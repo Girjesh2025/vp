@@ -1,0 +1,9 @@
+from dhanhq import dhanhq
+
+dhan = dhanhq("1100543236","eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwicGFydG5lcklkIjoiIiwiZXhwIjoxNzM2ODYzNTk2LCJ0b2tlbkNvbnN1bWVyVHlwZSI6IlNFTEYiLCJ3ZWJob29rVXJsIjoiIiwiZGhhbkNsaWVudElkIjoiMTEwMDU0MzIzNiJ9.sKLobKhG3gz9BtlQ9gN741kKnabPqlLvHJjrKi0x7yhLNGdnIbu97f-Qu_l0xqTTMAzIoauXf2Ea2lQ7sPi2gQ")
+# Get holdings
+print(dhan.get_holdings())
+
+
+
+
