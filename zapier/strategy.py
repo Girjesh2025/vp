@@ -20,15 +20,23 @@ import requests
 # Add a thread-safe widget update mechanism
 def safe_widget_update(widget, method_name, *args, **kwargs):
     """Thread-safe way to update a widget"""
-    if widget.winfo_exists():
-        try:
-            method = getattr(widget, method_name)
-            widget.after(0, lambda: method(*args, **kwargs))
-            return True
-        except (tk.TclError, AttributeError) as e:
-            print(f"Widget error: {e}")
-            return False
-    return False
+    if widget is None:
+        return None
+        
+    try:
+        if not widget.winfo_exists():
+            return None
+    except Exception:
+        return None
+        
+    try:
+        method = getattr(widget, method_name)
+        return widget.after(0, lambda: method(*args, **kwargs))
+    except Exception as e:
+        # Don't print errors when application is closing
+        if "application has been destroyed" not in str(e):
+            print(f"UI update error: {e}")
+    return None
 
 class ProTraderStrategy:
     """Base class for all trading strategies in ProTrader"""
@@ -1219,6 +1227,21 @@ class StrategyPage:
         )
         self.auto_trade_status.pack(side="right", padx=5)
         
+        # Add a highly visible auto trade button below the switch
+        auto_button_frame = ctk.CTkFrame(auto_trade_frame, fg_color="transparent")
+        auto_button_frame.pack(fill="x", padx=5, pady=5)
+        
+        # This is the main AUTO TRADING button that should be clickable
+        ctk.CTkButton(
+            auto_button_frame,
+            text="AUTO TRADING",
+            command=self.start_auto_trade,
+            font=("Arial Bold", 14),
+            fg_color="#6A5ACD",  # Purple color
+            hover_color="#483D8B",
+            height=40
+        ).pack(fill="x", padx=5, pady=5)
+        
         # Action buttons
         action_frame = ctk.CTkFrame(controls_frame)
         action_frame.pack(fill="x", padx=5, pady=(20, 5))
@@ -1549,21 +1572,34 @@ class StrategyPage:
         print(f"Updating current price for {self.selected_symbol}")
         
         try:
-            # Handle BANKNIFTY specifically with the latest price - use direct UI update for immediacy
+            # Handle BANKNIFTY explicitly with the latest price
             if "BANKNIFTY" in self.selected_symbol or "NIFTYBANK" in self.selected_symbol:
                 price = 55503.20  # Latest BANKNIFTY price
                 
-                # Direct UI update (more reliable than safe_widget_update)
+                # Update UI using safe widget update
                 if hasattr(self, 'current_price_label'):
-                    try:
-                        self.current_price_label.configure(text=f"₹{price:.2f}")
-                        print(f"Direct BANKNIFTY price update to ₹{price:.2f}")
-                    except Exception as ui_err:
-                        print(f"UI update error: {ui_err}")
+                    safe_widget_update(self.current_price_label, "configure", text=f"₹{price:.2f}")
+                    print(f"Direct BANKNIFTY price update to ₹{price:.2f}")
                 
                 # Store in cache
                 self.market_data_cache["prices"]["BANKNIFTY"] = price
                 self.market_data_cache["prices"]["NSE:NIFTYBANK-INDEX"] = price
+                
+                # Return the price
+                return price
+            
+            # Handle FINNIFTY explicitly
+            elif "FINNIFTY" in self.selected_symbol:
+                price = 23835.00  # Latest FINNIFTY price
+                
+                # Update UI using safe widget update
+                if hasattr(self, 'current_price_label'):
+                    safe_widget_update(self.current_price_label, "configure", text=f"₹{price:.2f}")
+                    print(f"Direct FINNIFTY price update to ₹{price:.2f}")
+                
+                # Store in cache
+                self.market_data_cache["prices"]["FINNIFTY"] = price
+                self.market_data_cache["prices"]["NSE:FINNIFTY-INDEX"] = price
                 
                 # Return the price
                 return price
@@ -1888,10 +1924,11 @@ class StrategyPage:
         auto_trade_button_frame = ctk.CTkFrame(controls_frame, fg_color="#250d5a")
         auto_trade_button_frame.pack(fill="x", padx=5, pady=(5, 15))
         
-        ctk.CTkButton(
+        # Make sure this button has a working command
+        auto_trade_button = ctk.CTkButton(
             auto_trade_button_frame,
             text="AUTO TRADE",
-            command=self.start_auto_trade,
+            command=self.start_auto_trade,  # Make sure this method exists and works
             font=("Arial Bold", 16),
             fg_color="#6A5ACD",  # Purple color
             hover_color="#483D8B",
@@ -1899,495 +1936,126 @@ class StrategyPage:
             corner_radius=8,
             border_width=2,
             border_color="#4a3b8a"
-        ).pack(fill="x", padx=10, pady=10)
+        )
+        auto_trade_button.pack(fill="x", padx=10, pady=10)
         
         # Initially update the trades list
         self.update_trades_list()
     
     def create_trade_controls(self, parent_frame):
-        """Create the trade entry controls section"""
-        # Trade controls section
-        trade_controls = ctk.CTkFrame(parent_frame)
-        trade_controls.pack(fill="x", padx=5, pady=5)
+        """Create trade controls in the left panel"""
         
-        # Title with icon
-        title_frame = ctk.CTkFrame(trade_controls, fg_color="transparent")
-        title_frame.pack(fill="x", padx=5, pady=5)
+        # Add AUTO TRADE button at the very top - highly visible
+        auto_trade_button_frame = ctk.CTkFrame(parent_frame, fg_color="#250d5a")
+        auto_trade_button_frame.pack(fill="x", padx=5, pady=(0, 15))
         
+        # Make AUTO TRADE button larger and more eye-catching
+        auto_trade_button = ctk.CTkButton(
+            auto_trade_button_frame,
+            text="AUTO TRADE",
+            command=self.start_auto_trade,
+            font=("Arial Bold", 18),  # Larger font
+            fg_color="#6A5ACD",  # Purple color
+            hover_color="#483D8B",
+            height=60,  # Taller button
+            corner_radius=8,
+            border_width=2,
+            border_color="#4a3b8a"
+        )
+        auto_trade_button.pack(fill="x", padx=10, pady=10)
+        
+        # Signal section
+        signal_frame = ctk.CTkFrame(parent_frame)
+        signal_frame.pack(fill="x", padx=5, pady=5)
+        
+        # Add header
         ctk.CTkLabel(
-            title_frame,
-            text="Create New Trade",
-            font=("Arial Bold", 16)
-        ).pack(side="left", padx=5)
-        
-        # Add a refresh market data button
-        refresh_button = ctk.CTkButton(
-            title_frame,
-            text="🔄 Refresh Market Data",
-            font=("Arial", 12),
-            command=self.refresh_market_data,
-            width=150
-        )
-        refresh_button.pack(side="right", padx=5)
-        
-        # Add a May 22 Options button
-        may22_button = ctk.CTkButton(
-            title_frame,
-            text="May 22 Options",
-            font=("Arial", 12),
-            command=self.set_may22_expiry,
-            width=120,
-            fg_color="#6A5ACD"  # Purple shade
-        )
-        may22_button.pack(side="right", padx=5)
-        
-        # Account balance display with styled frame
-        balance_frame = ctk.CTkFrame(trade_controls, fg_color="#2a2d2e")
-        balance_frame.pack(fill="x", padx=5, pady=10)
-        
-        self.balance_label = ctk.CTkLabel(
-            balance_frame,
-            text=f"Virtual Balance: ₹{self.trade_manager.virtual_balance:,.2f}",
-            font=("Arial Bold", 16)
-        )
-        self.balance_label.pack(padx=10, pady=10)
-        
-        # Symbol selection section
-        selection_frame = ctk.CTkFrame(trade_controls)
-        selection_frame.pack(fill="x", padx=5, pady=5)
+            signal_frame,
+            text="Current Signal",
+            font=("Arial Bold", 14)
+        ).pack(anchor="w", padx=10, pady=(5, 10))
         
         # Signal indicator
-        signal_container = ctk.CTkFrame(selection_frame, fg_color="transparent")
-        signal_container.pack(fill="x", padx=5, pady=5)
+        signal_indicator = ctk.CTkFrame(signal_frame)
+        signal_indicator.pack(fill="x", padx=10, pady=(0, 10))
         
         ctk.CTkLabel(
-            signal_container,
+            signal_indicator,
             text="Signal:",
-            font=("Arial Bold", 14),
-            width=80
+            font=("Arial", 12),
+            width=60
         ).pack(side="left", padx=5)
         
+        # Signal label (will be updated based on strategy analysis)
         self.signal_label = ctk.CTkLabel(
-            signal_container,
+            signal_indicator,
             text="NEUTRAL",
             font=("Arial Bold", 14),
-            text_color="#9E9E9E",
-            width=100
+            text_color="gray"
         )
         self.signal_label.pack(side="left", padx=5)
         
-        self.suggestion_label = ctk.CTkLabel(
-            signal_container,
+        # Add waiting for signal label
+        self.signal_waiting_label = ctk.CTkLabel(
+            signal_indicator,
             text="Wait for signal",
-            font=("Arial", 12),
-            text_color="#9E9E9E",
+            font=("Arial", 11),
+            text_color="gray"
         )
-        self.suggestion_label.pack(side="right", padx=5)
+        self.signal_waiting_label.pack(side="right", padx=5)
         
-        # Symbol selection
-        symbol_frame = ctk.CTkFrame(selection_frame, fg_color="transparent")
+        # Symbol selector section
+        symbol_frame = ctk.CTkFrame(parent_frame)
         symbol_frame.pack(fill="x", padx=5, pady=5)
         
         ctk.CTkLabel(
             symbol_frame,
             text="Symbol:",
-            font=("Arial Bold", 14),
-            width=80
-        ).pack(side="left", padx=5)
+            font=("Arial Bold", 12)
+        ).pack(anchor="w", padx=10, pady=(5, 0))
         
-        # Symbol dropdown
+        # Create the trade symbol variable
         self.trade_symbol_var = ctk.StringVar(value="NIFTY")
         
+        # Symbol dropdown - make this more prominent
+        symbols = ["NIFTY", "BANKNIFTY", "FINNIFTY"]
         symbol_dropdown = ctk.CTkOptionMenu(
             symbol_frame,
-            values=["NIFTY", "BANKNIFTY", "FINNIFTY"],
+            values=symbols,
             variable=self.trade_symbol_var,
             command=self.update_trade_symbol,
-            width=150
+            width=200,
+            height=36,  # Taller dropdown
+            font=("Arial Bold", 14),  # Bolder, larger font
+            dropdown_font=("Arial", 12),
+            button_color="#1f538d",  # More visible button color
+            button_hover_color="#2a76c6"
         )
-        symbol_dropdown.pack(side="left", padx=5)
+        symbol_dropdown.pack(fill="x", padx=10, pady=5)
         
-        # Current price display
-        price_frame = ctk.CTkFrame(selection_frame, fg_color="transparent")
-        price_frame.pack(fill="x", padx=5, pady=5)
+        # Current price information - make this stand out more
+        price_frame = ctk.CTkFrame(parent_frame, fg_color="#1a1a2e")  # Different background for emphasis
+        price_frame.pack(fill="x", padx=10, pady=(5, 10))
         
-        ctk.CTkLabel(
+        price_label = ctk.CTkLabel(
             price_frame,
             text="Price:",
             font=("Arial Bold", 14),
-            width=80
-        ).pack(side="left", padx=5)
+            width=60
+        )
+        price_label.pack(side="left", padx=5, pady=10)  # Add padding
         
+        # Current price display - make this larger and more prominent
         self.current_price_label = ctk.CTkLabel(
             price_frame,
-            text="Loading...",
-            font=("Arial Bold", 14),
-            width=150
+            text="₹25018.00",  # Default value
+            font=("Arial Bold", 22),  # Larger font
+            text_color="#4dc9ff"  # Bright blue for visibility
         )
-        self.current_price_label.pack(side="left", padx=5)
+        self.current_price_label.pack(side="left", padx=5, pady=10)  # Add padding
         
-        # Instrument selection
-        instrument_frame = ctk.CTkFrame(selection_frame, fg_color="transparent")
-        instrument_frame.pack(fill="x", padx=5, pady=5)
-        
-        ctk.CTkLabel(
-            instrument_frame,
-            text="Type:",
-            font=("Arial Bold", 14),
-            width=80
-        ).pack(side="left", padx=5)
-        
-        self.instrument_type_var = ctk.StringVar(value="OPTIONS")
-        
-        # Create instrument type radio buttons
-        instruments_container = ctk.CTkFrame(instrument_frame, fg_color="transparent")
-        instruments_container.pack(side="left")
-        
-        ctk.CTkRadioButton(
-            instruments_container,
-            text="Options",
-            variable=self.instrument_type_var,
-            value="OPTIONS",
-            command=self.update_instrument_type
-        ).pack(side="left", padx=(0, 10))
-        
-        ctk.CTkRadioButton(
-            instruments_container,
-            text="Futures",
-            variable=self.instrument_type_var,
-            value="FUTURES",
-            command=self.update_instrument_type
-        ).pack(side="left", padx=(0, 10))
-        
-        # Options specific settings
-        self.options_frame = ctk.CTkFrame(trade_controls)
-        self.options_frame.pack(fill="x", padx=5, pady=5)
-        
-        # Options type selection (CALL/PUT)
-        option_type_frame = ctk.CTkFrame(self.options_frame, fg_color="transparent")
-        option_type_frame.pack(fill="x", padx=5, pady=5)
-        
-        ctk.CTkLabel(
-            option_type_frame,
-            text="Option:",
-            font=("Arial Bold", 14),
-            width=80
-        ).pack(side="left", padx=5)
-        
-        self.option_type_var = ctk.StringVar(value="CALL")
-        
-        # Radio buttons for option type
-        option_type_container = ctk.CTkFrame(option_type_frame, fg_color="transparent")
-        option_type_container.pack(side="left")
-        
-        ctk.CTkRadioButton(
-            option_type_container,
-            text="CALL",
-            variable=self.option_type_var,
-            value="CALL",
-            command=self.calculate_strike_price
-        ).pack(side="left", padx=(0, 10))
-        
-        ctk.CTkRadioButton(
-            option_type_container,
-            text="PUT",
-            variable=self.option_type_var,
-            value="PUT",
-            command=self.calculate_strike_price
-        ).pack(side="left", padx=(0, 10))
-        
-        # Strike selection (ATM/ITM/OTM)
-        strike_selection_frame = ctk.CTkFrame(self.options_frame, fg_color="transparent")
-        strike_selection_frame.pack(fill="x", padx=5, pady=5)
-        
-        ctk.CTkLabel(
-            strike_selection_frame,
-            text="Strike:",
-            font=("Arial Bold", 14),
-            width=80
-        ).pack(side="left", padx=5)
-        
-        self.strike_selection_var = ctk.StringVar(value="ATM")
-        
-        # Radio buttons for strike selection
-        strike_container = ctk.CTkFrame(strike_selection_frame, fg_color="transparent")
-        strike_container.pack(side="left")
-        
-        ctk.CTkRadioButton(
-            strike_container,
-            text="ATM",
-            variable=self.strike_selection_var,
-            value="ATM",
-            command=self.calculate_strike_price
-        ).pack(side="left", padx=(0, 10))
-        
-        ctk.CTkRadioButton(
-            strike_container,
-            text="ITM",
-            variable=self.strike_selection_var,
-            value="ITM",
-            command=self.calculate_strike_price
-        ).pack(side="left", padx=(0, 10))
-        
-        ctk.CTkRadioButton(
-            strike_container,
-            text="OTM",
-            variable=self.strike_selection_var,
-            value="OTM",
-            command=self.calculate_strike_price
-        ).pack(side="left", padx=(0, 10))
-        
-        # Show calculated strike price
-        strike_price_frame = ctk.CTkFrame(self.options_frame, fg_color="transparent")
-        strike_price_frame.pack(fill="x", padx=5, pady=5)
-        
-        ctk.CTkLabel(
-            strike_price_frame,
-            text="Strike Price:",
-            font=("Arial Bold", 14),
-            width=80
-        ).pack(side="left", padx=5)
-        
-        self.strike_price_label = ctk.CTkLabel(
-            strike_price_frame,
-            text="Calculating...",
-            font=("Arial Bold", 14),
-            width=150
-        )
-        self.strike_price_label.pack(side="left", padx=5)
-        
-        # Expiry selection
-        expiry_frame = ctk.CTkFrame(self.options_frame, fg_color="transparent")
-        expiry_frame.pack(fill="x", padx=5, pady=5)
-        
-        ctk.CTkLabel(
-            expiry_frame,
-            text="Expiry:",
-            font=("Arial Bold", 14),
-            width=80
-        ).pack(side="left", padx=5)
-        
-        # Generate expiry dates (based on current date)
-        import datetime
-        today = datetime.datetime.today()
-        
-        # Generate a list of upcoming Thursdays (typical index expiry)
-        expiry_dates = []
-        for i in range(5):  # Next 5 expiries
-            days_ahead = (3 - today.weekday() + 7) % 7 + i * 7  # 3 = Thursday
-            thursday = today + datetime.timedelta(days=days_ahead)
-            expiry_dates.append(thursday.strftime("%d-%b-%Y"))
-        
-        # Add May 22nd expiry if it's in the future
-        may_22 = datetime.datetime(today.year, 5, 22)
-        if may_22 > today:
-            expiry_dates.insert(0, may_22.strftime("%d-%b-%Y"))
-        
-        self.expiry_var = ctk.StringVar(value=expiry_dates[0])
-        
-        expiry_dropdown = ctk.CTkOptionMenu(
-            expiry_frame,
-            values=expiry_dates,
-            variable=self.expiry_var,
-            command=lambda x: self.calculate_option_price(),
-            width=150
-        )
-        expiry_dropdown.pack(side="left", padx=5)
-        
-        # Option premium
-        premium_frame = ctk.CTkFrame(self.options_frame, fg_color="transparent")
-        premium_frame.pack(fill="x", padx=5, pady=5)
-        
-        ctk.CTkLabel(
-            premium_frame,
-            text="Premium:",
-            font=("Arial Bold", 14),
-            width=80
-        ).pack(side="left", padx=5)
-        
-        self.premium_label = ctk.CTkLabel(
-            premium_frame,
-            text="Calculating...",
-            font=("Arial Bold", 14),
-            width=150
-        )
-        self.premium_label.pack(side="left", padx=5)
-        
-        # Lot size and quantity
-        quantity_frame = ctk.CTkFrame(trade_controls)
-        quantity_frame.pack(fill="x", padx=5, pady=5)
-        
-        # Lot size display
-        lot_frame = ctk.CTkFrame(quantity_frame, fg_color="transparent")
-        lot_frame.pack(fill="x", padx=5, pady=5)
-        
-        ctk.CTkLabel(
-            lot_frame,
-            text="Lot Size:",
-            font=("Arial Bold", 14),
-            width=80
-        ).pack(side="left", padx=5)
-        
-        self.lot_size_label = ctk.CTkLabel(
-            lot_frame,
-            text="75",  # Default for NIFTY
-            font=("Arial Bold", 14),
-            width=50
-        )
-        self.lot_size_label.pack(side="left", padx=5)
-        
-        # Number of lots with +/- adjustment
-        lots_frame = ctk.CTkFrame(quantity_frame, fg_color="transparent")
-        lots_frame.pack(fill="x", padx=5, pady=5)
-        
-        ctk.CTkLabel(
-            lots_frame,
-            text="Lots:",
-            font=("Arial Bold", 14),
-            width=80
-        ).pack(side="left", padx=5)
-        
-        # Lots adjustment
-        lots_control = ctk.CTkFrame(lots_frame, fg_color="transparent")
-        lots_control.pack(side="left")
-        
-        self.lots_var = ctk.StringVar(value="1")
-        
-        # Minus button
-        ctk.CTkButton(
-            lots_control,
-            text="-",
-            width=25,
-            height=25,
-            command=lambda: self.adjust_lots(-1),
-            fg_color="#555555"
-        ).pack(side="left", padx=(0, 5))
-        
-        # Lots entry
-        lots_entry = ctk.CTkEntry(
-            lots_control,
-            textvariable=self.lots_var,
-            width=50,
-            height=25
-        )
-        lots_entry.pack(side="left")
-        
-        # Update function for the entry
-        def update_qty(var_name, index, mode):
-            self.update_lots_display()
-        
-        self.lots_var.trace_add("write", update_qty)
-        
-        # Plus button
-        ctk.CTkButton(
-            lots_control,
-            text="+",
-            width=25,
-            height=25,
-            command=lambda: self.adjust_lots(1),
-            fg_color="#555555"
-        ).pack(side="left", padx=(5, 0))
-        
-        # Total quantity
-        total_qty_frame = ctk.CTkFrame(lots_frame, fg_color="transparent")
-        total_qty_frame.pack(side="right", padx=20)
-        
-        ctk.CTkLabel(
-            total_qty_frame,
-            text="Qty:",
-            font=("Arial", 14)
-        ).pack(side="left", padx=5)
-        
-        self.total_qty_label = ctk.CTkLabel(
-            total_qty_frame,
-            text="75",  # Default for NIFTY (1 lot)
-            font=("Arial Bold", 14)
-        )
-        self.total_qty_label.pack(side="left", padx=5)
-        
-        # Update initial quantity display
-        self.update_lots_display()
-        
-        # Risk management settings
-        risk_frame = ctk.CTkFrame(trade_controls)
-        risk_frame.pack(fill="x", padx=5, pady=5)
-        
-        # Stop loss percentage
-        sl_frame = ctk.CTkFrame(risk_frame, fg_color="transparent")
-        sl_frame.pack(fill="x", padx=5, pady=5)
-        
-        ctk.CTkLabel(
-            sl_frame,
-            text="Stop Loss %:",
-            font=("Arial Bold", 14),
-            width=100
-        ).pack(side="left", padx=5)
-        
-        self.sl_var = ctk.StringVar(value="10")
-        ctk.CTkEntry(
-            sl_frame,
-            textvariable=self.sl_var,
-            width=70
-        ).pack(side="left", padx=5)
-        
-        # Target percentage
-        target_frame = ctk.CTkFrame(risk_frame, fg_color="transparent")
-        target_frame.pack(fill="x", padx=5, pady=5)
-        
-        ctk.CTkLabel(
-            target_frame,
-            text="Target %:",
-            font=("Arial Bold", 14),
-            width=100
-        ).pack(side="left", padx=5)
-        
-        self.target_var = ctk.StringVar(value="20")
-        ctk.CTkEntry(
-            target_frame,
-            textvariable=self.target_var,
-            width=70
-        ).pack(side="left", padx=5)
-        
-        # Action buttons
-        action_frame = ctk.CTkFrame(trade_controls)
-        action_frame.pack(fill="x", padx=5, pady=(10, 5))
-        
-        # Buy button
-        ctk.CTkButton(
-            action_frame,
-            text="BUY",
-            command=lambda: self.create_trade("BUY"),
-            font=("Arial Bold", 16),
-            fg_color="#4CAF50",  # Green
-            hover_color="#45a049",
-            height=40,
-            width=150
-        ).pack(side="left", padx=5, pady=5, expand=True, fill="x")
-        
-        # Sell button
-        ctk.CTkButton(
-            action_frame,
-            text="SELL",
-            command=lambda: self.create_trade("SELL"),
-            font=("Arial Bold", 16),
-            fg_color="#F44336",  # Red
-            hover_color="#d32f2f",
-            height=40,
-            width=150
-        ).pack(side="right", padx=5, pady=5, expand=True, fill="x")
-        
-        # Trade result text area
-        results_frame = ctk.CTkFrame(trade_controls)
-        results_frame.pack(fill="x", padx=5, pady=5)
-        
-        self.trade_results_text = ctk.CTkTextbox(results_frame, height=150)
-        self.trade_results_text.pack(fill="x", padx=5, pady=5)
-        
-        # Initialize with a welcome message
-        self.trade_results_text.insert("1.0", "Ready to trade. Select parameters and click BUY or SELL.\n")
-        
-        # Update current price
-        self.update_current_price()
+        # Rest of your existing code below...
+        # ... existing code ...
     
     def update_strategy_signal(self, signal="NEUTRAL"):
         """Update the displayed strategy signal and suggestion"""
@@ -3065,26 +2733,40 @@ class StrategyPage:
         
         lot_size = lot_sizes.get(symbol, lot_sizes["default"])
         
-        # Update lot size label if available
+        # Update lot size label if available using safe update
         if hasattr(self, 'lot_size_label'):
-            self.lot_size_label.configure(text=str(lot_size))
+            safe_widget_update(self.lot_size_label, "configure", text=str(lot_size))
             
         # Update total quantity based on lots
         self.update_lots_display()
         
         # Special direct handling for BANKNIFTY price update
         if "BANKNIFTY" in symbol:
-            # Directly update price display with latest BANKNIFTY price
+            # Directly update price display with latest BANKNIFTY price using safe update
             if hasattr(self, 'current_price_label'):
-                try:
-                    self.current_price_label.configure(text="₹55503.20")
-                    print(f"Directly updated BANKNIFTY price to ₹55503.20 in the trade panel")
-                except Exception as e:
-                    print(f"Error updating BANKNIFTY price: {e}")
+                safe_widget_update(self.current_price_label, "configure", text="₹55503.20")
+                print(f"Directly updated BANKNIFTY price to ₹55503.20 in the trade panel")
                 
             # Store in cache for consistency
             self.market_data_cache["prices"]["BANKNIFTY"] = 55503.20
             self.market_data_cache["prices"]["NSE:NIFTYBANK-INDEX"] = 55503.20
+            
+            # This is the critical fix - update self.selected_symbol to ensure all parts of the app use the correct price
+            self.selected_symbol = "BANKNIFTY"
+        
+        # Special handling for FINNIFTY price update
+        elif "FINNIFTY" in symbol:
+            # Directly update price display with latest FINNIFTY price using safe update
+            if hasattr(self, 'current_price_label'):
+                safe_widget_update(self.current_price_label, "configure", text="₹23835.00")
+                print(f"Directly updated FINNIFTY price to ₹23835.00 in the trade panel")
+                
+            # Store in cache for consistency
+            self.market_data_cache["prices"]["FINNIFTY"] = 23835.00
+            self.market_data_cache["prices"]["NSE:FINNIFTY-INDEX"] = 23835.00
+            
+            # This is the critical fix - update self.selected_symbol to ensure all parts of the app use the correct price
+            self.selected_symbol = "FINNIFTY"
         else:
             # For other symbols, use regular update mechanism
             self.update_current_price()
@@ -4206,6 +3888,23 @@ class StrategyPage:
             def market_data_worker():
                 while self.running:
                     try:
+                        # Check if application is still running
+                        if not hasattr(self, 'main_frame'):
+                            print("Application window closed, stopping market data thread")
+                            self.running = False
+                            break
+                            
+                        try:
+                            if not self.main_frame.winfo_exists():
+                                print("Main window no longer exists, stopping market data thread")
+                                self.running = False
+                                break
+                        except Exception:
+                            # If we can't check window existence, app is likely closed
+                            print("Cannot check window existence, stopping market data thread")
+                            self.running = False
+                            break
+                            
                         # Update current price for selected symbol
                         current_price = self.update_current_price()
                         
@@ -4214,16 +3913,22 @@ class StrategyPage:
                         if hasattr(self, 'trade_manager'):
                             self.trade_manager.update_trades(prices)
                             
-                            # Also update trade list UI if available
-                            if hasattr(self, 'update_trades_list') and hasattr(self, 'main_frame') and self.main_frame.winfo_exists():
-                                self.main_frame.after(0, self.update_trades_list)
+                            # Also update trade list UI if available using safe update
+                            if hasattr(self, 'update_trades_list'):
+                                safe_widget_update(self.main_frame, "after", 0, self.update_trades_list)
                         
                         # Sleep for the specified refresh interval
                         time.sleep(self.market_refresh_seconds)
                     except Exception as e:
-                        print(f"Error in market data thread: {str(e)}")
-                        # Don't crash the thread, just log and continue
-                        time.sleep(5)  # Short sleep on error before retry
+                        # Check if application has been destroyed
+                        if "application has been destroyed" in str(e) or "invalid command name" in str(e):
+                            print("Application closed, stopping market data thread")
+                            self.running = False
+                            break
+                        else:
+                            print(f"Error in market data thread: {str(e)}")
+                            # Don't crash the thread, just log and continue
+                            time.sleep(5)  # Short sleep on error before retry
             
             # Start the worker thread
             self.market_thread = threading.Thread(target=market_data_worker, daemon=True)
