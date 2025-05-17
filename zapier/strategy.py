@@ -1227,20 +1227,8 @@ class StrategyPage:
         )
         self.auto_trade_status.pack(side="right", padx=5)
         
-        # Add a highly visible auto trade button below the switch
-        auto_button_frame = ctk.CTkFrame(auto_trade_frame, fg_color="transparent")
-        auto_button_frame.pack(fill="x", padx=5, pady=5)
-        
-        # This is the main AUTO TRADING button that should be clickable
-        ctk.CTkButton(
-            auto_button_frame,
-            text="AUTO TRADING",
-            command=self.start_auto_trade,
-            font=("Arial Bold", 14),
-            fg_color="#6A5ACD",  # Purple color
-            hover_color="#483D8B",
-            height=40
-        ).pack(fill="x", padx=5, pady=5)
+        # Remove duplicate AUTO TRADING button
+        # The button in create_trade_controls will be used instead
         
         # Action buttons
         action_frame = ctk.CTkFrame(controls_frame)
@@ -1920,24 +1908,7 @@ class StrategyPage:
         )
         self.last_update_label.pack(side="left", padx=5, pady=5)
         
-        # Add auto trade button at the top of controls frame (more prominent)
-        auto_trade_button_frame = ctk.CTkFrame(controls_frame, fg_color="#250d5a")
-        auto_trade_button_frame.pack(fill="x", padx=5, pady=(5, 15))
-        
-        # Make sure this button has a working command
-        auto_trade_button = ctk.CTkButton(
-            auto_trade_button_frame,
-            text="AUTO TRADE",
-            command=self.start_auto_trade,  # Make sure this method exists and works
-            font=("Arial Bold", 16),
-            fg_color="#6A5ACD",  # Purple color
-            hover_color="#483D8B",
-            height=50,
-            corner_radius=8,
-            border_width=2,
-            border_color="#4a3b8a"
-        )
-        auto_trade_button.pack(fill="x", padx=10, pady=10)
+        # Remove duplicate AUTO TRADE button - this is already in create_trade_controls
         
         # Initially update the trades list
         self.update_trades_list()
