@@ -16,6 +16,19 @@ import random
 import math
 import hashlib
 
+# Add a thread-safe widget update mechanism
+def safe_widget_update(widget, method_name, *args, **kwargs):
+    """Thread-safe way to update a widget"""
+    if widget.winfo_exists():
+        try:
+            method = getattr(widget, method_name)
+            widget.after(0, lambda: method(*args, **kwargs))
+            return True
+        except (tk.TclError, AttributeError) as e:
+            print(f"Widget error: {e}")
+            return False
+    return False
+
 class ProTraderStrategy:
     """Base class for all trading strategies in ProTrader"""
     
@@ -897,16 +910,17 @@ class StrategyPage:
         """Perform the initial API connection check and schedule periodic checks"""
         is_connected = self.check_api_connection()
         
-        # Update UI from main thread
+        # Update UI from main thread using safe widget update
         if is_connected:
-            self.main_frame.after(0, lambda: self.api_connection_label.configure(
-                text="Connected", text_color="#4CAF50"))  # Green
+            safe_widget_update(self.api_connection_label, "configure", 
+                text="Connected", text_color="#4CAF50")  # Green
         else:
-            self.main_frame.after(0, lambda: self.api_connection_label.configure(
-                text="Disconnected", text_color="#F44336"))  # Red
+            safe_widget_update(self.api_connection_label, "configure", 
+                text="Disconnected", text_color="#F44336")  # Red
         
         # Schedule periodic checks (every 5 minutes)
-        self.main_frame.after(300000, self.schedule_api_check)
+        if hasattr(self, 'main_frame') and self.main_frame.winfo_exists():
+            self.main_frame.after(300000, self.schedule_api_check)
     
     def schedule_api_check(self):
         """Schedule a periodic API connection check"""
@@ -924,13 +938,13 @@ class StrategyPage:
         try:
             is_connected = self.check_api_connection()
             
-            # Update UI from main thread
+            # Update UI from main thread using safe widget update
             if is_connected:
-                self.main_frame.after(0, lambda: self.api_connection_label.configure(
-                    text="Connected", text_color="#4CAF50"))  # Green
+                safe_widget_update(self.api_connection_label, "configure", 
+                    text="Connected", text_color="#4CAF50")  # Green
             else:
-                self.main_frame.after(0, lambda: self.api_connection_label.configure(
-                    text="Disconnected", text_color="#F44336"))  # Red
+                safe_widget_update(self.api_connection_label, "configure", 
+                    text="Disconnected", text_color="#F44336")  # Red
         except Exception as e:
             print(f"Error in API check: {str(e)}")
     
@@ -1207,9 +1221,9 @@ class StrategyPage:
             if self.selected_symbol in self.market_data_cache["prices"]:
                 cached_price = self.market_data_cache["prices"][self.selected_symbol]
                 
-                # Update the UI with cached price
+                # Update the UI with cached price using safe update
                 if hasattr(self, 'current_price_label'):
-                    self.current_price_label.configure(text=f"₹{cached_price:.2f}")
+                    safe_widget_update(self.current_price_label, "configure", text=f"₹{cached_price:.2f}")
                 
                 # Return the cached price
                 return cached_price
@@ -1278,9 +1292,9 @@ class StrategyPage:
             # Store in cache
             self.market_data_cache["prices"][self.selected_symbol] = price
             
-            # Update UI
+            # Update UI using safe update
             if hasattr(self, 'current_price_label'):
-                self.current_price_label.configure(text=f"₹{price:.2f}")
+                safe_widget_update(self.current_price_label, "configure", text=f"₹{price:.2f}")
                 
             # Return the price
             return price
@@ -1288,7 +1302,7 @@ class StrategyPage:
         except Exception as e:
             print(f"Error updating current price: {str(e)}")
             if hasattr(self, 'current_price_label'):
-                self.current_price_label.configure(text="Error updating price")
+                safe_widget_update(self.current_price_label, "configure", text="Error updating price")
             return None
             
     def set_may22_expiry(self):
@@ -1992,19 +2006,19 @@ class StrategyPage:
     def test_api_connection(self):
         """Test API connection and update the status label"""
         # Display checking message
-        self.api_connection_label.configure(text="Checking...", text_color="gray")
+        safe_widget_update(self.api_connection_label, "configure", text="Checking...", text_color="gray")
         
         # Create a function to run in a separate thread
         def check_and_update():
             is_connected = self.check_api_connection()
             
-            # Update UI from main thread
+            # Update UI from main thread using safe widget update
             if is_connected:
-                self.main_frame.after(0, lambda: self.api_connection_label.configure(
-                    text="Connected", text_color="#4CAF50"))  # Green
+                safe_widget_update(self.api_connection_label, "configure", 
+                    text="Connected", text_color="#4CAF50")  # Green
             else:
-                self.main_frame.after(0, lambda: self.api_connection_label.configure(
-                    text="Disconnected", text_color="#F44336"))  # Red
+                safe_widget_update(self.api_connection_label, "configure", 
+                    text="Disconnected", text_color="#F44336")  # Red
                     
         # Run the check in a separate thread to avoid freezing UI
         threading.Thread(target=check_and_update, daemon=True).start()
@@ -3728,3 +3742,37 @@ class StrategyPage:
             height=40,
             width=150
         ).pack(pady=20)
+
+    def start_market_data_thread(self):
+        """Start a background thread for periodically refreshing market data"""
+        try:
+            # Function to run in the background thread
+            def market_data_worker():
+                while self.running:
+                    try:
+                        # Update current price for selected symbol
+                        current_price = self.update_current_price()
+                        
+                        # Check for updates to trades based on current prices
+                        prices = {self.selected_symbol: current_price}
+                        if hasattr(self, 'trade_manager'):
+                            self.trade_manager.update_trades(prices)
+                            
+                            # Also update trade list UI if available
+                            if hasattr(self, 'update_trades_list') and hasattr(self, 'main_frame') and self.main_frame.winfo_exists():
+                                self.main_frame.after(0, self.update_trades_list)
+                        
+                        # Sleep for the specified refresh interval
+                        time.sleep(self.market_refresh_seconds)
+                    except Exception as e:
+                        print(f"Error in market data thread: {str(e)}")
+                        # Don't crash the thread, just log and continue
+                        time.sleep(5)  # Short sleep on error before retry
+            
+            # Start the worker thread
+            self.market_thread = threading.Thread(target=market_data_worker, daemon=True)
+            self.market_thread.start()
+            print(f"Setting auto-refresh to {self.market_refresh_seconds} seconds")
+            print(f"Setting up auto-refresh every {self.market_refresh_seconds} seconds")
+        except Exception as e:
+            print(f"Error starting market data thread: {str(e)}")
