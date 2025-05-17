@@ -2827,6 +2827,12 @@ class StrategyPage:
             if not current_price:
                 return
                 
+            # Check if option type variables exist
+            # If they don't exist, we're likely in a different UI context or just used price display
+            if not hasattr(self, 'option_type_var') or not hasattr(self, 'strike_selection_var'):
+                print("Option type variables not found - skipping strike price calculation")
+                return
+                
             # Get option type and strike selection
             option_type = self.option_type_var.get()
             strike_selection = self.strike_selection_var.get()
