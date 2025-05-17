@@ -908,6 +908,32 @@ class StrategyPage:
         # Schedule periodic checks (every 5 minutes)
         self.main_frame.after(300000, self.schedule_api_check)
     
+    def schedule_api_check(self):
+        """Schedule a periodic API connection check"""
+        try:
+            # Run the check in a separate thread to avoid freezing UI
+            threading.Thread(target=self._run_api_check, daemon=True).start()
+            
+            # Schedule the next check (every 5 minutes)
+            self.main_frame.after(300000, self.schedule_api_check)
+        except Exception as e:
+            print(f"Error scheduling API check: {str(e)}")
+    
+    def _run_api_check(self):
+        """Run the API check and update UI"""
+        try:
+            is_connected = self.check_api_connection()
+            
+            # Update UI from main thread
+            if is_connected:
+                self.main_frame.after(0, lambda: self.api_connection_label.configure(
+                    text="Connected", text_color="#4CAF50"))  # Green
+            else:
+                self.main_frame.after(0, lambda: self.api_connection_label.configure(
+                    text="Disconnected", text_color="#F44336"))  # Red
+        except Exception as e:
+            print(f"Error in API check: {str(e)}")
+    
     def check_api_connection(self):
         """Test the API connection and get user profile if available"""
         try:
@@ -3387,14 +3413,14 @@ class StrategyPage:
                 }
                 status_text = status_map.get(trade.status, trade.status)
                 
-                # Add columns
+                # Add columns - FIX: change "left", "right", "center" to Tkinter compatible "w", "e", "center"
                 columns = [
-                    (exit_date, 120, "left", None),
-                    (trade.symbol, 200, "left", None),
+                    (exit_date, 120, "w", None),
+                    (trade.symbol, 200, "w", None),
                     (trade.trade_type, 80, "center", type_color),
-                    (f"₹{trade.entry_price:.2f}", 100, "right", None),
-                    (f"₹{trade.exit_price:.2f}", 100, "right", None),
-                    (pnl_text, 120, "right", pnl_color),
+                    (f"₹{trade.entry_price:.2f}", 100, "e", None),
+                    (f"₹{trade.exit_price:.2f}", 100, "e", None),
+                    (pnl_text, 120, "e", pnl_color),
                     (status_text, 100, "center", None)
                 ]
                 
