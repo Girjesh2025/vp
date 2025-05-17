@@ -682,7 +682,7 @@ class TradeManager:
             # Function to execute the trade close
             def execute_close():
                 # Close the trade using the trade manager
-                self.trade_manager.close_trade(trade_index, exit_price)
+                self.close_trade(trade_index, exit_price)
                 
                 # Update UI elements
                 self.update_trades_list()
@@ -1187,12 +1187,8 @@ class StrategyPage:
         auto_trade_frame = ctk.CTkFrame(controls_frame)
         auto_trade_frame.pack(fill="x", padx=5, pady=(10, 5))
         
-        # Add title
-        ctk.CTkLabel(
-            auto_trade_frame,
-            text="Auto Trading",
-            font=("Arial Bold", 14)
-        ).pack(anchor="w", padx=10, pady=5)
+        # Remove the "Auto Trading" title label
+        # Auto trade settings are already available in the trades tab
         
         # Auto-trade switch
         if not hasattr(self, 'auto_trade_enabled'):
