@@ -597,7 +597,7 @@ class TradeManager:
         try:
             if trade_index < 0 or trade_index >= len(self.open_trades):
                 print(f"Invalid trade index: {trade_index}")
-                return
+                return False, None
                 
             # Get the trade to close
             trade = self.open_trades[trade_index]
@@ -681,21 +681,52 @@ class TradeManager:
             
             # Function to execute the trade close
             def execute_close():
-                # Close the trade using the trade manager
-                self.close_trade(trade_index, exit_price)
-                
-                # Update UI elements
-                self.update_trades_list()
-                self.update_balance_display()
+                # Actually close the trade without showing another confirmation dialog
+                # Get the trade again to be safe
+                if trade_index < len(self.open_trades):
+                    trade_to_close = self.open_trades[trade_index]
+                    
+                    # Record the trade details before closing
+                    trade_to_close.exit_price = exit_price
+                    trade_to_close.exit_time = datetime.now()
+                    trade_to_close.status = "CLOSED"
+                    
+                    # Calculate P&L
+                    if trade_to_close.trade_type == "BUY":
+                        trade_to_close.pnl = (exit_price - trade_to_close.entry_price) * trade_to_close.qty
+                        trade_to_close.pnl_percent = ((exit_price / trade_to_close.entry_price) - 1) * 100
+                    else:  # SELL
+                        trade_to_close.pnl = (trade_to_close.entry_price - exit_price) * trade_to_close.qty
+                        trade_to_close.pnl_percent = ((trade_to_close.entry_price / exit_price) - 1) * 100
+                    
+                    # Add to closed trades
+                    self.closed_trades.append(trade_to_close)
+                    
+                    # Remove from open trades
+                    self.open_trades.pop(trade_index)
+                    
+                    # Update virtual balance
+                    self.virtual_balance += (trade_to_close.qty * exit_price)
+                    
+                    # Save trades
+                    self.save_trades()
+                    
+                    # Update UI elements if method exists in the parent class
+                    if hasattr(self, 'update_trades_list'):
+                        self.update_trades_list()
+                    
+                    if hasattr(self, 'update_balance_display'):
+                        self.update_balance_display()
+                    
+                    # Also set any trade results message if available
+                    if hasattr(self, 'trade_results_text'):
+                        self.trade_results_text.delete("1.0", "end")
+                        self.trade_results_text.insert("1.0", f"✅ Trade closed successfully!\n\n")
+                        self.trade_results_text.insert("end", f"Symbol: {trade_to_close.symbol}\n")
+                        self.trade_results_text.insert("end", f"Profit/Loss: {pnl_text}\n")
                 
                 # Close the popup
                 popup.destroy()
-                
-                # Show success message
-                self.trade_results_text.delete("1.0", "end")
-                self.trade_results_text.insert("1.0", f"✅ Trade closed successfully!\n\n")
-                self.trade_results_text.insert("end", f"Symbol: {trade.symbol}\n")
-                self.trade_results_text.insert("end", f"Profit/Loss: {pnl_text}\n")
             
             # Cancel function
             def cancel_close():
@@ -722,10 +753,13 @@ class TradeManager:
                 width=100
             ).pack(side="right", padx=5)
             
+            return True, None
+            
         except Exception as e:
             print(f"Error closing trade: {str(e)}")
             import traceback
             traceback.print_exc()
+            return False, None
     
     def update_trades(self, current_prices):
         """Update trades based on current prices, checking for stop loss and target hits"""
@@ -755,10 +789,45 @@ class TradeManager:
             
             # Close trade if stop loss or target hit
             if status:
-                success, closed_trade = self.close_trade(i, current_price)
-                if success:
+                # Clone trade info before closing it
+                trade_symbol = trade.symbol
+                trade_type = trade.trade_type
+                trade_entry_price = trade.entry_price
+                trade_qty = trade.qty
+                
+                # We don't use a confirmation popup for automatic closures
+                # So directly close the trade
+                if i < len(self.open_trades):  # Ensure index is still valid
+                    trade_to_close = self.open_trades[i]
+                    
+                    # Record the trade details before closing
+                    trade_to_close.exit_price = current_price
+                    trade_to_close.exit_time = datetime.now()
+                    trade_to_close.status = status  # SL_HIT or TARGET_HIT
+                    
+                    # Calculate P&L
+                    if trade_to_close.trade_type == "BUY":
+                        trade_to_close.pnl = (current_price - trade_to_close.entry_price) * trade_to_close.qty
+                        trade_to_close.pnl_percent = ((current_price / trade_to_close.entry_price) - 1) * 100
+                    else:  # SELL
+                        trade_to_close.pnl = (trade_to_close.entry_price - current_price) * trade_to_close.qty
+                        trade_to_close.pnl_percent = ((trade_to_close.entry_price / current_price) - 1) * 100
+                    
+                    # Add to closed trades
+                    self.closed_trades.append(trade_to_close)
+                    
+                    # Remove from open trades
+                    self.open_trades.pop(i)
+                    
+                    # Update virtual balance
+                    self.virtual_balance += (trade_to_close.qty * current_price)
+                    
+                    # Save trades
+                    self.save_trades()
+                    
+                    # Add to updates
                     updates.append({
-                        "trade": closed_trade,
+                        "trade": trade_to_close,
                         "event": status
                     })
         
