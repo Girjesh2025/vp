@@ -1490,6 +1490,9 @@ class StrategyPage:
             if not symbol or not isinstance(symbol, str):
                 symbol = "BANKNIFTY"
                 
+            # Check if this is an index (NIFTY, BANKNIFTY, FINNIFTY)
+            is_index = any(idx in symbol.upper() for idx in ["NIFTY", "BANKNIFTY", "FINNIFTY"])
+            
             # Get strategy name if available
             strategy_name = getattr(self, 'selected_strategy', None)
             if hasattr(strategy_name, 'name'):
@@ -1528,38 +1531,187 @@ class StrategyPage:
                 print(f"Unable to get current price for {symbol}. Skipping auto-trade.")
                 return
                 
+            # Important Fix: For indices, we need to create either futures or options contracts
+            # We can't trade indices directly
+            
+            # Check if this is an index (NIFTY, BANKNIFTY, FINNIFTY)
+            is_index = any(idx in symbol.upper() for idx in ["NIFTY", "BANKNIFTY", "FINNIFTY"])
+            
+            # Determine the instrument type - first check if we have this information from the UI
+            if hasattr(self, 'instrument_type_var'):
+                instrument_type = self.instrument_type_var.get()
+            else:
+                # Default to FUTURES if not specified
+                instrument_type = "FUTURES"
+                
+            # Create the full symbol with appropriate suffix for indices
+            if is_index:
+                if instrument_type == "FUTURES":
+                    # Get current month's expiry (last Thursday of month)
+                    now = datetime.now()
+                    if now.month == 12:
+                        next_month = 1
+                        next_year = now.year + 1
+                    else:
+                        next_month = now.month + 1
+                        next_year = now.year
+                    
+                    last_day = datetime(next_year, next_month, 1) - timedelta(days=1)
+                    offset = (last_day.weekday() - 3) % 7  # 3 is Thursday
+                    last_thursday = last_day - timedelta(days=offset)
+                    expiry_str = last_thursday.strftime("%d%b%y").upper()
+                    
+                    # Format: SYMBOL EXPIRY FUT
+                    full_symbol = f"{symbol} {expiry_str} FUT"
+                    entry_price = current_price  # Use index price for futures
+                else:
+                    # OPTIONS - Use the option type from UI if available
+                    if hasattr(self, 'option_type_var'):
+                        option_type = "CE" if self.option_type_var.get() == "CALL" else "PE"
+                    else:
+                        option_type = "CE" if trade_type == "BUY" else "PE"  # Default based on trade type
+                    
+                    # Get strike price from UI if available
+                    if hasattr(self, 'strike_price_label'):
+                        strike_text = self.strike_price_label.cget("text")
+                        if strike_text != "Calculating..." and strike_text != "Error":
+                            strike_price = float(strike_text.replace('₹', ''))
+                        else:
+                            # Calculate appropriate strike price (use common strike intervals)
+                            strike_intervals = {
+                                "NIFTY": 50,
+                                "BANKNIFTY": 100,
+                                "FINNIFTY": 50
+                            }
+                            
+                            interval = strike_intervals.get(symbol, 50)
+                            strike_price = round(current_price / interval) * interval
+                    else:
+                        # Calculate appropriate strike price (use common strike intervals)
+                        strike_intervals = {
+                            "NIFTY": 50,
+                            "BANKNIFTY": 100,
+                            "FINNIFTY": 50
+                        }
+                        
+                        interval = strike_intervals.get(symbol, 50)
+                        strike_price = round(current_price / interval) * interval
+                    
+                    # Get expiry date from UI if available
+                    if hasattr(self, 'expiry_var'):
+                        try:
+                            expiry_date = datetime.strptime(self.expiry_var.get(), "%d-%b-%Y")
+                            expiry_str = expiry_date.strftime("%d%b%y").upper()
+                        except:
+                            # Use current week's expiry as fallback
+                            now = datetime.now()
+                            days_to_thursday = (3 - now.weekday()) % 7  # 3 is Thursday
+                            if days_to_thursday == 0 and now.hour >= 15:  # After market close on Thursday
+                                days_to_thursday = 7  # Use next Thursday
+                            
+                            expiry_date = now + timedelta(days=days_to_thursday)
+                            expiry_str = expiry_date.strftime("%d%b%y").upper()
+                    else:
+                        # Use current week's expiry
+                        now = datetime.now()
+                        days_to_thursday = (3 - now.weekday()) % 7  # 3 is Thursday
+                        if days_to_thursday == 0 and now.hour >= 15:  # After market close on Thursday
+                            days_to_thursday = 7  # Use next Thursday
+                        
+                        expiry_date = now + timedelta(days=days_to_thursday)
+                        expiry_str = expiry_date.strftime("%d%b%y").upper()
+                    
+                    # Format: SYMBOL EXPIRY STRIKE CE/PE
+                    full_symbol = f"{symbol} {expiry_str} {int(strike_price)} {option_type}"
+                    
+                    # Get option premium from UI if available
+                    if hasattr(self, 'premium_label'):
+                        premium_text = self.premium_label.cget("text")
+                        if premium_text != "Calculating..." and premium_text != "Error":
+                            entry_price = float(premium_text.replace('₹', ''))
+                        else:
+                            # Calculate realistic option premium
+                            days_to_expiry = max(1, (expiry_date - datetime.now()).days + 1)
+                            
+                            # Different IV values based on symbol
+                            iv_values = {
+                                "NIFTY": 0.12,
+                                "BANKNIFTY": 0.16,
+                                "FINNIFTY": 0.14
+                            }
+                            iv = iv_values.get(symbol, 0.14)
+                            
+                            # Calculate intrinsic value
+                            if option_type == "CE":
+                                intrinsic = max(0, current_price - strike_price)
+                            else:  # PE
+                                intrinsic = max(0, strike_price - current_price)
+                            
+                            # Simple time value calculation (just for realistic pricing)
+                            time_value = current_price * iv * (days_to_expiry / 365) * (1 - abs(strike_price - current_price) / current_price)
+                            
+                            # Set option premium
+                            entry_price = max(intrinsic + time_value, 0.5)  # Minimum 0.5 premium
+                    else:
+                        # Calculate realistic option premium
+                        days_to_expiry = max(1, (expiry_date - datetime.now()).days + 1)
+                        
+                        # Different IV values based on symbol
+                        iv_values = {
+                            "NIFTY": 0.12,
+                            "BANKNIFTY": 0.16,
+                            "FINNIFTY": 0.14
+                        }
+                        iv = iv_values.get(symbol, 0.14)
+                        
+                        # Calculate intrinsic value
+                        if option_type == "CE":
+                            intrinsic = max(0, current_price - strike_price)
+                        else:  # PE
+                            intrinsic = max(0, strike_price - current_price)
+                        
+                        # Simple time value calculation (just for realistic pricing)
+                        time_value = current_price * iv * (days_to_expiry / 365) * (1 - abs(strike_price - current_price) / current_price)
+                        
+                        # Set option premium
+                        entry_price = max(intrinsic + time_value, 0.5)  # Minimum 0.5 premium
+            else:
+                # For stocks, we'll use the stock symbol directly
+                full_symbol = symbol
+                entry_price = current_price
+            
             # Determine quantity based on price and trade size
-            qty = max(1, int(trade_size / current_price))
+            qty = max(1, int(trade_size / entry_price))
             
             # Calculate stop loss and target
             if trade_type == "BUY":
-                stop_loss = current_price * (1 - sl_percent)
-                target = current_price * (1 + target_percent)
+                stop_loss = entry_price * (1 - sl_percent)
+                target = entry_price * (1 + target_percent)
             else:  # SELL
-                stop_loss = current_price * (1 + sl_percent)
-                target = current_price * (1 - target_percent)
+                stop_loss = entry_price * (1 + sl_percent)
+                target = entry_price * (1 - target_percent)
                 
             # Create the trade
             success, trade = self.trade_manager.create_trade(
-                symbol=symbol,
+                symbol=full_symbol,
                 trade_type=trade_type,
-                entry_price=current_price,
+                entry_price=entry_price,
                 qty=qty,
                 stop_loss=stop_loss,
                 target=target
             )
             
             if success:
-                print(f"Auto-trade created: {symbol} {trade_type} at {current_price}")
+                print(f"Auto-trade created: {full_symbol} {trade_type} at {entry_price}")
                 
                 # Record this trade
                 if not hasattr(self, 'auto_trade_history'):
                     self.auto_trade_history = []
                     
                 self.auto_trade_history.append({
-                    "symbol": symbol,
+                    "symbol": full_symbol,
                     "type": trade_type,
-                    "price": current_price,
+                    "price": entry_price,
                     "time": datetime.now(),
                     "strategy": strategy_name
                 })
@@ -1568,7 +1720,7 @@ class StrategyPage:
                 if hasattr(self, 'results_text'):
                     self.results_text.insert(
                         "1.0", 
-                        f"✅ AUTO TRADE: {trade_type} {qty} {symbol} @ ₹{current_price:.2f}\n" +
+                        f"✅ AUTO TRADE: {trade_type} {qty} {full_symbol} @ ₹{entry_price:.2f}\n" +
                         f"   Stop Loss: ₹{stop_loss:.2f}, Target: ₹{target:.2f}\n\n"
                     )
                 
@@ -4012,6 +4164,155 @@ class StrategyPage:
                     self.trade_results_text.insert("1.0", "❌ Error: Could not get current price for auto trade\n")
                 return
             
+            # Important Fix: For indices, we need to create either futures or options contracts
+            # We can't trade indices directly
+            
+            # Check if this is an index (NIFTY, BANKNIFTY, FINNIFTY)
+            is_index = any(idx in symbol.upper() for idx in ["NIFTY", "BANKNIFTY", "FINNIFTY"])
+            
+            # Determine the instrument type - first check if we have this information from the UI
+            if hasattr(self, 'instrument_type_var'):
+                instrument_type = self.instrument_type_var.get()
+            else:
+                # Default to FUTURES if not specified
+                instrument_type = "FUTURES"
+                
+            # Create the full symbol with appropriate suffix for indices
+            if is_index:
+                if instrument_type == "FUTURES":
+                    # Get current month's expiry (last Thursday of month)
+                    now = datetime.now()
+                    if now.month == 12:
+                        next_month = 1
+                        next_year = now.year + 1
+                    else:
+                        next_month = now.month + 1
+                        next_year = now.year
+                    
+                    last_day = datetime(next_year, next_month, 1) - timedelta(days=1)
+                    offset = (last_day.weekday() - 3) % 7  # 3 is Thursday
+                    last_thursday = last_day - timedelta(days=offset)
+                    expiry_str = last_thursday.strftime("%d%b%y").upper()
+                    
+                    # Format: SYMBOL EXPIRY FUT
+                    full_symbol = f"{symbol} {expiry_str} FUT"
+                    entry_price = current_price  # Use index price for futures
+                else:
+                    # OPTIONS - Use the option type from UI if available
+                    if hasattr(self, 'option_type_var'):
+                        option_type = "CE" if self.option_type_var.get() == "CALL" else "PE"
+                    else:
+                        option_type = "CE" if trade_type == "BUY" else "PE"  # Default based on trade type
+                    
+                    # Get strike price from UI if available
+                    if hasattr(self, 'strike_price_label'):
+                        strike_text = self.strike_price_label.cget("text")
+                        if strike_text != "Calculating..." and strike_text != "Error":
+                            strike_price = float(strike_text.replace('₹', ''))
+                        else:
+                            # Calculate appropriate strike price (use common strike intervals)
+                            strike_intervals = {
+                                "NIFTY": 50,
+                                "BANKNIFTY": 100,
+                                "FINNIFTY": 50
+                            }
+                            
+                            interval = strike_intervals.get(symbol, 50)
+                            strike_price = round(current_price / interval) * interval
+                    else:
+                        # Calculate appropriate strike price (use common strike intervals)
+                        strike_intervals = {
+                            "NIFTY": 50,
+                            "BANKNIFTY": 100,
+                            "FINNIFTY": 50
+                        }
+                        
+                        interval = strike_intervals.get(symbol, 50)
+                        strike_price = round(current_price / interval) * interval
+                    
+                    # Get expiry date from UI if available
+                    if hasattr(self, 'expiry_var'):
+                        try:
+                            expiry_date = datetime.strptime(self.expiry_var.get(), "%d-%b-%Y")
+                            expiry_str = expiry_date.strftime("%d%b%y").upper()
+                        except:
+                            # Use current week's expiry as fallback
+                            now = datetime.now()
+                            days_to_thursday = (3 - now.weekday()) % 7  # 3 is Thursday
+                            if days_to_thursday == 0 and now.hour >= 15:  # After market close on Thursday
+                                days_to_thursday = 7  # Use next Thursday
+                            
+                            expiry_date = now + timedelta(days=days_to_thursday)
+                            expiry_str = expiry_date.strftime("%d%b%y").upper()
+                    else:
+                        # Use current week's expiry
+                        now = datetime.now()
+                        days_to_thursday = (3 - now.weekday()) % 7  # 3 is Thursday
+                        if days_to_thursday == 0 and now.hour >= 15:  # After market close on Thursday
+                            days_to_thursday = 7  # Use next Thursday
+                        
+                        expiry_date = now + timedelta(days=days_to_thursday)
+                        expiry_str = expiry_date.strftime("%d%b%y").upper()
+                    
+                    # Format: SYMBOL EXPIRY STRIKE CE/PE
+                    full_symbol = f"{symbol} {expiry_str} {int(strike_price)} {option_type}"
+                    
+                    # Get option premium from UI if available
+                    if hasattr(self, 'premium_label'):
+                        premium_text = self.premium_label.cget("text")
+                        if premium_text != "Calculating..." and premium_text != "Error":
+                            entry_price = float(premium_text.replace('₹', ''))
+                        else:
+                            # Calculate realistic option premium
+                            days_to_expiry = max(1, (expiry_date - datetime.now()).days + 1)
+                            
+                            # Different IV values based on symbol
+                            iv_values = {
+                                "NIFTY": 0.12,
+                                "BANKNIFTY": 0.16,
+                                "FINNIFTY": 0.14
+                            }
+                            iv = iv_values.get(symbol, 0.14)
+                            
+                            # Calculate intrinsic value
+                            if option_type == "CE":
+                                intrinsic = max(0, current_price - strike_price)
+                            else:  # PE
+                                intrinsic = max(0, strike_price - current_price)
+                            
+                            # Simple time value calculation (just for realistic pricing)
+                            time_value = current_price * iv * (days_to_expiry / 365) * (1 - abs(strike_price - current_price) / current_price)
+                            
+                            # Set option premium
+                            entry_price = max(intrinsic + time_value, 0.5)  # Minimum 0.5 premium
+                    else:
+                        # Calculate realistic option premium
+                        days_to_expiry = max(1, (expiry_date - datetime.now()).days + 1)
+                        
+                        # Different IV values based on symbol
+                        iv_values = {
+                            "NIFTY": 0.12,
+                            "BANKNIFTY": 0.16,
+                            "FINNIFTY": 0.14
+                        }
+                        iv = iv_values.get(symbol, 0.14)
+                        
+                        # Calculate intrinsic value
+                        if option_type == "CE":
+                            intrinsic = max(0, current_price - strike_price)
+                        else:  # PE
+                            intrinsic = max(0, strike_price - current_price)
+                        
+                        # Simple time value calculation (just for realistic pricing)
+                        time_value = current_price * iv * (days_to_expiry / 365) * (1 - abs(strike_price - current_price) / current_price)
+                        
+                        # Set option premium
+                        entry_price = max(intrinsic + time_value, 0.5)  # Minimum 0.5 premium
+            else:
+                # For stocks, we'll use the stock symbol directly
+                full_symbol = symbol
+                entry_price = current_price
+            
             # Get quantity
             try:
                 lots = int(self.lots_var.get())
@@ -4029,17 +4330,17 @@ class StrategyPage:
                 target_percent = 0.03  # Default 3%
             
             if trade_type == "BUY":
-                stop_loss = current_price * (1 - sl_percent)
-                target = current_price * (1 + target_percent)
+                stop_loss = entry_price * (1 - sl_percent)
+                target = entry_price * (1 + target_percent)
             else:  # SELL
-                stop_loss = current_price * (1 + sl_percent)
-                target = current_price * (1 - target_percent)
+                stop_loss = entry_price * (1 + sl_percent)
+                target = entry_price * (1 - target_percent)
             
             # Create the trade
             success, result = self.trade_manager.create_trade(
-                symbol=symbol,
+                symbol=full_symbol,
                 trade_type=trade_type,
-                entry_price=current_price,
+                entry_price=entry_price,
                 qty=quantity,
                 stop_loss=stop_loss,
                 target=target
@@ -4050,17 +4351,17 @@ class StrategyPage:
                 # Format the result
                 if hasattr(self, 'trade_results_text'):
                     self.trade_results_text.delete("1.0", "end")
-                    self.trade_results_text.insert("1.0", f"✅ AUTO TRADE: {trade_type} {quantity} {symbol} @ ₹{current_price:.2f}\n\n")
+                    self.trade_results_text.insert("1.0", f"✅ AUTO TRADE: {trade_type} {quantity} {full_symbol} @ ₹{entry_price:.2f}\n\n")
                     self.trade_results_text.insert("end", f"Stop Loss: ₹{stop_loss:.2f}\n")
                     self.trade_results_text.insert("end", f"Target: ₹{target:.2f}\n\n")
                     
                     # Display risk-reward ratio
                     if trade_type == "BUY":
-                        risk = current_price - stop_loss
-                        reward = target - current_price
+                        risk = entry_price - stop_loss
+                        reward = target - entry_price
                     else:  # SELL
-                        risk = stop_loss - current_price
-                        reward = current_price - target
+                        risk = stop_loss - entry_price
+                        reward = entry_price - target
                     
                     rr_ratio = reward / risk
                     self.trade_results_text.insert("end", f"Risk-Reward Ratio: 1:{rr_ratio:.2f}\n\n")
