@@ -5,19 +5,17 @@ import StockPortfolioApp from './StockPortfolioApp'
 import './App.css'
 
 function App() {
-  const [showPortfolio, setShowPortfolio] = useState(false)
+  const [showPortfolio, setShowPortfolio] = useState(true) // Changed to true to show portfolio by default
 
   return (
     <Routes>
       <Route 
         path="/" 
-        element={
-          showPortfolio ? (
-            <StockPortfolioApp />
-          ) : (
-            <LandingPage onGetStarted={() => setShowPortfolio(true)} />
-          )
-        } 
+        element={<StockPortfolioApp />} // Direct portfolio app on home page
+      />
+      <Route 
+        path="/landing" 
+        element={<LandingPage onGetStarted={() => setShowPortfolio(true)} />} 
       />
       <Route 
         path="/app" 
