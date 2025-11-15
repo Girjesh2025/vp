@@ -254,7 +254,7 @@ export function usePortfolio() {
         .select('*')
         .eq('portfolio_id', currentPortfolio?.id)
         .eq('symbol', transactionData.stockSymbol)
-        .single()
+        .maybeSingle()
 
       if (stockError || !stockData) throw new Error('Stock not found')
 
@@ -346,7 +346,7 @@ export function usePortfolio() {
         .select('id')
         .eq('portfolio_id', currentPortfolio?.id)
         .eq('symbol', symbol)
-        .single()
+        .maybeSingle()
 
       if (stockError || !stockData) throw new Error('Stock not found')
 
