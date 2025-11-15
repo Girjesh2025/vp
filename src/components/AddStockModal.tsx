@@ -157,7 +157,7 @@ const AddStockModal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
       const newStock: Stock = {
         symbol: stockInfo.symbol,
         name: stockInfo.name,
-        displaySymbol: stockInfo.symbol,
+        displaySymbol: `${stockInfo.symbol}-${stockInfo.exchange}`,
         quantity: 0,
         avgPrice: 0
       };

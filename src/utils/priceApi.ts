@@ -161,65 +161,45 @@ async function fetchEODHDPrice(symbol: string): Promise<number | null> {
   }
 }
 
-// Convert symbol to EODHD format
-const toEODHDSymbol = (symbol: string): string => {
-  // Remove existing suffixes if present
-  const cleanSymbol = symbol.replace(/\.(NS|BO|NSE|BSE)$/, '');
-  
-  // Check if it's a US stock (common US symbols)
+// Convert to candidate symbols
+const toEODHDSymbols = (symbol: string): string[] => {
+  const cleanSymbol = symbol.replace(/\.(NS|BO|NSE|BSE)$/i, '');
   const usStocks = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'TSLA', 'META', 'NVDA', 'NFLX', 'ADBE', 'CRM', 'ORCL', 'IBM', 'INTC', 'AMD', 'UBER', 'LYFT', 'SNAP', 'TWTR', 'SPOT', 'SQ', 'PYPL', 'V', 'MA', 'JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'AXP', 'BRK.A', 'BRK.B', 'JNJ', 'PFE', 'MRK', 'ABBV', 'UNH', 'CVS', 'WMT', 'TGT', 'HD', 'LOW', 'NKE', 'SBUX', 'MCD', 'KO', 'PEP', 'DIS', 'CMCSA', 'VZ', 'T'];
-  
-  if (usStocks.includes(cleanSymbol)) {
-    // US stocks use .US suffix in EODHD
-    return `${cleanSymbol}.US`;
-  } else {
-    // Default to NSE for Indian stocks
-    return `${cleanSymbol}.NSE`;
-  }
+  if (usStocks.includes(cleanSymbol)) return [`${cleanSymbol}.US`];
+  return [`${cleanSymbol}.NSE`, `${cleanSymbol}.BSE`];
 };
 
 // Main function to fetch stock prices using local proxy server
 export const fetchStockPrice = async (symbol: string): Promise<PriceData | null> => {
   try {
     console.log(`🚀 [DEBUG] fetchStockPrice called for symbol: ${symbol}`);
-    const eodhSymbol = toEODHDSymbol(symbol);
+    const candidates = toEODHDSymbols(symbol);
     const baseUrl = resolveBaseUrl();
-    console.log(`🔄 [DEBUG] Converted to EODHD symbol: ${eodhSymbol}`);
+    console.log(`🔄 [DEBUG] Converted candidates: ${candidates.join(', ')}`);
     
-    // Use local proxy server instead of direct API calls
-    const response = await fetch(`${baseUrl}/api/stock/${eodhSymbol}?source=yahoo`, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      mode: 'cors'
-    });
-
-    if (!response.ok) {
-      throw new Error(`Proxy server responded with status: ${response.status}`);
-    }
-
-    const ct = response.headers.get('content-type') || '';
-    if (!ct.includes('application/json')) {
-      throw new Error(`Invalid content-type: ${ct}`);
-    }
-    const data = await response.json();
-    console.log(`🔍 [DEBUG] Proxy server response for ${symbol}:`, data);
-
-    if (data && typeof data.close === 'number' && data.close > 0) {
-      console.log(`✅ [DEBUG] Successfully got real price for ${symbol}: ${data.close} from ${data.source}`);
-      
-      // Calculate change if we have previous close data
-      const change = data.open && data.close ? ((data.close - data.open) / data.open) * 100 : 0;
-      
-      return {
-        price: Number(data.close.toFixed(2)),
-        change: Number(change.toFixed(2)),
-        previousClose: data.open || data.close,
-      };
-    } else {
-      throw new Error('Invalid data structure from proxy server');
+    for (const cand of candidates) {
+      try {
+        const response = await fetch(`${baseUrl}/api/stock/${cand}?source=yahoo`, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          mode: 'cors'
+        });
+        if (!response.ok) continue;
+        const ct = response.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) continue;
+        const data = await response.json();
+        if (data && typeof data.close === 'number' && data.close > 0) {
+          const change = data.open && data.close ? ((data.close - data.open) / data.open) * 100 : 0;
+          return {
+            price: Number(data.close.toFixed(2)),
+            change: Number(change.toFixed(2)),
+            previousClose: data.open || data.close,
+          };
+        }
+      } catch (_) {}
     }
   } catch (error) {
     console.warn(`❌ [DEBUG] Failed to fetch real price for ${symbol}, using mock data:`, error);
