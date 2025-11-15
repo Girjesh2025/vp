@@ -25,6 +25,7 @@ const AddStockModal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
   const [isValidating, setIsValidating] = useState(false);
   const [error, setError] = useState('');
   const [selectedSector, setSelectedSector] = useState<string>('');
+  const [exchangeFilter, setExchangeFilter] = useState<'ALL' | 'NSE' | 'BSE'>('ALL');
 
   // Initialize with popular stocks
   useEffect(() => {
@@ -39,7 +40,8 @@ const AddStockModal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
     async (searchQuery: string) => {
       if (!searchQuery.trim()) {
         const popularStocks = getPopularStocks(12);
-        setSearchResults(popularStocks);
+        const filtered = exchangeFilter === 'ALL' ? popularStocks : popularStocks.filter(s => s.exchange === exchangeFilter);
+        setSearchResults(filtered);
         return;
       }
 
@@ -49,7 +51,8 @@ const AddStockModal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
         // Use fast search for quick autocomplete (first 3 characters)
         if (searchQuery.length <= 3) {
           const fastResults = searchStocksFast(searchQuery, 10);
-          setSearchResults(fastResults);
+          const filtered = exchangeFilter === 'ALL' ? fastResults : fastResults.filter(s => s.exchange === exchangeFilter);
+          setSearchResults(filtered);
           setIsSearching(false);
           return;
         }
@@ -58,21 +61,24 @@ const AddStockModal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
         const dynamicResults = await searchStocksDynamic(searchQuery, 8);
         
         if (dynamicResults.length > 0) {
-          setSearchResults(dynamicResults);
+          const filtered = exchangeFilter === 'ALL' ? dynamicResults : dynamicResults.filter(s => s.exchange === exchangeFilter);
+          setSearchResults(filtered);
         } else {
           // Fallback to enhanced static search
           const staticResults = searchStocks(searchQuery, 10);
-          setSearchResults(staticResults);
+          const filtered = exchangeFilter === 'ALL' ? staticResults : staticResults.filter(s => s.exchange === exchangeFilter);
+          setSearchResults(filtered);
         }
       } catch (error) {
         console.warn('Dynamic search failed, using enhanced static search:', error);
         const results = searchStocks(searchQuery, 10);
-        setSearchResults(results);
+        const filtered = exchangeFilter === 'ALL' ? results : results.filter(s => s.exchange === exchangeFilter);
+        setSearchResults(filtered);
       } finally {
         setIsSearching(false);
       }
     },
-    []
+    [exchangeFilter]
   );
 
   // Search by sector
@@ -91,6 +97,14 @@ const AddStockModal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
 
     return () => clearTimeout(timeoutId);
   }, [symbol, debouncedSearch]);
+
+  // Re-filter current results when exchange filter changes
+  useEffect(() => {
+    if (showSuggestions) {
+      const filtered = exchangeFilter === 'ALL' ? searchResults : searchResults.filter(s => s.exchange === exchangeFilter);
+      setSearchResults(filtered);
+    }
+  }, [exchangeFilter]);
 
   if (!isOpen) return null;
 
@@ -217,12 +231,23 @@ const AddStockModal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
         </div>
         
         <div className="p-6 space-y-4 overflow-y-auto max-h-[calc(90vh-140px)]">
-          {/* Sector Filter Pills */}
+          {/* Exchange Filter and Sector Filter */}
           <div className="mb-4">
             <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Quick Filter by Sector
+              Quick Filters
             </label>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 items-center">
+              <select
+                value={exchangeFilter}
+                onChange={(e) => setExchangeFilter(e.target.value as any)}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                title="Filter by exchange"
+              >
+                <option value="ALL">All Exchanges</option>
+                <option value="NSE">NSE</option>
+                <option value="BSE">BSE</option>
+              </select>
+              <span className="text-xs text-gray-500">Sector:</span>
               {popularSectors.map((sector) => (
                 <button
                   key={sector}
@@ -243,7 +268,8 @@ const AddStockModal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
                   onClick={() => {
                     setSelectedSector('');
                     const popularStocks = getPopularStocks(12);
-                    setSearchResults(popularStocks);
+                    const filtered = exchangeFilter === 'ALL' ? popularStocks : popularStocks.filter(s => s.exchange === exchangeFilter);
+                    setSearchResults(filtered);
                   }}
                   className="px-3 py-1 text-xs rounded-full bg-red-50 text-red-600 border border-red-200 hover:bg-red-100"
                 >
