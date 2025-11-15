@@ -557,7 +557,7 @@ const StockPortfolioApp: React.FC = () => {
 
   return (
     <>
-      <div className="min-h-screen bg-gray-50 flex">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 flex">
       {/* Error handling for portfolio loading */}
       {portfolioError && (
         <div className="fixed inset-0 bg-gray-50 flex items-center justify-center z-50">
@@ -735,7 +735,7 @@ const StockPortfolioApp: React.FC = () => {
               </div>
 
               {/* Detailed Holdings Table */}
-              <div className="bg-white rounded-2xl p-6 shadow-lg">
+        <div className="bg-white/90 backdrop-blur rounded-2xl p-6 shadow-xl">
                 <h3 className="text-xl font-bold text-gray-800 mb-6">All Holdings</h3>
                 
                 {(!portfolioStocks || portfolioStocks.length === 0) && popularStocks.length > 0 ? (
@@ -938,7 +938,7 @@ const StockPortfolioApp: React.FC = () => {
                   </div>
 
                   {/* Transactions Table */}
-                  <div className="bg-white rounded-2xl p-6 shadow-lg">
+        <div className="bg-white/90 backdrop-blur rounded-2xl p-6 shadow-xl">
                     <h3 className="text-xl font-bold text-gray-800 mb-6">All Transactions</h3>
                     <div className="overflow-x-auto">
                       <table className="w-full">
