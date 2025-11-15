@@ -75,13 +75,13 @@ const PROXY_SERVICES = [
 
 async function fetchEODHDPrice(symbol: string): Promise<number | null> {
   try {
-    console.log(`🔍 [DEBUG] Fetching real-time price for ${symbol} via local proxy...`);
-    console.log(`🔍 [DEBUG] API URL: http://localhost:3001/api/stock/${symbol}`);
+    console.log(`🔍 [DEBUG] Fetching real-time price for ${symbol} via proxy...`);
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
     
-    const response = await fetch(`http://localhost:3001/api/stock/${symbol}`, {
+    const response = await fetch(`${baseUrl}/api/stock/${symbol}`, {
       signal: controller.signal,
       headers: {
         'Accept': 'application/json',
@@ -138,10 +138,11 @@ export const fetchStockPrice = async (symbol: string): Promise<PriceData | null>
   try {
     console.log(`🚀 [DEBUG] fetchStockPrice called for symbol: ${symbol}`);
     const eodhSymbol = toEODHDSymbol(symbol);
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
     console.log(`🔄 [DEBUG] Converted to EODHD symbol: ${eodhSymbol}`);
     
     // Use local proxy server instead of direct API calls
-    const response = await fetch(`http://localhost:3001/api/stock/${eodhSymbol}`, {
+    const response = await fetch(`${baseUrl}/api/stock/${eodhSymbol}`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',

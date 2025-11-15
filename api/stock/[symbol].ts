@@ -1,0 +1,123 @@
+export default async function handler(req: any, res: any) {
+  const symbol = (req.query?.symbol || req.query?.params?.symbol || '').toString();
+  if (!symbol) {
+    res.status(400).json({ error: 'Missing symbol' });
+    return;
+  }
+
+  const alphaKey = process.env.ALPHA_VANTAGE_KEY || '';
+  const finnhubKey = process.env.FINNHUB_KEY || '';
+  const eodhdKey = process.env.EODHD_API_TOKEN || '';
+
+  const formatSymbolForAPI = (s: string, api: string) => {
+    const clean = s.replace(/\.(NSE|BSE)$/i, '');
+    if (api === 'yahoo') {
+      if (/\.NSE$/i.test(s)) return `${clean}.NS`;
+      if (/\.BSE$/i.test(s)) return `${clean}.BO`;
+      return clean;
+    }
+    if (api === 'eodhd') return s;
+    return clean;
+  };
+
+  const fetchFromYahoo = async () => {
+    const formatted = formatSymbolForAPI(symbol, 'yahoo');
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${formatted}`;
+    const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    if (!r.ok) throw new Error(`yahoo ${r.status}`);
+    const data = await r.json();
+    const result = data?.chart?.result?.[0]?.meta;
+    if (!result) throw new Error('yahoo invalid');
+    return {
+      close: result.regularMarketPrice || result.previousClose,
+      open: result.regularMarketOpen,
+      high: result.regularMarketDayHigh,
+      low: result.regularMarketDayLow,
+      volume: result.regularMarketVolume,
+      source: 'Yahoo Finance'
+    };
+  };
+
+  const fetchFromAlpha = async () => {
+    if (!alphaKey) throw new Error('alpha missing');
+    const formatted = formatSymbolForAPI(symbol, 'alpha');
+    const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${formatted}&apikey=${alphaKey}`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`alpha ${r.status}`);
+    const data = await r.json();
+    const q = data['Global Quote'];
+    if (!q || !q['05. price']) throw new Error('alpha invalid');
+    return {
+      close: parseFloat(q['05. price']),
+      open: parseFloat(q['02. open']),
+      high: parseFloat(q['03. high']),
+      low: parseFloat(q['04. low']),
+      volume: parseInt(q['06. volume']),
+      source: 'Alpha Vantage'
+    };
+  };
+
+  const fetchFromFinnhub = async () => {
+    if (!finnhubKey) throw new Error('finnhub missing');
+    const formatted = formatSymbolForAPI(symbol, 'finnhub');
+    const url = `https://finnhub.io/api/v1/quote?symbol=${formatted}&token=${finnhubKey}`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`finnhub ${r.status}`);
+    const d = await r.json();
+    if (typeof d.c !== 'number') throw new Error('finnhub invalid');
+    return {
+      close: d.c,
+      open: d.o,
+      high: d.h,
+      low: d.l,
+      volume: d.v,
+      source: 'Finnhub'
+    };
+  };
+
+  const fetchFromEodhd = async () => {
+    if (!eodhdKey) throw new Error('eodhd missing');
+    const url = `https://eodhd.com/api/real-time/${symbol}?api_token=${eodhdKey}&fmt=json`;
+    const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!r.ok) throw new Error(`eodhd ${r.status}`);
+    const d = await r.json();
+    if (typeof d.close !== 'number') throw new Error('eodhd invalid');
+    return {
+      close: d.close,
+      open: d.open,
+      high: d.high,
+      low: d.low,
+      volume: d.volume,
+      source: 'EODHD'
+    };
+  };
+
+  const generateMock = () => {
+    const base = Math.random() * 1000 + 100;
+    const v = 0.05;
+    return {
+      close: Math.round(base * 100) / 100,
+      open: Math.round(base * (1 + (Math.random() - 0.5) * v) * 100) / 100,
+      high: Math.round(base * (1 + Math.random() * v) * 100) / 100,
+      low: Math.round(base * (1 - Math.random() * v) * 100) / 100,
+      volume: Math.floor(Math.random() * 1000000) + 10000,
+      source: 'Mock Data'
+    };
+  };
+
+  const chain: Array<() => Promise<any>> = [fetchFromYahoo];
+  if (alphaKey) chain.push(fetchFromAlpha);
+  if (finnhubKey) chain.push(fetchFromFinnhub);
+  if (eodhdKey) chain.push(fetchFromEodhd);
+
+  for (const fn of chain) {
+    try {
+      const data = await fn();
+      res.json(data);
+      return;
+    } catch (e) {
+    }
+  }
+
+  res.json(generateMock());
+}
