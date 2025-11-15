@@ -1,5 +1,6 @@
 export default async function handler(req: any, res: any) {
   const symbol = (req.query?.symbol || req.query?.params?.symbol || '').toString();
+  const source = (req.query?.source || '').toString().toLowerCase();
   if (!symbol) {
     res.status(400).json({ error: 'Missing symbol' });
     return;
@@ -106,19 +107,31 @@ export default async function handler(req: any, res: any) {
   };
 
   const chain: Array<() => Promise<any>> = [];
-  if (eodhdKey) chain.push(fetchFromEodhd);
-  chain.push(fetchFromYahoo);
-  if (alphaKey) chain.push(fetchFromAlpha);
-  if (finnhubKey) chain.push(fetchFromFinnhub);
+  if (source === 'yahoo') {
+    chain.push(fetchFromYahoo);
+  } else if (source === 'eodhd') {
+    chain.push(fetchFromEodhd);
+  } else if (source === 'alpha') {
+    chain.push(fetchFromAlpha);
+  } else if (source === 'finnhub') {
+    chain.push(fetchFromFinnhub);
+  } else {
+    chain.push(fetchFromYahoo);
+    if (alphaKey) chain.push(fetchFromAlpha);
+    if (finnhubKey) chain.push(fetchFromFinnhub);
+    if (eodhdKey) chain.push(fetchFromEodhd);
+  }
 
   for (const fn of chain) {
     try {
       const data = await fn();
+      res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=300');
       res.json(data);
       return;
     } catch (e) {
     }
   }
 
+  res.setHeader('Cache-Control', 's-maxage=10');
   res.json(generateMock());
 }

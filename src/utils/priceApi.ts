@@ -76,7 +76,9 @@ const PROXY_SERVICES = [
 async function fetchEODHDPrice(symbol: string): Promise<number | null> {
   try {
     console.log(`🔍 [DEBUG] Fetching real-time price for ${symbol} via proxy...`);
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const baseUrl = (import.meta.env.VITE_API_BASE_URL && import.meta.env.VITE_API_BASE_URL.trim())
+      ? import.meta.env.VITE_API_BASE_URL.trim()
+      : (import.meta.env.DEV ? 'http://localhost:3001' : '');
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -138,11 +140,13 @@ export const fetchStockPrice = async (symbol: string): Promise<PriceData | null>
   try {
     console.log(`🚀 [DEBUG] fetchStockPrice called for symbol: ${symbol}`);
     const eodhSymbol = toEODHDSymbol(symbol);
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const baseUrl = (import.meta.env.VITE_API_BASE_URL && import.meta.env.VITE_API_BASE_URL.trim())
+      ? import.meta.env.VITE_API_BASE_URL.trim()
+      : (import.meta.env.DEV ? 'http://localhost:3001' : '');
     console.log(`🔄 [DEBUG] Converted to EODHD symbol: ${eodhSymbol}`);
     
     // Use local proxy server instead of direct API calls
-    const response = await fetch(`${baseUrl}/api/stock/${eodhSymbol}`, {
+    const response = await fetch(`${baseUrl}/api/stock/${eodhSymbol}?source=yahoo`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
