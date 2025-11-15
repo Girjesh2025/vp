@@ -73,12 +73,20 @@ const PROXY_SERVICES = [
   }
 ];
 
+const resolveBaseUrl = (): string => {
+  const envBase = (import.meta.env.VITE_API_BASE_URL && import.meta.env.VITE_API_BASE_URL.trim())
+    ? import.meta.env.VITE_API_BASE_URL.trim()
+    : '';
+  if (envBase) return envBase;
+  const isLocalHost = typeof window !== 'undefined' && (/^localhost$/i.test(window.location.hostname) || /^127\.0\.0\.1$/.test(window.location.hostname));
+  if (isLocalHost) return 'http://localhost:3001';
+  return '';
+};
+
 async function fetchEODHDPrice(symbol: string): Promise<number | null> {
   try {
     console.log(`🔍 [DEBUG] Fetching real-time price for ${symbol} via proxy...`);
-    const baseUrl = (import.meta.env.VITE_API_BASE_URL && import.meta.env.VITE_API_BASE_URL.trim())
-      ? import.meta.env.VITE_API_BASE_URL.trim()
-      : (import.meta.env.DEV ? 'http://localhost:3001' : '');
+    const baseUrl = resolveBaseUrl();
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -101,6 +109,10 @@ async function fetchEODHDPrice(symbol: string): Promise<number | null> {
       return null;
     }
     
+    const ct = response.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) {
+      throw new Error(`Invalid content-type: ${ct}`);
+    }
     const data = await response.json();
     console.log(`🔍 [DEBUG] Response data:`, data);
     
@@ -140,9 +152,7 @@ export const fetchStockPrice = async (symbol: string): Promise<PriceData | null>
   try {
     console.log(`🚀 [DEBUG] fetchStockPrice called for symbol: ${symbol}`);
     const eodhSymbol = toEODHDSymbol(symbol);
-    const baseUrl = (import.meta.env.VITE_API_BASE_URL && import.meta.env.VITE_API_BASE_URL.trim())
-      ? import.meta.env.VITE_API_BASE_URL.trim()
-      : (import.meta.env.DEV ? 'http://localhost:3001' : '');
+    const baseUrl = resolveBaseUrl();
     console.log(`🔄 [DEBUG] Converted to EODHD symbol: ${eodhSymbol}`);
     
     // Use local proxy server instead of direct API calls
@@ -159,6 +169,10 @@ export const fetchStockPrice = async (symbol: string): Promise<PriceData | null>
       throw new Error(`Proxy server responded with status: ${response.status}`);
     }
 
+    const ct = response.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) {
+      throw new Error(`Invalid content-type: ${ct}`);
+    }
     const data = await response.json();
     console.log(`🔍 [DEBUG] Proxy server response for ${symbol}:`, data);
 
