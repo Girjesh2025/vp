@@ -105,10 +105,11 @@ export default async function handler(req: any, res: any) {
     };
   };
 
-  const chain: Array<() => Promise<any>> = [fetchFromYahoo];
+  const chain: Array<() => Promise<any>> = [];
+  if (eodhdKey) chain.push(fetchFromEodhd);
+  chain.push(fetchFromYahoo);
   if (alphaKey) chain.push(fetchFromAlpha);
   if (finnhubKey) chain.push(fetchFromFinnhub);
-  if (eodhdKey) chain.push(fetchFromEodhd);
 
   for (const fn of chain) {
     try {
