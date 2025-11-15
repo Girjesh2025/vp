@@ -80,6 +80,8 @@ const StockPortfolioApp: React.FC = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{isOpen: boolean, stock: Stock | null}>({isOpen: false, stock: null});
 
+  const memoPortfolioSymbols = useMemo(() => portfolioStocks.map(stock => stock.symbol), [portfolioStocks]);
+
   const updatePrices = async () => {
     if (stocks.length === 0) return;
     
@@ -999,7 +1001,7 @@ const StockPortfolioApp: React.FC = () => {
               )}
           {activeTab === 'ai-trading' && (
             <AITradingSuggestions 
-              portfolioSymbols={useMemo(() => portfolioStocks.map(stock => stock.symbol), [portfolioStocks])}
+              portfolioSymbols={memoPortfolioSymbols}
             />
           )}
               {activeTab === 'stock-recommendations' && (
