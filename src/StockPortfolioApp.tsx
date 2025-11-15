@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, TrendingUp, TrendingDown, DollarSign, PieChart, BarChart3, Settings, User, Wallet, Activity, Trash2, Edit, Briefcase } from 'lucide-react';
 import AddStockModal from './components/AddStockModal';
 import TransactionModal from './components/TransactionModal';
@@ -997,11 +997,11 @@ const StockPortfolioApp: React.FC = () => {
                   getStockInfo={getStockBySymbol}
                 />
               )}
-              {activeTab === 'ai-trading' && (
-                <AITradingSuggestions 
-                  portfolioSymbols={portfolioStocks.map(stock => stock.symbol)}
-                />
-              )}
+          {activeTab === 'ai-trading' && (
+            <AITradingSuggestions 
+              portfolioSymbols={useMemo(() => portfolioStocks.map(stock => stock.symbol), [portfolioStocks])}
+            />
+          )}
               {activeTab === 'stock-recommendations' && (
                 <StockRecommendations />
               )}
