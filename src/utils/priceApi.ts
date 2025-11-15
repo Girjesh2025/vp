@@ -83,6 +83,37 @@ const resolveBaseUrl = (): string => {
   return '';
 };
 
+const toYahooSymbol = (symbol: string): string => {
+  const clean = symbol.replace(/\.(NSE|BSE)$/i, '');
+  if (/\.NSE$/i.test(symbol)) return `${clean}.NS`;
+  if (/\.BSE$/i.test(symbol)) return `${clean}.BO`;
+  return clean;
+};
+
+const fetchYahooViaProxy = async (symbol: string): Promise<PriceData | null> => {
+  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${toYahooSymbol(symbol)}`;
+  for (const p of PROXY_SERVICES) {
+    try {
+      const r = await fetch(`${p.url}${encodeURIComponent(yahooUrl)}`, { method: 'GET' });
+      const raw = await r.json();
+      const data = p.transform(raw);
+      const meta = data?.chart?.result?.[0]?.meta;
+      if (meta && (typeof meta.regularMarketPrice === 'number' || typeof meta.previousClose === 'number')) {
+        const close = meta.regularMarketPrice ?? meta.previousClose ?? 0;
+        const open = meta.regularMarketOpen ?? close;
+        const change = open ? ((close - open) / open) * 100 : 0;
+        return {
+          price: Number(close.toFixed(2)),
+          change: Number(change.toFixed(2)),
+          previousClose: Number((open || close).toFixed(2))
+        };
+      }
+    } catch (_) {
+    }
+  }
+  return null;
+};
+
 async function fetchEODHDPrice(symbol: string): Promise<number | null> {
   try {
     console.log(`🔍 [DEBUG] Fetching real-time price for ${symbol} via proxy...`);
@@ -192,8 +223,8 @@ export const fetchStockPrice = async (symbol: string): Promise<PriceData | null>
     }
   } catch (error) {
     console.warn(`❌ [DEBUG] Failed to fetch real price for ${symbol}, using mock data:`, error);
-    
-    // Fallback to mock data if proxy server fails
+    const yahooFallback = await fetchYahooViaProxy(symbol);
+    if (yahooFallback) return yahooFallback;
     return getMockPrice(symbol);
   }
 };
