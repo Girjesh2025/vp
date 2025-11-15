@@ -184,22 +184,22 @@ const ProfessionalHeader: React.FC<ProfessionalHeaderProps> = ({
           <div className="flex items-center space-x-4">
             {/* Market Status */}
             <div className={`hidden md:flex items-center space-x-2 px-3 py-1.5 rounded-full ${isMarketOpen() 
-              ? 'bg-green-50' 
-              : 'bg-gray-50'
+              ? 'bg-green-50 border border-green-200' 
+              : 'bg-red-50 border border-red-200'
             }`}>
               <div className={`w-2 h-2 rounded-full ${isMarketOpen() 
                 ? 'bg-green-500 animate-pulse' 
-                : 'bg-gray-400'
+                : 'bg-red-500'
               }`}></div>
               <span className={`text-sm font-medium ${isMarketOpen() 
                 ? 'text-green-700' 
-                : 'text-gray-600'
+                : 'text-red-700'
               }`}>
-                {isMarketOpen() ? 'Market Open' : 'Market Closed'}
+                {isMarketOpen() ? 'Market Open • LIVE' : 'Market Closed'}
               </span>
               <Globe className={`w-4 h-4 ${isMarketOpen() 
                 ? 'text-green-600' 
-                : 'text-gray-500'
+                : 'text-red-600'
               }`} />
             </div>
 
