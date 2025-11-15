@@ -1,0 +1,22 @@
+export const popularStocks = [
+  { symbol: 'RELIANCE', name: 'Reliance Industries Limited' },
+  { symbol: 'TCS', name: 'Tata Consultancy Services' },
+  { symbol: 'INFY', name: 'Infosys Limited' },
+  { symbol: 'HDFCBANK', name: 'HDFC Bank Limited' },
+  { symbol: 'ICICIBANK', name: 'ICICI Bank Limited' },
+  { symbol: 'HINDUNILVR', name: 'Hindustan Unilever Limited' },
+  { symbol: 'ITC', name: 'ITC Limited' },
+  { symbol: 'SBIN', name: 'State Bank of India' },
+  { symbol: 'BHARTIARTL', name: 'Bharti Airtel Limited' },
+  { symbol: 'KOTAKBANK', name: 'Kotak Mahindra Bank Limited' },
+  { symbol: 'LT', name: 'Larsen & Toubro Limited' },
+  { symbol: 'ASIANPAINT', name: 'Asian Paints Limited' },
+  { symbol: 'MARUTI', name: 'Maruti Suzuki India Limited' },
+  { symbol: 'AXISBANK', name: 'Axis Bank Limited' },
+  { symbol: 'TITAN', name: 'Titan Company Limited' },
+  { symbol: 'NESTLEIND', name: 'Nestle India Limited' },
+  { symbol: 'ULTRACEMCO', name: 'UltraTech Cement Limited' },
+  { symbol: 'BAJFINANCE', name: 'Bajaj Finance Limited' },
+  { symbol: 'WIPRO', name: 'Wipro Limited' },
+  { symbol: 'TECHM', name: 'Tech Mahindra Limited' }
+];
