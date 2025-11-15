@@ -474,7 +474,61 @@ export const stockDatabase: StockInfo[] = [
    { symbol: '532144', name: 'Welspun Corp Limited', exchange: 'BSE', sector: 'Steel', marketCap: 'Small' },
    { symbol: '514162', name: 'Welspun India Limited', exchange: 'BSE', sector: 'Textiles', marketCap: 'Small' },
    { symbol: '532300', name: 'Wockhardt Limited', exchange: 'BSE', sector: 'Pharmaceuticals', marketCap: 'Small' },
-   { symbol: '532321', name: 'Zensar Technologies Limited', exchange: 'BSE', sector: 'IT Services', marketCap: 'Small' }
+  { symbol: '532321', name: 'Zensar Technologies Limited', exchange: 'BSE', sector: 'IT Services', marketCap: 'Small' }
+  ,
+  { symbol: 'RELIANCE', name: 'Reliance Industries Limited', exchange: 'BSE', sector: 'Oil & Gas', marketCap: 'Large' },
+  { symbol: 'TCS', name: 'Tata Consultancy Services', exchange: 'BSE', sector: 'IT Services', marketCap: 'Large' },
+  { symbol: 'HDFCBANK', name: 'HDFC Bank Limited', exchange: 'BSE', sector: 'Banking', marketCap: 'Large' },
+  { symbol: 'INFY', name: 'Infosys Limited', exchange: 'BSE', sector: 'IT Services', marketCap: 'Large' },
+  { symbol: 'ICICIBANK', name: 'ICICI Bank Limited', exchange: 'BSE', sector: 'Banking', marketCap: 'Large' },
+  { symbol: 'HINDUNILVR', name: 'Hindustan Unilever Limited', exchange: 'BSE', sector: 'FMCG', marketCap: 'Large' },
+  { symbol: 'ITC', name: 'ITC Limited', exchange: 'BSE', sector: 'FMCG', marketCap: 'Large' },
+  { symbol: 'SBIN', name: 'State Bank of India', exchange: 'BSE', sector: 'Banking', marketCap: 'Large' },
+  { symbol: 'BHARTIARTL', name: 'Bharti Airtel Limited', exchange: 'BSE', sector: 'Telecom', marketCap: 'Large' },
+  { symbol: 'KOTAKBANK', name: 'Kotak Mahindra Bank Limited', exchange: 'BSE', sector: 'Banking', marketCap: 'Large' },
+  { symbol: 'LT', name: 'Larsen & Toubro Limited', exchange: 'BSE', sector: 'Engineering', marketCap: 'Large' },
+  { symbol: 'ASIANPAINT', name: 'Asian Paints Limited', exchange: 'BSE', sector: 'Paints', marketCap: 'Large' },
+  { symbol: 'MARUTI', name: 'Maruti Suzuki India Limited', exchange: 'BSE', sector: 'Automobile', marketCap: 'Large' },
+  { symbol: 'AXISBANK', name: 'Axis Bank Limited', exchange: 'BSE', sector: 'Banking', marketCap: 'Large' },
+  { symbol: 'TITAN', name: 'Titan Company Limited', exchange: 'BSE', sector: 'Jewellery', marketCap: 'Large' },
+  { symbol: 'NESTLEIND', name: 'Nestle India Limited', exchange: 'BSE', sector: 'FMCG', marketCap: 'Large' },
+  { symbol: 'ULTRACEMCO', name: 'UltraTech Cement Limited', exchange: 'BSE', sector: 'Cement', marketCap: 'Large' },
+  { symbol: 'BAJFINANCE', name: 'Bajaj Finance Limited', exchange: 'BSE', sector: 'NBFC', marketCap: 'Large' },
+  { symbol: 'WIPRO', name: 'Wipro Limited', exchange: 'BSE', sector: 'IT Services', marketCap: 'Large' },
+  { symbol: 'TECHM', name: 'Tech Mahindra Limited', exchange: 'BSE', sector: 'IT Services', marketCap: 'Large' },
+  { symbol: 'ADANIPORTS', name: 'Adani Ports and Special Economic Zone Limited', exchange: 'BSE', sector: 'Infrastructure', marketCap: 'Large' },
+  { symbol: 'APOLLOHOSP', name: 'Apollo Hospitals Enterprise Limited', exchange: 'BSE', sector: 'Healthcare', marketCap: 'Large' },
+  { symbol: 'BAJAJ-AUTO', name: 'Bajaj Auto Limited', exchange: 'BSE', sector: 'Automobile', marketCap: 'Large' },
+  { symbol: 'BAJAJFINSV', name: 'Bajaj Finserv Limited', exchange: 'BSE', sector: 'Financial Services', marketCap: 'Large' },
+  { symbol: 'BPCL', name: 'Bharat Petroleum Corporation Limited', exchange: 'BSE', sector: 'Oil & Gas', marketCap: 'Large' },
+  { symbol: 'BRITANNIA', name: 'Britannia Industries Limited', exchange: 'BSE', sector: 'FMCG', marketCap: 'Large' },
+  { symbol: 'CIPLA', name: 'Cipla Limited', exchange: 'BSE', sector: 'Pharmaceuticals', marketCap: 'Large' },
+  { symbol: 'COALINDIA', name: 'Coal India Limited', exchange: 'BSE', sector: 'Mining', marketCap: 'Large' },
+  { symbol: 'DIVISLAB', name: "Divi's Laboratories Limited", exchange: 'BSE', sector: 'Pharmaceuticals', marketCap: 'Large' },
+  { symbol: 'DRREDDY', name: "Dr. Reddy's Laboratories Limited", exchange: 'BSE', sector: 'Pharmaceuticals', marketCap: 'Large' },
+  { symbol: 'EICHERMOT', name: 'Eicher Motors Limited', exchange: 'BSE', sector: 'Automobile', marketCap: 'Large' },
+  { symbol: 'GRASIM', name: 'Grasim Industries Limited', exchange: 'BSE', sector: 'Cement', marketCap: 'Large' },
+  { symbol: 'HCLTECH', name: 'HCL Technologies Limited', exchange: 'BSE', sector: 'IT Services', marketCap: 'Large' },
+  { symbol: 'HEROMOTOCO', name: 'Hero MotoCorp Limited', exchange: 'BSE', sector: 'Automobile', marketCap: 'Large' },
+  { symbol: 'HINDALCO', name: 'Hindalco Industries Limited', exchange: 'BSE', sector: 'Metals', marketCap: 'Large' },
+  { symbol: 'INDUSINDBK', name: 'IndusInd Bank Limited', exchange: 'BSE', sector: 'Banking', marketCap: 'Large' },
+  { symbol: 'IOC', name: 'Indian Oil Corporation Limited', exchange: 'BSE', sector: 'Oil & Gas', marketCap: 'Large' },
+  { symbol: 'JSWSTEEL', name: 'JSW Steel Limited', exchange: 'BSE', sector: 'Steel', marketCap: 'Large' },
+  { symbol: 'M&M', name: 'Mahindra & Mahindra Limited', exchange: 'BSE', sector: 'Automobile', marketCap: 'Large' },
+  { symbol: 'NTPC', name: 'NTPC Limited', exchange: 'BSE', sector: 'Power', marketCap: 'Large' },
+  { symbol: 'ONGC', name: 'Oil and Natural Gas Corporation Limited', exchange: 'BSE', sector: 'Oil & Gas', marketCap: 'Large' },
+  { symbol: 'POWERGRID', name: 'Power Grid Corporation of India Limited', exchange: 'BSE', sector: 'Power', marketCap: 'Large' },
+  { symbol: 'SUNPHARMA', name: 'Sun Pharmaceutical Industries Limited', exchange: 'BSE', sector: 'Pharmaceuticals', marketCap: 'Large' },
+  { symbol: 'TATACONSUM', name: 'Tata Consumer Products Limited', exchange: 'BSE', sector: 'FMCG', marketCap: 'Large' },
+  { symbol: 'TATAMOTORS', name: 'Tata Motors Limited', exchange: 'BSE', sector: 'Automobile', marketCap: 'Large' },
+  { symbol: 'TATASTEEL', name: 'Tata Steel Limited', exchange: 'BSE', sector: 'Steel', marketCap: 'Large' },
+  { symbol: 'UPL', name: 'UPL Limited', exchange: 'BSE', sector: 'Chemicals', marketCap: 'Large' },
+  { symbol: 'VEDL', name: 'Vedanta Limited', exchange: 'BSE', sector: 'Metals', marketCap: 'Large' },
+  { symbol: 'SAIL', name: 'Steel Authority of India Limited', exchange: 'BSE', sector: 'Steel', marketCap: 'Large' },
+  { symbol: 'NMDC', name: 'NMDC Limited', exchange: 'BSE', sector: 'Mining', marketCap: 'Large' },
+  { symbol: 'GAIL', name: 'GAIL (India) Limited', exchange: 'BSE', sector: 'Oil & Gas', marketCap: 'Large' },
+  { symbol: 'PETRONET', name: 'Petronet LNG Limited', exchange: 'BSE', sector: 'Oil & Gas', marketCap: 'Large' },
+  { symbol: 'INDIGO', name: 'InterGlobe Aviation Limited', exchange: 'BSE', sector: 'Aviation', marketCap: 'Large' }
 ];
 
 // Search functions
@@ -514,9 +568,9 @@ export function searchStocksBySector(sector: string): StockInfo[] {
   );
 }
 
-export function getPopularStocks(): StockInfo[] {
-  // Return large cap stocks as popular stocks
-  return stockDatabase.filter(stock => stock.marketCap === 'Large').slice(0, 20);
+export function getPopularStocks(limit?: number): StockInfo[] {
+  const results = stockDatabase.filter(stock => stock.marketCap === 'Large');
+  return results.slice(0, typeof limit === 'number' ? limit : 20);
 }
 
 export function getStockBySymbol(symbol: string): StockInfo | undefined {
