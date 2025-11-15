@@ -5,6 +5,7 @@ export interface StockInfo {
   exchange: 'NSE' | 'BSE';
   sector?: string;
   marketCap?: 'Large' | 'Mid' | 'Small';
+  isin?: string;
 }
 
 export const stockDatabase: StockInfo[] = [
@@ -62,6 +63,8 @@ export const stockDatabase: StockInfo[] = [
   { symbol: 'GAIL', name: 'GAIL (India) Limited', exchange: 'NSE', sector: 'Oil & Gas', marketCap: 'Large' },
   { symbol: 'PETRONET', name: 'Petronet LNG Limited', exchange: 'NSE', sector: 'Oil & Gas', marketCap: 'Large' },
   { symbol: 'INDIGO', name: 'InterGlobe Aviation Limited', exchange: 'NSE', sector: 'Aviation', marketCap: 'Large' },
+  // BSE Limited (Exchange)
+  { symbol: 'BSE', name: 'BSE Limited', exchange: 'NSE', sector: 'Exchange', marketCap: 'Mid', isin: 'INE118H01025' },
 
   // NSE Mid Cap Stocks
   { symbol: 'ADANIGREEN', name: 'Adani Green Energy Limited', exchange: 'NSE', sector: 'Renewable Energy', marketCap: 'Mid' },
@@ -360,6 +363,7 @@ export const stockDatabase: StockInfo[] = [
   { symbol: '500251', name: 'Trent Limited', exchange: 'BSE', sector: 'Retail', marketCap: 'Mid' },
   { symbol: '532343', name: 'TVS Motor Company Limited', exchange: 'BSE', sector: 'Automobile', marketCap: 'Mid' },
   { symbol: '533271', name: 'Ujjivan Financial Services Limited', exchange: 'BSE', sector: 'NBFC', marketCap: 'Mid' },
+  { symbol: '539956', name: 'BSE Limited', exchange: 'BSE', sector: 'Exchange', marketCap: 'Mid', isin: 'INE118H01025' },
 
   // BSE Small Cap Stocks (Sample)
   { symbol: '540611', name: 'Aavas Financiers Limited', exchange: 'BSE', sector: 'Housing Finance', marketCap: 'Small' },
@@ -540,7 +544,8 @@ export function searchStocks(query: string): StockInfo[] {
   return stockDatabase.filter(stock => 
     stock.symbol.toLowerCase().includes(searchTerm) ||
     stock.name.toLowerCase().includes(searchTerm) ||
-    stock.sector.toLowerCase().includes(searchTerm)
+    stock.sector.toLowerCase().includes(searchTerm) ||
+    (stock.isin ? stock.isin.toLowerCase().includes(searchTerm) : false)
   ).slice(0, 50); // Limit results for performance
 }
 
@@ -554,7 +559,8 @@ export function searchStocksFast(query: string): StockInfo[] {
   for (let i = 0; i < stockDatabase.length && results.length < 20; i++) {
     const stock = stockDatabase[i];
     if (stock.symbol.toLowerCase().includes(searchTerm) ||
-        stock.name.toLowerCase().includes(searchTerm)) {
+        stock.name.toLowerCase().includes(searchTerm) ||
+        (stock.isin ? stock.isin.toLowerCase().includes(searchTerm) : false)) {
       results.push(stock);
     }
   }
@@ -615,6 +621,7 @@ interface SearchIndex {
   nameIndex: Map<string, StockInfo[]>;
   sectorIndex: Map<string, StockInfo[]>;
   exactSymbolIndex: Map<string, StockInfo>;
+  exactIsinIndex: Map<string, StockInfo>;
 }
 
 interface CacheEntry {
@@ -637,10 +644,14 @@ class SearchOptimizer {
     const nameIndex = new Map<string, StockInfo[]>();
     const sectorIndex = new Map<string, StockInfo[]>();
     const exactSymbolIndex = new Map<string, StockInfo>();
+    const exactIsinIndex = new Map<string, StockInfo>();
 
     stockDatabase.forEach(stock => {
       // Exact symbol lookup
       exactSymbolIndex.set(stock.symbol.toLowerCase(), stock);
+      if (stock.isin) {
+        exactIsinIndex.set(stock.isin.toLowerCase(), stock);
+      }
 
       // Symbol prefix indexing
       const symbol = stock.symbol.toLowerCase();
@@ -676,7 +687,7 @@ class SearchOptimizer {
       }
     });
 
-    return { symbolIndex, nameIndex, sectorIndex, exactSymbolIndex };
+    return { symbolIndex, nameIndex, sectorIndex, exactSymbolIndex, exactIsinIndex };
   }
 
   // Levenshtein distance for fuzzy search
@@ -745,6 +756,12 @@ class SearchOptimizer {
     if (exactMatch) {
       results.add(exactMatch);
       scores.set(exactMatch, 100);
+    }
+    // 1b. Exact ISIN match
+    const exactIsin = this.searchIndex.exactIsinIndex.get(searchTerm);
+    if (exactIsin) {
+      results.add(exactIsin);
+      scores.set(exactIsin, 100);
     }
 
     // 2. Symbol prefix matches
