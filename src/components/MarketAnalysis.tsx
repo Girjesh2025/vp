@@ -38,30 +38,25 @@ interface IndexData {
   error: boolean;
 }
 
-const PROXY_SERVICES = [
-  { url: 'https://api.allorigins.win/get?url=', transform: (d: any) => JSON.parse(d.contents) },
-  { url: 'https://api.codetabs.com/v1/proxy?quest=', transform: (d: any) => d },
-];
-
-const fetchIndexData = async (symbol: string): Promise<{ price: number; change: number; prevClose: number } | null> => {
+// Single fastest proxy with AbortSignal support for timeout control
+const fetchIndexData = async (symbol: string, signal: AbortSignal): Promise<{ price: number; change: number; prevClose: number } | null> => {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`;
-  for (const p of PROXY_SERVICES) {
-    try {
-      const r = await fetch(`${p.url}${encodeURIComponent(url)}`, { method: 'GET' });
-      if (!r.ok) continue;
-      const raw = await r.json();
-      const data = p.transform(raw);
-      const meta = data?.chart?.result?.[0]?.meta;
-      if (meta && typeof meta.regularMarketPrice === 'number') {
-        const price = meta.regularMarketPrice;
-        const prevClose = meta.previousClose ?? meta.chartPreviousClose ?? price;
-        const change = prevClose ? ((price - prevClose) / prevClose) * 100 : 0;
-        return { price, change, prevClose };
-      }
-    } catch (_) {}
-  }
+  try {
+    const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, { signal });
+    if (!r.ok) return null;
+    const raw = await r.json();
+    const data = JSON.parse(raw.contents ?? '{}');
+    const meta = data?.chart?.result?.[0]?.meta;
+    if (meta && typeof meta.regularMarketPrice === 'number') {
+      const price = meta.regularMarketPrice;
+      const prevClose = meta.previousClose ?? meta.chartPreviousClose ?? price;
+      const change = prevClose ? ((price - prevClose) / prevClose) * 100 : 0;
+      return { price, change, prevClose };
+    }
+  } catch (_) {}
   return null;
 };
+
 
 const getHeatColor = (change: number | null): { bg: string; border: string; text: string } => {
   if (change === null) return { bg: 'rgba(55,65,81,0.5)', border: 'rgba(107,114,128,0.3)', text: '#9CA3AF' };
@@ -86,36 +81,31 @@ const MarketAnalysis: React.FC = () => {
 
   const loadAll = useCallback(async () => {
     setRefreshing(true);
-    // Reset loading states
-    setIndices(prev => prev.map(i => ({ ...i, loading: true, error: false })));
+    // Reset all to loading
+    setIndices(SECTORAL_INDICES.map(i => ({ ...i, price: null, change: null, prevClose: null, loading: true, error: false })));
 
-    // Fetch in small batches to avoid rate limits
-    const batchSize = 4;
-    for (let start = 0; start < SECTORAL_INDICES.length; start += batchSize) {
-      const batch = SECTORAL_INDICES.slice(start, start + batchSize);
-      const results = await Promise.all(batch.map(async (idx) => {
-        const data = await fetchIndexData(idx.symbol);
-        return { symbol: idx.symbol, data };
-      }));
+    // Fire ALL requests in parallel — each with a 3.5-second timeout
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3500);
 
-      setIndices(prev => prev.map(item => {
-        const result = results.find(r => r.symbol === item.symbol);
-        if (!result) return item;
-        if (!result.data) return { ...item, loading: false, error: true };
-        return {
-          ...item,
-          price: result.data.price,
-          change: result.data.change,
-          prevClose: result.data.prevClose,
-          loading: false,
-          error: false,
-        };
-      }));
-      // Small delay between batches
-      if (start + batchSize < SECTORAL_INDICES.length) {
-        await new Promise(r => setTimeout(r, 300));
-      }
-    }
+    await Promise.allSettled(
+      SECTORAL_INDICES.map(async (idx) => {
+        const data = await fetchIndexData(idx.symbol, controller.signal);
+        // Update this single tile immediately when it arrives
+        setIndices(prev => prev.map(item =>
+          item.symbol !== idx.symbol ? item : {
+            ...item,
+            loading: false,
+            error: !data,
+            price: data?.price ?? null,
+            change: data?.change ?? null,
+            prevClose: data?.prevClose ?? null,
+          }
+        ));
+      })
+    );
+
+    clearTimeout(timer);
     setLastUpdated(new Date());
     setRefreshing(false);
   }, []);
