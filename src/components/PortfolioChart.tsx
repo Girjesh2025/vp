@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, Search } from 'lucide-react';
+import { isMarketOpen } from '../utils/priceApi';
 import type { Stock } from '../types';
 
 interface Props {
@@ -30,27 +31,8 @@ const PortfolioChart: React.FC<Props> = ({ stocks, priceData }) => {
     );
   }
 
-  // Check if Indian market is open
-  const isIndianMarketOpen = () => {
-    const now = new Date();
-    const istTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
-    const day = istTime.getDay(); // 0 = Sunday, 6 = Saturday
-    const hours = istTime.getHours();
-    const minutes = istTime.getMinutes();
-    const currentTime = hours * 60 + minutes;
-    
-    // Market closed on weekends
-    if (day === 0 || day === 6) return false;
-    
-    // Market hours: 9:15 AM to 3:30 PM IST
-    const marketOpen = 9 * 60 + 15; // 9:15 AM
-    const marketClose = 15 * 60 + 30; // 3:30 PM
-    
-    return currentTime >= marketOpen && currentTime <= marketClose;
-  };
-
   // Calculate portfolio allocation using market-aware pricing
-  const marketOpen = isIndianMarketOpen();
+  const marketOpen = isMarketOpen();
   const totalValue = stocks.reduce((sum, stock) => {
     // Use current price only when market is open, otherwise use average price
     const currentPrice = marketOpen ? (priceData[stock.symbol]?.price || stock.avgPrice) : stock.avgPrice;

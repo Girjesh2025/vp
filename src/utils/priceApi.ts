@@ -1,26 +1,26 @@
 import type { PriceData } from '../types';
 
-// Check if Indian stock market is open
-const isIndianMarketOpen = (): boolean => {
+/**
+ * Single source of truth for Indian stock market hours.
+ * NSE/BSE: Mon–Fri, 9:15 AM – 3:30 PM IST.
+ * Exported so all components share one implementation.
+ */
+export const isMarketOpen = (): boolean => {
   const now = new Date();
   const istTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
-  
+
   const day = istTime.getDay(); // 0 = Sunday, 6 = Saturday
-  const hours = istTime.getHours();
-  const minutes = istTime.getMinutes();
-  const currentTime = hours * 60 + minutes; // Convert to minutes
-  
-  // Market is closed on weekends
-  if (day === 0 || day === 6) {
-    return false;
-  }
-  
-  // Market hours: 9:15 AM to 3:30 PM IST (555 minutes to 930 minutes)
-  const marketOpen = 9 * 60 + 15; // 9:15 AM
+  if (day === 0 || day === 6) return false; // Weekend
+
+  const currentTime = istTime.getHours() * 60 + istTime.getMinutes();
+  const marketOpen  = 9 * 60 + 15;  // 9:15 AM
   const marketClose = 15 * 60 + 30; // 3:30 PM
-  
+
   return currentTime >= marketOpen && currentTime <= marketClose;
 };
+
+// Keep internal alias for backward compatibility within this file
+const isIndianMarketOpen = isMarketOpen;
 
 // Mock data for development when API is rate limited or fails
 const getMockPrice = (symbol: string): PriceData => {

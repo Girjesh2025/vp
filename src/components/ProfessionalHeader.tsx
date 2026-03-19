@@ -1,32 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Bell, Search, Settings, User, TrendingUp, Globe, Plus } from 'lucide-react';
 import { searchStocksOptimized } from '../stockDatabase';
+import { isMarketOpen } from '../utils/priceApi';
 import type { Stock } from '../types';
 
-// Check if Indian stock market is open
-const isMarketOpen = (): boolean => {
-  const now = new Date();
-  
-  // Convert to IST properly by adding 5.5 hours to UTC
-  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
-  const istTime = new Date(utcTime + (5.5 * 3600000)); // IST is UTC+5:30
-  
-  const day = istTime.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-  const hours = istTime.getHours();
-  const minutes = istTime.getMinutes();
-  const currentTime = hours * 60 + minutes; // Convert to minutes
-  
-  // Market is closed on weekends (Saturday = 6, Sunday = 0)
-  if (day === 0 || day === 6) {
-    return false;
-  }
-  
-  // Market hours: 9:15 AM to 3:30 PM IST
-  const marketOpen = 9 * 60 + 15; // 9:15 AM in minutes
-  const marketClose = 15 * 60 + 30; // 3:30 PM in minutes
-  
-  return currentTime >= marketOpen && currentTime <= marketClose;
-};
 
 interface ProfessionalHeaderProps {
   currentPortfolio?: any;
