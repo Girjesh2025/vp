@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase, Portfolio } from '../lib/supabase'
 import { Stock, Transaction } from '../types'
-
-// Simple user ID for demo purposes - in a real app, this would come from authentication
-const DEMO_USER_ID = 'demo-user-123'
+import { useAuth } from '../contexts/AuthContext'
 
 const DEMO_STOCKS: Stock[] = [
   { symbol: 'AAPL', name: 'Apple Inc.', displaySymbol: 'AAPL-NASDAQ', quantity: 15, avgPrice: 165.50 },
@@ -19,6 +17,7 @@ const DEMO_TRANSACTIONS: Transaction[] = [
 ];
 
 export function usePortfolio() {
+  const { user } = useAuth()
   const [portfolios, setPortfolios] = useState<Portfolio[]>([])
   const [currentPortfolio, setCurrentPortfolio] = useState<Portfolio | null>(null)
   const [stocks, setStocks] = useState<Stock[]>([])
@@ -28,6 +27,11 @@ export function usePortfolio() {
 
   // Initialize user's portfolio
   const initializePortfolio = async () => {
+    if (!user) {
+      setLoading(false)
+      return
+    }
+    
     setLoading(true)
     setError(null)
     
@@ -47,7 +51,7 @@ export function usePortfolio() {
         const { data: portfolios, error } = await supabase
           .from('portfolios')
           .select('*')
-          .eq('user_id', DEMO_USER_ID)
+          .eq('user_id', user.id)
 
         if (error) throw error
 
@@ -60,7 +64,7 @@ export function usePortfolio() {
           const { data: newPortfolio, error: createError } = await supabase
             .from('portfolios')
             .insert([{
-              user_id: DEMO_USER_ID,
+              user_id: user.id,
               name: 'My Portfolio'
             }])
             .select()
@@ -79,7 +83,7 @@ export function usePortfolio() {
         // Fallback to offline/demo mode
         const demoPortfolio: Portfolio = {
           id: 'demo-portfolio-1',
-          user_id: DEMO_USER_ID,
+          user_id: user.id,
           name: 'Demo Portfolio (Offline Mode)',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -97,7 +101,7 @@ export function usePortfolio() {
       // Fallback to offline/demo mode
       const demoPortfolio: Portfolio = {
         id: 'demo-portfolio-1',
-        user_id: DEMO_USER_ID,
+        user_id: user.id,
         name: 'Demo Portfolio (Offline Mode)',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -397,10 +401,10 @@ export function usePortfolio() {
     }
   }
 
-  // Initialize on mount
+  // Initialize on mount or when auth user changes
   useEffect(() => {
     initializePortfolio()
-  }, [])
+  }, [user?.id])
 
   // Create new portfolio
   const createPortfolio = async (name: string) => {
@@ -410,7 +414,7 @@ export function usePortfolio() {
         // Create portfolio locally for demo mode
         const newPortfolio: Portfolio = {
           id: `demo-portfolio-${Date.now()}`, // Generate unique ID
-          user_id: DEMO_USER_ID,
+          user_id: user?.id || 'demo-user-123',
           name: name,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -421,10 +425,12 @@ export function usePortfolio() {
       }
 
       // Normal Supabase mode
+      if (!user) throw new Error('Must be logged in to create a portfolio');
+      
       const { data: newPortfolio, error } = await supabase
         .from('portfolios')
         .insert([{
-          user_id: DEMO_USER_ID,
+          user_id: user.id,
           name: name
         }])
         .select()

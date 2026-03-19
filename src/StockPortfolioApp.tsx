@@ -625,10 +625,6 @@ const StockPortfolioApp: React.FC = () => {
             setSelectedStock(stock);
             setIsAddModalOpen(true);
           }}
-          currentUser={{
-            name: 'Demo User',
-            email: 'demo@example.com'
-          }}
         />
 
         {/* Main Content Area */}

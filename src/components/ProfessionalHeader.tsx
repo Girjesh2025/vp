@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bell, Search, Settings, User, TrendingUp, Globe, Plus } from 'lucide-react';
+import { Bell, Search, Settings, User, TrendingUp, Globe, Plus, LogOut } from 'lucide-react';
 import { searchStocksOptimized } from '../stockDatabase';
 import { isMarketOpen } from '../utils/priceApi';
+import { useAuth } from '../contexts/AuthContext';
 import type { Stock } from '../types';
 
 
@@ -13,15 +14,10 @@ interface ProfessionalHeaderProps {
     totalGainLossPercent: number;
   };
   isLoading?: boolean;
-  lastUpdated?: Date | null;
   onStockSelect?: (stock: Stock) => void;
   onNotificationClick?: () => void;
   onSettingsClick?: () => void;
   onProfileClick?: () => void;
-  currentUser?: {
-    name: string;
-    email: string;
-  };
 }
 
 const ProfessionalHeader: React.FC<ProfessionalHeaderProps> = ({
@@ -32,9 +28,9 @@ const ProfessionalHeader: React.FC<ProfessionalHeaderProps> = ({
   onStockSelect,
   onNotificationClick,
   onSettingsClick,
-  onProfileClick,
-  currentUser
+  onProfileClick
 }) => {
+  const { user, signOut } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Stock[]>([]);
   const [showResults, setShowResults] = useState(false);
@@ -197,21 +193,31 @@ const ProfessionalHeader: React.FC<ProfessionalHeaderProps> = ({
               <Settings className="w-5 h-5" />
             </button>
 
-            {/* User Profile */}
-            <div className="relative">
-              <button
+            {/* User Profile & Sign Out */}
+            <div className="relative group flex items-center bg-gray-50 rounded-lg p-1 pr-2 border border-gray-100">
+               <button
                 onClick={onProfileClick}
-                className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                className="flex items-center space-x-3 p-2 rounded-md hover:bg-gray-100 transition-colors duration-200"
               >
                 <div className="flex items-center space-x-3">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 text-right">{currentUser?.name || 'Demo User'}</p>
-                    <p className="text-xs text-gray-500 text-right">{currentUser?.email || 'demo@example.com'}</p>
+                  <div className="hidden sm:block">
+                    <p className="text-sm font-medium text-gray-900 text-right">{user?.user_metadata?.full_name || 'User'}</p>
+                    <p className="text-xs text-gray-500 text-right truncate max-w-[120px]">{user?.email}</p>
                   </div>
                   <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
                     <User className="w-4 h-4 text-white" />
                   </div>
                 </div>
+              </button>
+              
+              <div className="h-6 w-px bg-gray-200 mx-1"></div>
+              
+              <button
+                onClick={signOut}
+                className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors duration-200"
+                title="Sign Out"
+              >
+                <LogOut className="w-4 h-4" />
               </button>
             </div>
           </div>
