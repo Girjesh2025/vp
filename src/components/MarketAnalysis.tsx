@@ -128,34 +128,45 @@ const MarketAnalysis: React.FC = () => {
       }
     } catch (_) {}
 
-    // 2. Not cached or expired: Reset to loading state (keep old prices if available, just show spinner)
+    // 2. Not cached or expired: Reset to loading state
     setIndices(prev => prev.map(i => ({ ...i, loading: true, error: false })));
-
-    // 3. Fire ALL requests in parallel — each proxy race has a 5-second timeout
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 5000);
 
     const newIndices: IndexData[] = [...SECTORAL_INDICES.map(i => ({ ...i, price: null, change: null, prevClose: null, loading: true, error: false }))];
 
-    await Promise.allSettled(
-      SECTORAL_INDICES.map(async (idx, index) => {
-        const data = await fetchIndexData(idx.symbol, controller.signal);
-        
-        const updatedItem = {
-          ...newIndices[index],
-          loading: false,
-          error: !data,
-          price: data?.price ?? null,
-          change: data?.change ?? null,
-          prevClose: data?.prevClose ?? null,
-        };
-        
-        newIndices[index] = updatedItem;
+    // 3. Process in chunks of 5 to avoid browser connection limits (6 max per domain)
+    const chunkSize = 5;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000); // 8s total timeout
 
-        // Update this single tile immediately when it arrives for progressive rendering
-        setIndices(prev => prev.map(item => item.symbol === idx.symbol ? updatedItem : item));
-      })
-    );
+    for (let i = 0; i < SECTORAL_INDICES.length; i += chunkSize) {
+      const chunk = SECTORAL_INDICES.slice(i, i + chunkSize);
+      
+      await Promise.allSettled(
+        chunk.map(async (idx, chunkIndex) => {
+          const actualIndex = i + chunkIndex;
+          const data = await fetchIndexData(idx.symbol, controller.signal);
+          
+          const updatedItem = {
+            ...newIndices[actualIndex],
+            loading: false,
+            error: !data,
+            price: data?.price ?? null,
+            change: data?.change ?? null,
+            prevClose: data?.prevClose ?? null,
+          };
+          
+          newIndices[actualIndex] = updatedItem;
+
+          // Update tile immediately
+          setIndices(prev => prev.map(item => item.symbol === idx.symbol ? updatedItem : item));
+        })
+      );
+      
+      // Tiny delay between chunks to let browser breathe
+      if (i + chunkSize < SECTORAL_INDICES.length) {
+        await new Promise(r => setTimeout(r, 100));
+      }
+    }
 
     clearTimeout(timer);
     
