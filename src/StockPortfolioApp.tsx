@@ -72,6 +72,10 @@ const StockPortfolioApp: React.FC = () => {
   const [refreshInterval, setRefreshInterval] = useState<NodeJS.Timeout | null>(null);
   const [apiCallCount, setApiCallCount] = useState(0);
   const [dailyApiLimit] = useState(100); // Assuming 100 calls per day for free tier
+
+  // Use a ref to always have the latest stocks list inside price-fetch without triggering re-renders
+  const stocksRef = React.useRef<StockWithPrice[]>([]);
+  const stockPricesRef = React.useRef<Record<string, PriceData>>({});
   const [priceAlertsEnabled, setPriceAlertsEnabled] = useState(true);
   const [portfolioUpdatesEnabled, setPortfolioUpdatesEnabled] = useState(true);
   const [marketNewsEnabled, setMarketNewsEnabled] = useState(false);
@@ -82,19 +86,25 @@ const StockPortfolioApp: React.FC = () => {
 
   const memoPortfolioSymbols = useMemo(() => portfolioStocks.map(stock => stock.symbol), [portfolioStocks]);
 
-  const updatePrices = async () => {
-    if (stocks.length === 0) return;
+  // Keep refs in sync with state so price fetch closure always reads the latest data
+  React.useEffect(() => { stocksRef.current = stocks; }, [stocks]);
+  React.useEffect(() => { stockPricesRef.current = stockPrices; }, [stockPrices]);
+
+  // Use a ref-based updater so the function never needs `stocks` or `stockPrices` as deps
+  const updatePrices = React.useCallback(async () => {
+    const currentStocks = stocksRef.current;
+    const currentPrices = stockPricesRef.current;
+
+    if (currentStocks.length === 0) return;
     
-    console.log(`🔄 Starting price fetch for ${stocks.length} stocks:`, stocks.map(s => s.symbol));
+    console.log(`🔄 Starting price fetch for ${currentStocks.length} stocks:`, currentStocks.map(s => s.symbol));
     setIsLoading(true);
     setDataError(null);
     
     try {
-      const pricePromises = stocks.map(async (stock) => {
+      const pricePromises = currentStocks.map(async (stock) => {
         try {
-          console.log(`📊 Fetching price for ${stock.symbol}...`);
           const priceData = await fetchStockPrice(stock.symbol);
-          console.log(`✅ Price fetched for ${stock.symbol}:`, priceData);
           return { symbol: stock.symbol, priceData };
         } catch (error) {
           console.error(`❌ Failed to fetch price for ${stock.symbol}:`, error);
@@ -104,39 +114,28 @@ const StockPortfolioApp: React.FC = () => {
 
       const results = await Promise.all(pricePromises);
       
-      // Update API call count
-      setApiCallCount(prev => prev + stocks.length);
+      setApiCallCount(prev => prev + currentStocks.length);
       
       const newPrices: Record<string, PriceData> = {};
       
       results.forEach(({ symbol, priceData }) => {
         if (priceData) {
           newPrices[symbol] = priceData;
-          console.log(`💾 Storing price for ${symbol}:`, priceData);
         } else {
-          // If price fetch failed, keep the previous price if available
-          if (stockPrices[symbol]) {
-            newPrices[symbol] = stockPrices[symbol];
-            console.log(`⚠️ Keeping previous price for ${symbol} due to fetch error`);
-          } else {
-            console.log(`❌ No price data available for ${symbol}`);
+          // If price fetch failed, keep the last known price — no random fallback
+          if (currentPrices[symbol]) {
+            newPrices[symbol] = currentPrices[symbol];
+            console.log(`⚠️ Keeping last known price for ${symbol}`);
           }
         }
       });
 
-      console.log(`📈 Price update complete. Got prices for:`, Object.keys(newPrices));
-      console.log(`📊 Final newPrices object:`, newPrices);
-      
       setStockPrices(newPrices);
       setPriceUpdateTime(new Date());
       
-      // Check if we got prices for all stocks
-      const missingPrices = stocks.filter(stock => !newPrices[stock.symbol]);
+      const missingPrices = currentStocks.filter(stock => !newPrices[stock.symbol]);
       if (missingPrices.length > 0) {
-        console.warn(`⚠️ Missing prices for:`, missingPrices.map(s => s.symbol));
         setDataError(`Unable to fetch prices for: ${missingPrices.map(s => s.symbol).join(', ')}`);
-      } else {
-        console.log(`✅ All ${stocks.length} stock prices fetched successfully`);
       }
     } catch (error) {
       setDataError('Failed to update stock prices. Please try again.');
@@ -144,7 +143,7 @@ const StockPortfolioApp: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []); // ← empty deps: reads latest data from refs, never triggers re-render cycle
 
   const updatePopularStockPrices = async () => {
     if (popularStocks.length === 0) return;
@@ -239,7 +238,14 @@ const StockPortfolioApp: React.FC = () => {
     initializeNotifications();
   }, []);
 
+  // Fetch prices when portfolio symbols change (stock added/removed) OR auto-refresh toggle changes.
+  // NOTE: `stocks` is intentionally NOT in deps to break the infinite loop:
+  //   stocks → updatePrices → setStockPrices → setStocks → stocks changed → updatePrices → ∞
+  // Instead we read the latest stocks from stocksRef inside updatePrices.
   useEffect(() => {
+    // Only run when there are actually stocks to fetch
+    if (memoPortfolioSymbols.length === 0) return;
+
     updatePrices();
     
     // Clear existing interval
@@ -247,10 +253,8 @@ const StockPortfolioApp: React.FC = () => {
       clearInterval(refreshInterval);
     }
     
-    // Set up new interval only if auto-refresh is enabled
     if (autoRefreshEnabled) {
       const smartRefresh = () => {
-        // Only fetch prices if market is open or if it's been more than 30 minutes since last update
         if (isMarketOpen()) {
           updatePrices();
         } else {
@@ -258,7 +262,6 @@ const StockPortfolioApp: React.FC = () => {
         }
       };
       
-      // Increased interval from 30 seconds to 5 minutes (300000ms) to conserve API calls
       const interval = setInterval(smartRefresh, 300000); // 5 minutes
       setRefreshInterval(interval);
       
@@ -267,7 +270,7 @@ const StockPortfolioApp: React.FC = () => {
         setRefreshInterval(null);
       };
     }
-  }, [stocks, autoRefreshEnabled]);
+  }, [memoPortfolioSymbols, autoRefreshEnabled]); // ← `stocks` removed to prevent infinite loop
 
   // Check price alerts when stock prices update
   useEffect(() => {

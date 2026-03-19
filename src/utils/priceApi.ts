@@ -50,10 +50,6 @@ const getMockPrice = (symbol: string): PriceData => {
   };
 };
 
-// EODHD API configuration
-const EODHD_API_TOKEN = '68ded7adeebd01.04469623';
-const EODHD_BASE_URL = 'https://eodhd.com/api/real-time';
-
 // More reliable proxy services
 const PROXY_SERVICES = [
   {
@@ -114,53 +110,6 @@ const fetchYahooViaProxy = async (symbol: string): Promise<PriceData | null> => 
   return null;
 };
 
-async function fetchEODHDPrice(symbol: string): Promise<number | null> {
-  try {
-    console.log(`🔍 [DEBUG] Fetching real-time price for ${symbol} via proxy...`);
-    const baseUrl = resolveBaseUrl();
-    
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-    
-    const response = await fetch(`${baseUrl}/api/stock/${symbol}`, {
-      signal: controller.signal,
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      mode: 'cors'
-    });
-    
-    clearTimeout(timeoutId);
-    
-    console.log(`🔍 [DEBUG] Response status: ${response.status} ${response.statusText}`);
-    
-    if (!response.ok) {
-      console.log(`❌ [DEBUG] Local proxy failed with status: ${response.status}`);
-      return null;
-    }
-    
-    const ct = response.headers.get('content-type') || '';
-    if (!ct.includes('application/json')) {
-      throw new Error(`Invalid content-type: ${ct}`);
-    }
-    const data = await response.json();
-    console.log(`🔍 [DEBUG] Response data:`, data);
-    
-    if (data && typeof data.close === 'number' && data.close > 0) {
-      console.log(`✅ [DEBUG] Successfully fetched price for ${symbol}: ${data.close} via local proxy`);
-      return data.close;
-    } else {
-      console.log(`❌ [DEBUG] Invalid data structure from local proxy for ${symbol}:`, data);
-      return null;
-    }
-    
-  } catch (error) {
-    console.log(`❌ [DEBUG] Local proxy failed for ${symbol}:`, error);
-    return null;
-  }
-}
-
 // Convert to candidate symbols
 const toEODHDSymbols = (symbol: string): string[] => {
   const cleanSymbol = symbol.replace(/\.(NS|BO|NSE|BSE)$/i, '');
@@ -201,6 +150,15 @@ export const fetchStockPrice = async (symbol: string): Promise<PriceData | null>
         }
       } catch (_) {}
     }
+
+    // Local proxy loop exhausted without returning — try Yahoo proxy then deterministic mock
+    console.warn(`⚠️ [DEBUG] All proxy candidates failed for ${symbol}, trying Yahoo fallback`);
+    const yahooFallback = await fetchYahooViaProxy(symbol);
+    if (yahooFallback) return yahooFallback;
+
+    // Last resort: deterministic mock (seeded by symbol — consistent across renders)
+    console.warn(`⚠️ [DEBUG] Using deterministic mock price for ${symbol}`);
+    return getMockPrice(symbol);
   } catch (error) {
     console.warn(`❌ [DEBUG] Failed to fetch real price for ${symbol}, using mock data:`, error);
     const yahooFallback = await fetchYahooViaProxy(symbol);

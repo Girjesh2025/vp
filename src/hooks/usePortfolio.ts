@@ -1,9 +1,22 @@
 import { useState, useEffect } from 'react'
-import { supabase, Portfolio, Stock as DBStock, Transaction as DBTransaction } from '../lib/supabase'
+import { supabase, Portfolio } from '../lib/supabase'
 import { Stock, Transaction } from '../types'
 
 // Simple user ID for demo purposes - in a real app, this would come from authentication
 const DEMO_USER_ID = 'demo-user-123'
+
+const DEMO_STOCKS: Stock[] = [
+  { symbol: 'AAPL', name: 'Apple Inc.', displaySymbol: 'AAPL-NASDAQ', quantity: 15, avgPrice: 165.50 },
+  { symbol: 'MSFT', name: 'Microsoft Corp.', displaySymbol: 'MSFT-NASDAQ', quantity: 8, avgPrice: 380.20 },
+  { symbol: 'RELIANCE', name: 'Reliance Industries', displaySymbol: 'RELIANCE-NSE', quantity: 25, avgPrice: 2850.00 }
+];
+
+const DEMO_TRANSACTIONS: Transaction[] = [
+  { id: 1, symbol: 'AAPL', displaySymbol: 'AAPL-NASDAQ', name: 'Apple Inc.', type: 'buy', quantity: 10, price: 160.00, date: new Date(Date.now() - 30*24*60*60*1000).toISOString(), total: 1600.00 },
+  { id: 2, symbol: 'MSFT', displaySymbol: 'MSFT-NASDAQ', name: 'Microsoft Corp.', type: 'buy', quantity: 8, price: 380.20, date: new Date(Date.now() - 15*24*60*60*1000).toISOString(), total: 3041.60 },
+  { id: 3, symbol: 'AAPL', displaySymbol: 'AAPL-NASDAQ', name: 'Apple Inc.', type: 'buy', quantity: 5, price: 176.50, date: new Date(Date.now() - 5*24*60*60*1000).toISOString(), total: 882.50 },
+  { id: 4, symbol: 'RELIANCE', displaySymbol: 'RELIANCE-NSE', name: 'Reliance Industries', type: 'buy', quantity: 25, price: 2850.00, date: new Date(Date.now() - 2*24*60*60*1000).toISOString(), total: 71250.00 }
+];
 
 export function usePortfolio() {
   const [portfolios, setPortfolios] = useState<Portfolio[]>([])
@@ -74,8 +87,8 @@ export function usePortfolio() {
         
         setPortfolios([demoPortfolio])
         setCurrentPortfolio(demoPortfolio)
-        setStocks([])
-        setTransactions([])
+        setStocks(DEMO_STOCKS)
+        setTransactions(DEMO_TRANSACTIONS)
         setError(null) // Clear any previous errors
       }
     } catch (err) {
@@ -92,8 +105,8 @@ export function usePortfolio() {
       
       setPortfolios([demoPortfolio])
       setCurrentPortfolio(demoPortfolio)
-      setStocks([])
-      setTransactions([])
+      setStocks(DEMO_STOCKS)
+      setTransactions(DEMO_TRANSACTIONS)
       setError(null) // Clear any previous errors
     } finally {
       setLoading(false)
@@ -118,13 +131,13 @@ export function usePortfolio() {
           *,
           stocks!inner(symbol, name)
         `)
-        .in('stock_id', stocksData?.map(s => s.id) || [])
+        .in('stock_id', stocksData?.map((s: { id: string }) => s.id) || [])
         .order('date', { ascending: false })
 
       if (transactionsError) throw transactionsError
 
       // Convert to local format
-      const localStocks: Stock[] = stocksData?.map(stock => ({
+      const localStocks: Stock[] = stocksData?.map((stock: { symbol: string; name: string; exchange: string; quantity: string | number; average_price: string | number }) => ({
         symbol: stock.symbol,
         name: stock.name,
         displaySymbol: `${stock.symbol}-${stock.exchange}`,
@@ -132,8 +145,8 @@ export function usePortfolio() {
         avgPrice: Number(stock.average_price)
       })) || []
 
-      const localTransactions: Transaction[] = transactionsData?.map((transaction, index) => ({
-        id: index + 1, // Use index as ID for local compatibility
+      const localTransactions: Transaction[] = transactionsData?.map((transaction: { stocks: { symbol: string; name: string }; type: string; quantity: string | number; price: string | number; date: string }, index: number) => ({
+        id: Date.now() + index, // Unique ID to avoid key collisions
         symbol: transaction.stocks.symbol,
         displaySymbol: `${transaction.stocks.symbol}-${transaction.stocks.name}`,
         name: transaction.stocks.name,
@@ -340,6 +353,13 @@ export function usePortfolio() {
   // Remove stock
   const removeStock = async (symbol: string) => {
     try {
+      // Handle offline/demo mode
+      if (currentPortfolio?.id?.startsWith('demo-portfolio')) {
+        setStocks(prev => prev.filter(s => s.symbol !== symbol))
+        setTransactions(prev => prev.filter(t => t.symbol !== symbol))
+        return
+      }
+
       // Find the stock in database
       const { data: stockData, error: stockError } = await supabase
         .from('stocks')
@@ -411,6 +431,16 @@ export function usePortfolio() {
   // Edit portfolio
   const editPortfolio = async (portfolioId: string, newName: string) => {
     try {
+      // Handle offline/demo mode
+      if (portfolioId.startsWith('demo-portfolio')) {
+        const updatedPortfolio = portfolios.find(p => p.id === portfolioId)
+        if (!updatedPortfolio) throw new Error('Portfolio not found')
+        const renamed = { ...updatedPortfolio, name: newName }
+        setPortfolios(prev => prev.map(p => p.id === portfolioId ? renamed : p))
+        if (currentPortfolio?.id === portfolioId) setCurrentPortfolio(renamed)
+        return renamed
+      }
+
       const { data: updatedPortfolio, error } = await supabase
         .from('portfolios')
         .update({ name: newName })
