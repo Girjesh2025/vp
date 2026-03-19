@@ -370,6 +370,18 @@ export function usePortfolio() {
 
       if (stockError || !stockData) throw new Error('Stock not found')
 
+      // First delete all associated transactions to prevent foreign key errors
+      const { error: txError } = await supabase
+        .from('transactions')
+        .delete()
+        .eq('stock_id', stockData.id)
+        
+      if (txError) {
+        console.error('Error deleting transactions for stock:', txError)
+        // Continue anyway to try deleting the stock, though it might fail if restrict is on
+      }
+
+      // Then delete the stock itself
       const { error } = await supabase
         .from('stocks')
         .delete()
