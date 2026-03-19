@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { TrendingUp, Mail, Lock, User, AlertCircle, CheckCircle } from 'lucide-react';
+import { TrendingUp, Mail, Lock, User, AlertCircle, CheckCircle, Zap } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 const Register: React.FC = () => {
@@ -20,11 +20,7 @@ const Register: React.FC = () => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: {
-          full_name: name,
-        }
-      }
+      options: { data: { full_name: name } },
     });
 
     if (error) {
@@ -33,99 +29,185 @@ const Register: React.FC = () => {
     } else {
       setSuccess(true);
       setLoading(false);
-      // Auto-redirect to login after short delay if no email confirmation is required
-      // If email confirmation IS required, Supabase handles the session creation later.
-      if (data.session) {
-        navigate('/app');
-      }
+      if (data.session) navigate('/app');
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center">
-          <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg">
-            <TrendingUp className="w-8 h-8 text-white" />
-          </div>
-        </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-          Create your account
-        </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          Already have an account?{' '}
-          <Link to="/login" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
-            Sign in
-          </Link>
-        </p>
-      </div>
+  const inputStyle = {
+    width: '100%', boxSizing: 'border-box' as const,
+    background: 'rgba(255,255,255,0.07)',
+    border: '1px solid rgba(255,255,255,0.15)',
+    borderRadius: '12px',
+    padding: '13px 14px 13px 42px',
+    color: '#fff', fontSize: '14px',
+    outline: 'none', transition: 'border-color 0.2s',
+  };
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow-xl shadow-blue-900/5 sm:rounded-2xl sm:px-10 border border-gray-100">
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #1a0533 0%, #2d1b69 35%, #1e3a5f 65%, #0f2027 100%)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '2rem 1rem',
+        fontFamily: "'Inter', 'Segoe UI', sans-serif",
+        position: 'relative',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Decorative blobs */}
+      <div style={{
+        position: 'absolute', top: '-150px', right: '-150px', width: '500px', height: '500px',
+        background: 'radial-gradient(circle, rgba(139,92,246,0.25) 0%, transparent 70%)',
+        borderRadius: '50%', pointerEvents: 'none',
+      }} />
+      <div style={{
+        position: 'absolute', bottom: '-150px', left: '-150px', width: '500px', height: '500px',
+        background: 'radial-gradient(circle, rgba(59,130,246,0.2) 0%, transparent 70%)',
+        borderRadius: '50%', pointerEvents: 'none',
+      }} />
+
+      <div style={{ width: '100%', maxWidth: '440px', position: 'relative', zIndex: 1 }}>
+        {/* Logo */}
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: '56px', height: '56px',
+            background: 'linear-gradient(135deg, #8b5cf6, #6366f1)',
+            borderRadius: '16px',
+            boxShadow: '0 0 30px rgba(139,92,246,0.5)',
+            marginBottom: '1rem',
+          }}>
+            <TrendingUp size={28} color="white" />
+          </div>
+
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: '6px',
+            background: 'rgba(139,92,246,0.15)',
+            border: '1px solid rgba(139,92,246,0.3)',
+            borderRadius: '999px', padding: '4px 14px',
+            marginBottom: '1rem',
+          }}>
+            <Zap size={12} color="#a78bfa" />
+            <span style={{ color: '#a78bfa', fontSize: '12px', fontWeight: 600, letterSpacing: '0.05em' }}>
+              PORTFOLIO PRO
+            </span>
+          </div>
+
+          <h1 style={{ fontSize: '2rem', fontWeight: 800, color: '#fff', margin: '0 0 0.5rem' }}>
+            {success ? 'You\'re almost in!' : 'Create your account'}
+          </h1>
+          <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: '0.95rem' }}>
+            {success ? 'Check your email to confirm your account' : 'Start trading smarter today — it\'s free'}
+          </p>
+        </div>
+
+        {/* Card */}
+        <div style={{
+          background: 'rgba(255,255,255,0.06)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          borderRadius: '24px',
+          padding: '2.5rem',
+        }}>
           {success ? (
-            <div className="text-center">
-              <CheckCircle className="mx-auto h-12 w-12 text-green-500" />
-              <h3 className="mt-2 text-xl font-medium text-gray-900">Registration successful!</h3>
-              <p className="mt-2 text-sm text-gray-500">
+            /* Success State */
+            <div style={{ textAlign: 'center' }}>
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                width: '64px', height: '64px',
+                background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.4)',
+                borderRadius: '50%', marginBottom: '1.25rem',
+              }}>
+                <CheckCircle size={32} color="#34d399" />
+              </div>
+              <h3 style={{ color: '#fff', fontWeight: 700, fontSize: '1.25rem', marginBottom: '0.5rem' }}>
+                Registration successful!
+              </h3>
+              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '14px', lineHeight: '1.6', marginBottom: '1.75rem' }}>
                 Please check your email to confirm your account, or sign in if no confirmation is required.
               </p>
-              <div className="mt-6">
-                <Link
-                  to="/login"
-                  className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors"
-                >
-                  Go to Sign in
-                </Link>
-              </div>
+              <Link
+                to="/login"
+                style={{
+                  display: 'block', padding: '14px',
+                  background: 'linear-gradient(90deg, #8b5cf6, #6366f1)',
+                  borderRadius: '12px', color: '#fff', fontWeight: 700,
+                  fontSize: '15px', textDecoration: 'none', textAlign: 'center',
+                  boxShadow: '0 0 20px rgba(139,92,246,0.5)',
+                }}
+              >
+                → Go to Sign In
+              </Link>
             </div>
           ) : (
-            <form className="space-y-6" onSubmit={handleRegister}>
+            /* Form */
+            <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center text-sm">
-                  <AlertCircle className="w-5 h-5 mr-2" />
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.35)',
+                  borderRadius: '12px', padding: '12px 16px', color: '#fca5a5', fontSize: '14px',
+                }}>
+                  <AlertCircle size={16} />
                   {error}
                 </div>
               )}
 
+              {/* Full Name */}
               <div>
-                <label className="block text-sm font-medium text-gray-700">Full Name</label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <User className="h-5 w-5 text-gray-400" />
+                <label style={{ display: 'block', color: 'rgba(255,255,255,0.75)', fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>
+                  Full Name
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }}>
+                    <User size={16} color="rgba(255,255,255,0.4)" />
                   </div>
                   <input
                     type="text"
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow text-gray-900"
                     placeholder="John Doe"
+                    style={inputStyle}
+                    onFocus={(e) => (e.target.style.borderColor = 'rgba(139,92,246,0.7)')}
+                    onBlur={(e) => (e.target.style.borderColor = 'rgba(255,255,255,0.15)')}
                   />
                 </div>
               </div>
 
+              {/* Email */}
               <div>
-                <label className="block text-sm font-medium text-gray-700">Email address</label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Mail className="h-5 w-5 text-gray-400" />
+                <label style={{ display: 'block', color: 'rgba(255,255,255,0.75)', fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>
+                  Email address
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }}>
+                    <Mail size={16} color="rgba(255,255,255,0.4)" />
                   </div>
                   <input
                     type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow text-gray-900"
                     placeholder="you@email.com"
+                    style={inputStyle}
+                    onFocus={(e) => (e.target.style.borderColor = 'rgba(139,92,246,0.7)')}
+                    onBlur={(e) => (e.target.style.borderColor = 'rgba(255,255,255,0.15)')}
                   />
                 </div>
               </div>
 
+              {/* Password */}
               <div>
-                <label className="block text-sm font-medium text-gray-700">Password</label>
-                <div className="mt-1 relative rounded-md shadow-sm">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Lock className="h-5 w-5 text-gray-400" />
+                <label style={{ display: 'block', color: 'rgba(255,255,255,0.75)', fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>
+                  Password
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <div style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)' }}>
+                    <Lock size={16} color="rgba(255,255,255,0.4)" />
                   </div>
                   <input
                     type="password"
@@ -133,24 +215,44 @@ const Register: React.FC = () => {
                     minLength={6}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow text-gray-900"
                     placeholder="Min. 6 characters"
+                    style={inputStyle}
+                    onFocus={(e) => (e.target.style.borderColor = 'rgba(139,92,246,0.7)')}
+                    onBlur={(e) => (e.target.style.borderColor = 'rgba(255,255,255,0.15)')}
                   />
                 </div>
               </div>
 
-              <div>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                >
-                  {loading ? 'Creating account...' : 'Sign up'}
-                </button>
-              </div>
+              {/* Submit */}
+              <button
+                type="submit"
+                disabled={loading}
+                style={{
+                  width: '100%', padding: '14px',
+                  background: loading ? 'rgba(139,92,246,0.5)' : 'linear-gradient(90deg, #8b5cf6, #6366f1)',
+                  border: 'none', borderRadius: '12px',
+                  color: '#fff', fontWeight: 700, fontSize: '15px',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  boxShadow: loading ? 'none' : '0 0 20px rgba(139,92,246,0.5)',
+                  transition: 'all 0.2s',
+                  marginTop: '0.25rem',
+                }}
+              >
+                {loading ? 'Creating account…' : '→  Create Account'}
+              </button>
             </form>
           )}
         </div>
+
+        {/* Footer link */}
+        {!success && (
+          <p style={{ textAlign: 'center', marginTop: '1.5rem', color: 'rgba(255,255,255,0.45)', fontSize: '14px' }}>
+            Already have an account?{' '}
+            <Link to="/login" style={{ color: '#a78bfa', fontWeight: 600, textDecoration: 'none' }}>
+              Sign in →
+            </Link>
+          </p>
+        )}
       </div>
     </div>
   );
