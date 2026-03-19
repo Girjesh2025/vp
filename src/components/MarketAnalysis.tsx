@@ -38,25 +38,57 @@ interface IndexData {
   error: boolean;
 }
 
+const CACHE_KEY = 'market_analysis_cache';
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Race 3 proxies — whichever responds first wins
+const PROXIES = [
+  (url: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+  (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+  (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+];
+
+const parseYahoo = (raw: any): { price: number; change: number; prevClose: number } | null => {
+  // allorigins wraps in .contents string; codetabs & corsproxy return JSON directly
+  let data = raw;
+  if (typeof raw?.contents === 'string') {
+    try { data = JSON.parse(raw.contents); } catch { return null; }
+  }
+  const meta = data?.chart?.result?.[0]?.meta;
+  if (!meta || typeof meta.regularMarketPrice !== 'number') return null;
+  const price = meta.regularMarketPrice;
+  const prevClose = meta.previousClose ?? meta.chartPreviousClose ?? price;
+  const change = prevClose ? ((price - prevClose) / prevClose) * 100 : 0;
+  return { price, change, prevClose };
+};
+
 // Single fastest proxy with AbortSignal support for timeout control
 const fetchIndexData = async (symbol: string, signal: AbortSignal): Promise<{ price: number; change: number; prevClose: number } | null> => {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`;
-  try {
-    const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, { signal });
-    if (!r.ok) return null;
-    const raw = await r.json();
-    const data = JSON.parse(raw.contents ?? '{}');
-    const meta = data?.chart?.result?.[0]?.meta;
-    if (meta && typeof meta.regularMarketPrice === 'number') {
-      const price = meta.regularMarketPrice;
-      const prevClose = meta.previousClose ?? meta.chartPreviousClose ?? price;
-      const change = prevClose ? ((price - prevClose) / prevClose) * 100 : 0;
-      return { price, change, prevClose };
-    }
-  } catch (_) {}
-  return null;
-};
+  // Race all proxies — first non-null result wins
+  return new Promise((resolve) => {
+    let settled = false;
+    let pending = PROXIES.length;
 
+    PROXIES.forEach(async (buildUrl) => {
+      try {
+        const r = await fetch(buildUrl(url), { signal });
+        if (!r.ok) throw new Error('bad status');
+        const raw = await r.json();
+        const result = parseYahoo(raw);
+        if (result && !settled) {
+          settled = true;
+          resolve(result);
+        }
+      } catch (_) {
+        // ignore
+      } finally {
+        pending--;
+        if (pending === 0 && !settled) resolve(null);
+      }
+    });
+  });
+};
 
 const getHeatColor = (change: number | null): { bg: string; border: string; text: string } => {
   if (change === null) return { bg: 'rgba(55,65,81,0.5)', border: 'rgba(107,114,128,0.3)', text: '#9CA3AF' };
@@ -81,31 +113,60 @@ const MarketAnalysis: React.FC = () => {
 
   const loadAll = useCallback(async () => {
     setRefreshing(true);
-    // Reset all to loading
-    setIndices(SECTORAL_INDICES.map(i => ({ ...i, price: null, change: null, prevClose: null, loading: true, error: false })));
 
-    // Fire ALL requests in parallel — each with a 3.5-second timeout
+    // 1. Check Cache First (Instant Load)
+    try {
+      const cached = sessionStorage.getItem(CACHE_KEY);
+      if (cached) {
+        const { timestamp, data } = JSON.parse(cached);
+        if (Date.now() - timestamp < CACHE_TTL) {
+          setIndices(data);
+          setLastUpdated(new Date(timestamp));
+          setRefreshing(false);
+          return;
+        }
+      }
+    } catch (_) {}
+
+    // 2. Not cached or expired: Reset to loading state (keep old prices if available, just show spinner)
+    setIndices(prev => prev.map(i => ({ ...i, loading: true, error: false })));
+
+    // 3. Fire ALL requests in parallel — each proxy race has a 5-second timeout
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3500);
+    const timer = setTimeout(() => controller.abort(), 5000);
+
+    const newIndices: IndexData[] = [...SECTORAL_INDICES.map(i => ({ ...i, price: null, change: null, prevClose: null, loading: true, error: false }))];
 
     await Promise.allSettled(
-      SECTORAL_INDICES.map(async (idx) => {
+      SECTORAL_INDICES.map(async (idx, index) => {
         const data = await fetchIndexData(idx.symbol, controller.signal);
-        // Update this single tile immediately when it arrives
-        setIndices(prev => prev.map(item =>
-          item.symbol !== idx.symbol ? item : {
-            ...item,
-            loading: false,
-            error: !data,
-            price: data?.price ?? null,
-            change: data?.change ?? null,
-            prevClose: data?.prevClose ?? null,
-          }
-        ));
+        
+        const updatedItem = {
+          ...newIndices[index],
+          loading: false,
+          error: !data,
+          price: data?.price ?? null,
+          change: data?.change ?? null,
+          prevClose: data?.prevClose ?? null,
+        };
+        
+        newIndices[index] = updatedItem;
+
+        // Update this single tile immediately when it arrives for progressive rendering
+        setIndices(prev => prev.map(item => item.symbol === idx.symbol ? updatedItem : item));
       })
     );
 
     clearTimeout(timer);
+    
+    // 4. Save to Cache
+    try {
+      sessionStorage.setItem(CACHE_KEY, JSON.stringify({
+        timestamp: Date.now(),
+        data: newIndices
+      }));
+    } catch (_) {}
+
     setLastUpdated(new Date());
     setRefreshing(false);
   }, []);
