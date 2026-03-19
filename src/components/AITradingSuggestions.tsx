@@ -241,9 +241,15 @@ const AITradingSuggestions: React.FC<AITradingSuggestionsProps> = ({ portfolioSy
 
       {/* Error Message */}
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-center space-x-2">
-          <AlertTriangle className="w-5 h-5 text-red-500" />
-          <span className="text-red-700">{error}</span>
+        <div className="p-5 bg-red-50 border border-red-200 rounded-xl">
+          <div className="flex items-start space-x-3">
+            <AlertTriangle className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-red-800 font-semibold">Analysis Failed</p>
+              <p className="text-red-600 text-sm mt-1">{error}</p>
+              <p className="text-red-500 text-xs mt-2">The AI Trading feature requires real historical market data from Yahoo Finance. Please check your internet connection and try again.</p>
+            </div>
+          </div>
         </div>
       )}
 

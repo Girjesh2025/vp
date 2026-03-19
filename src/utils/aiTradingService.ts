@@ -1,5 +1,5 @@
 // AI Trading Service for Swing Trading Recommendations
-import { fetchStockPrice } from './priceApi';
+import { fetchStockPrice, fetchHistoricalPrices } from './priceApi';
 
 export interface TechnicalIndicators {
   rsi: number;
@@ -828,46 +828,7 @@ class AITradingService {
     return Math.round(baseVolume * rsiMultiplier * momentumMultiplier);
   }
 
-  // Generate realistic historical data with better market patterns
-  private generateRealisticHistoricalPrices(currentPrice: number, days: number = 50): number[] {
-    const prices: number[] = [];
-    let price = currentPrice;
-    
-    // Create more varied market patterns to generate different signals
-    const marketPhase = Math.random(); // Random market condition
-    
-    for (let i = 0; i < days; i++) {
-      const volatility = 0.01 + Math.random() * 0.02; // 1-3% volatility
-      let trend = 0;
-      
-      // Create different market scenarios
-      if (marketPhase < 0.3) {
-        // Bullish trend scenario (30% chance)
-        trend = Math.sin(i * 0.15) * 0.008 + 0.003; // Upward bias
-      } else if (marketPhase < 0.6) {
-        // Bearish trend scenario (30% chance)
-        trend = Math.sin(i * 0.15) * 0.008 - 0.003; // Downward bias
-      } else {
-        // Sideways/consolidation scenario (40% chance)
-        trend = Math.sin(i * 0.2) * 0.005; // Oscillating pattern
-      }
-      
-      const momentum = Math.cos(i * 0.08) * 0.003; // Momentum cycles
-      const randomWalk = (Math.random() - 0.5) * volatility;
-      
-      const dailyChange = trend + momentum + randomWalk;
-      price = price * (1 - dailyChange);
-      
-      // Prevent unrealistic price movements but allow more variation
-      price = Math.max(price, currentPrice * 0.5);
-      price = Math.min(price, currentPrice * 1.6);
-      
-      prices.unshift(price);
-    }
-    
-    prices[prices.length - 1] = currentPrice;
-    return prices;
-  }
+  // [REMOVED] generateRealisticHistoricalPrices — replaced by real fetchHistoricalPrices from Yahoo Finance
 
   // Enhanced technical indicators calculation
   private calculateTechnicalIndicators(prices: number[], marketData: MarketData): TechnicalIndicators {
@@ -1236,11 +1197,20 @@ class AITradingService {
 
       // Generate market data
       const marketData = this.generateMarketData(symbol, currentPrice);
-      
-      // Generate realistic historical data
-      const historicalPrices = this.generateRealisticHistoricalPrices(currentPrice);
-      
-      // Calculate enhanced technical indicators
+
+      // Fetch REAL historical data from Yahoo Finance — no mock fallback
+      let historicalPrices: number[];
+      try {
+        historicalPrices = await fetchHistoricalPrices(symbol, 60);
+        if (historicalPrices.length < 20) {
+          throw new Error(`Insufficient data: only ${historicalPrices.length} data points returned`);
+        }
+        console.log(`📈 [AI] Using ${historicalPrices.length} real data points for ${symbol}`);
+      } catch (histErr) {
+        throw new Error(`Cannot perform real technical analysis for ${symbol}: ${histErr instanceof Error ? histErr.message : histErr}`);
+      }
+
+      // Calculate enhanced technical indicators on REAL data
       const indicators = this.calculateTechnicalIndicators(historicalPrices, marketData);
       
       // Generate enhanced swing trading signal

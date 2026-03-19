@@ -110,6 +110,44 @@ const fetchYahooViaProxy = async (symbol: string): Promise<PriceData | null> => 
   return null;
 };
 
+/**
+ * Fetch real historical daily closing prices from Yahoo Finance.
+ * Returns an array of numbers (oldest first, newest last).
+ * Throws if no real data can be obtained — no mock fallback.
+ */
+export const fetchHistoricalPrices = async (symbol: string, days: number = 60): Promise<number[]> => {
+  const yahooSymbol = toYahooSymbol(symbol);
+
+  // Build URL: 6-month range with 1-day interval gives ~120 trading days
+  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?range=6mo&interval=1d`;
+
+  for (const p of PROXY_SERVICES) {
+    try {
+      const r = await fetch(`${p.url}${encodeURIComponent(yahooUrl)}`, { method: 'GET' });
+      if (!r.ok) continue;
+      const raw = await r.json();
+      const data = p.transform(raw);
+      const result = data?.chart?.result?.[0];
+      if (!result) continue;
+
+      const closes: number[] = result.indicators?.quote?.[0]?.close ?? [];
+      // Filter out null/undefined/0 entries that Yahoo sometimes includes
+      const validCloses = closes.filter((c: number | null) => typeof c === 'number' && c > 0) as number[];
+
+      if (validCloses.length >= 20) {
+        // Return the most recent `days` prices with oldest first
+        const subset = validCloses.slice(-days);
+        console.log(`✅ [Historical] Got ${subset.length} real prices for ${symbol} via ${p.name}`);
+        return subset;
+      }
+    } catch (e) {
+      console.warn(`[Historical] ${p.name} failed for ${symbol}:`, e);
+    }
+  }
+
+  throw new Error(`fetchHistoricalPrices: Unable to obtain real historical data for ${symbol}. All proxies failed.`);
+};
+
 // Convert to candidate symbols
 const toEODHDSymbols = (symbol: string): string[] => {
   const cleanSymbol = symbol.replace(/\.(NS|BO|NSE|BSE)$/i, '');
