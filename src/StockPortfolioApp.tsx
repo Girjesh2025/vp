@@ -11,6 +11,7 @@ import ProfessionalSidebar from './components/ProfessionalSidebar';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import AlertsPage from './components/AlertsPage';
 import AITradingSuggestions from './components/AITradingSuggestions';
+import MarketAnalysis from './components/MarketAnalysis';
 import StockRecommendations from './components/StockRecommendations';
 import { fetchStockPrice } from './utils/priceApi';
 import { 
@@ -1004,6 +1005,9 @@ const StockPortfolioApp: React.FC = () => {
             <AITradingSuggestions 
               portfolioSymbols={memoPortfolioSymbols}
             />
+          )}
+          {activeTab === 'market-analysis' && (
+            <MarketAnalysis />
           )}
               {activeTab === 'stock-recommendations' && (
                 <StockRecommendations />

@@ -3,7 +3,6 @@ import {
   LayoutDashboard, 
   Briefcase, 
   TrendingUp, 
-  BarChart3, 
   Settings, 
   Bell,
   Brain,
@@ -11,7 +10,8 @@ import {
   HelpCircle,
   LogOut,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Globe
 } from 'lucide-react';
 
 interface MenuItem {
@@ -40,12 +40,14 @@ const ProfessionalSidebar: React.FC<ProfessionalSidebarProps> = ({
   const menuItems: MenuItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'portfolio', label: 'Portfolio', icon: Briefcase, badge: portfolioCount > 0 ? portfolioCount : undefined },
-    { id: 'stock-recommendations', label: 'Stock Recommendations', icon: Star, badge: 'NEW' },
+    { id: 'market-analysis', label: 'Market Analysis', icon: Globe, badge: 'NEW' },
+    { id: 'stock-recommendations', label: 'Stock Recommendations', icon: Star },
     { id: 'ai-trading', label: 'AI Trading', icon: Brain },
     { id: 'analytics', label: 'Analytics', icon: TrendingUp },
     { id: 'alerts', label: 'Alerts', icon: Bell, badge: '3' },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
+
 
   const bottomMenuItems: MenuItem[] = [
     { id: 'help', label: 'Help & Support', icon: HelpCircle },
