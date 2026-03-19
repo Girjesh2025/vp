@@ -96,12 +96,12 @@ const fetchYahooViaProxy = async (symbol: string): Promise<PriceData | null> => 
       const meta = data?.chart?.result?.[0]?.meta;
       if (meta && (typeof meta.regularMarketPrice === 'number' || typeof meta.previousClose === 'number')) {
         const close = meta.regularMarketPrice ?? meta.previousClose ?? 0;
-        const open = meta.regularMarketOpen ?? close;
-        const change = open ? ((close - open) / open) * 100 : 0;
+        const prevClose = meta.previousClose ?? close;
+        const change = prevClose ? ((close - prevClose) / prevClose) * 100 : 0;
         return {
           price: Number(close.toFixed(2)),
           change: Number(change.toFixed(2)),
-          previousClose: Number((open || close).toFixed(2))
+          previousClose: Number(prevClose.toFixed(2))
         };
       }
     } catch (_) {
@@ -141,11 +141,12 @@ export const fetchStockPrice = async (symbol: string): Promise<PriceData | null>
         if (!ct.includes('application/json')) continue;
         const data = await response.json();
         if (data && typeof data.close === 'number' && data.close > 0) {
-          const change = data.open && data.close ? ((data.close - data.open) / data.open) * 100 : 0;
+          const prevClose = data.previousClose || data.open || data.close;
+          const change = prevClose ? ((data.close - prevClose) / prevClose) * 100 : 0;
           return {
             price: Number(data.close.toFixed(2)),
             change: Number(change.toFixed(2)),
-            previousClose: data.open || data.close,
+            previousClose: prevClose,
           };
         }
       } catch (_) {}

@@ -607,6 +607,7 @@ const StockPortfolioApp: React.FC = () => {
         onTabChange={setActiveTab}
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        portfolioCount={portfolios.length}
       />
 
       {/* Main Content */}

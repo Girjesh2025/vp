@@ -27,17 +27,19 @@ interface ProfessionalSidebarProps {
   onTabChange: (tab: string) => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  portfolioCount?: number;
 }
 
 const ProfessionalSidebar: React.FC<ProfessionalSidebarProps> = ({
   activeTab,
   onTabChange,
   isCollapsed = false,
-  onToggleCollapse
+  onToggleCollapse,
+  portfolioCount = 0
 }) => {
   const menuItems: MenuItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'portfolio', label: 'Portfolio', icon: Briefcase, badge: '5' },
+    { id: 'portfolio', label: 'Portfolio', icon: Briefcase, badge: portfolioCount > 0 ? portfolioCount : undefined },
     { id: 'stock-recommendations', label: 'Stock Recommendations', icon: Star, badge: 'NEW' },
     { id: 'ai-trading', label: 'AI Trading', icon: Brain },
     { id: 'analytics', label: 'Analytics', icon: TrendingUp },
