@@ -46,16 +46,52 @@ const PROXIES = [
   (url: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
   (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
   (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-];// Bulk fetch all 21 indices in ONE request
+];
+
+// Bulk fetch all 21 indices in ONE request
 const fetchAllIndices = async (symbols: string[], signal: AbortSignal): Promise<Map<string, { price: number; change: number; prevClose: number }> | null> => {
   const symbolString = symbols.map(encodeURIComponent).join(',');
-  const url = `https://query1.finance.yahoo.com/v8/finance/spark?symbols=${symbolString}&interval=1d&range=1d`;
+  const directUrl = `/api/yahoo?symbols=${symbolString}`;
   
-  return new Promise((resolve) => {
+  const parseYahooData = (data: any, resolve: any) => {
+    if (data && typeof data === 'object' && Object.keys(data).length > 0) {
+      const result = new Map();
+      for (const [sym, info] of Object.entries(data)) {
+        const sparkInfo = info as any;
+        if (sparkInfo && Array.isArray(sparkInfo.close) && sparkInfo.close.length > 0) {
+          const price = sparkInfo.close[sparkInfo.close.length - 1];
+          const prevClose = sparkInfo.chartPreviousClose ?? sparkInfo.previousClose ?? price;
+          const change = prevClose ? ((price - prevClose) / prevClose) * 100 : 0;
+          result.set(sym, { price, change, prevClose });
+        }
+      }
+      resolve(result);
+      return true;
+    }
+    return false;
+  };
+
+  return new Promise(async (resolve) => {
     let settled = false;
+
+    // 1. First attempt: Native Vercel Serverless Function (fastest, no CORS, no limits)
+    try {
+      const direct = await fetch(directUrl, { signal });
+      if (direct.ok) {
+        const data = await direct.json();
+        if (parseYahooData(data, resolve)) {
+          settled = true;
+          return; // Success! No need for public proxies
+        }
+      }
+    } catch (_) { }
+
+    // 2. Fallback: Public Proxies Race (for local Vite dev primarily)
+    const url = `https://query1.finance.yahoo.com/v8/finance/spark?symbols=${symbolString}&interval=1d&range=1d`;
     let pending = PROXIES.length;
 
     PROXIES.forEach(async (buildUrl) => {
+      if (settled) return;
       try {
         const r = await fetch(buildUrl(url), { signal });
         if (!r.ok) throw new Error('bad status');
@@ -66,19 +102,8 @@ const fetchAllIndices = async (symbols: string[], signal: AbortSignal): Promise<
           try { data = JSON.parse(raw.contents); } catch { throw new Error('parse error'); }
         }
         
-        if (data && typeof data === 'object' && Object.keys(data).length > 0 && !settled) {
+        if (!settled && parseYahooData(data, resolve)) {
           settled = true;
-          const result = new Map();
-          for (const [sym, info] of Object.entries(data)) {
-            const sparkInfo = info as any;
-            if (sparkInfo && Array.isArray(sparkInfo.close) && sparkInfo.close.length > 0) {
-              const price = sparkInfo.close[sparkInfo.close.length - 1];
-              const prevClose = sparkInfo.chartPreviousClose ?? sparkInfo.previousClose ?? price;
-              const change = prevClose ? ((price - prevClose) / prevClose) * 100 : 0;
-              result.set(sym, { price, change, prevClose });
-            }
-          }
-          resolve(result);
         }
       } catch (_) {
       } finally {
@@ -86,6 +111,8 @@ const fetchAllIndices = async (symbols: string[], signal: AbortSignal): Promise<
         if (pending === 0 && !settled) resolve(null);
       }
     });
+
+    if (pending === 0 && !settled) resolve(null);
   });
 };
 
