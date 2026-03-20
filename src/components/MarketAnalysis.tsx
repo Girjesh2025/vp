@@ -6,7 +6,7 @@ const SECTORAL_INDICES = [
   { name: 'NIFTY 50',        symbol: '^NSEI',       sector: 'broad' },
   { name: 'NIFTY BANK',      symbol: '^NSEBANK',    sector: 'broad' },
   { name: 'NIFTY MIDCAP 100',symbol: 'NIFTY_MIDCAP_100.NS', sector: 'broad' },
-  { name: 'NIFTY SMALLCAP', symbol: 'NIFSMCP250.NS', sector: 'broad' },
+  { name: 'NIFTY SMALLCAP', symbol: 'NIFTY_SMLCAP_250.NS', sector: 'broad' },
   { name: 'NIFTY NEXT 50',   symbol: '^NSMIDCP',    sector: 'broad' },
   { name: 'NIFTY AUTO',      symbol: '^CNXAUTO',    sector: 'sectoral' },
   { name: 'NIFTY IT',        symbol: '^CNXIT',      sector: 'sectoral' },
@@ -277,7 +277,12 @@ const MarketAnalysis: React.FC = () => {
   const totalNeutral = filtered.filter(i => i.change !== null && i.change === 0).length;
 
   return (
-    <div style={{ padding: '0', background: '#f8fafc', minHeight: '100vh' }}>
+    <div style={{ padding: '0', background: 'linear-gradient(135deg, #07060D 0%, #0F0E1A 50%, #0A1020 100%)', minHeight: '100vh', position: 'relative', overflow: 'hidden' }}>
+      {/* ambient blobs for glassmorphism */}
+      <div style={{ position:'fixed', top:'-20%', left:'-10%', width:'600px', height:'600px', background:'radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%)', borderRadius:'50%', pointerEvents:'none', zIndex:0 }} />
+      <div style={{ position:'fixed', bottom:'-10%', right:'-10%', width:'500px', height:'500px', background:'radial-gradient(circle, rgba(16,185,129,0.08) 0%, transparent 70%)', borderRadius:'50%', pointerEvents:'none', zIndex:0 }} />
+      <div style={{ position:'fixed', top:'40%', right:'20%', width:'300px', height:'300px', background:'radial-gradient(circle, rgba(239,68,68,0.06) 0%, transparent 70%)', borderRadius:'50%', pointerEvents:'none', zIndex:0 }} />
+      <div style={{ position:'relative', zIndex:1 }}>
       <div style={{
         background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e3a5f 100%)',
         padding: '2rem 2rem 1.5rem',
@@ -351,7 +356,7 @@ const MarketAnalysis: React.FC = () => {
       </div>
 
       <div style={{ padding:'0 1.5rem 2rem' }}>
-        <div style={{ display:'flex', gap:'8px', marginBottom:'1.5rem', flexWrap:'wrap' }}>
+        <div style={{ display:'flex', gap:'8px', marginBottom:'1.25rem', flexWrap:'wrap' }}>
           {([
             { key:'all',       label:'All Indices', icon:<Globe size={14}/> },
             { key:'broad',     label:'Broad Market', icon:<Layers size={14}/> },
@@ -363,12 +368,16 @@ const MarketAnalysis: React.FC = () => {
               onClick={() => setFilter(tab.key)}
               style={{
                 display:'flex', alignItems:'center', gap:'6px',
-                padding:'8px 18px', borderRadius:'10px', fontSize:'13px', fontWeight:600, cursor:'pointer',
-                transition:'all 0.2s',
-                background: filter === tab.key ? '#6366f1' : 'white',
-                border: filter === tab.key ? '1px solid #6366f1' : '1px solid #e2e8f0',
-                color: filter === tab.key ? 'white' : '#64748b',
-                boxShadow: filter === tab.key ? '0 4px 12px rgba(99,102,241,0.35)' : '0 1px 3px rgba(0,0,0,0.06)',
+                padding:'8px 20px', borderRadius:'12px', fontSize:'13px', fontWeight:600, cursor:'pointer',
+                transition:'all 0.25s ease',
+                background: filter === tab.key
+                  ? 'linear-gradient(135deg, rgba(99,102,241,0.8), rgba(139,92,246,0.7))'
+                  : 'rgba(255,255,255,0.06)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                border: filter === tab.key ? '1px solid rgba(139,92,246,0.5)' : '1px solid rgba(255,255,255,0.1)',
+                color: filter === tab.key ? 'white' : 'rgba(255,255,255,0.55)',
+                boxShadow: filter === tab.key ? '0 4px 20px rgba(99,102,241,0.4)' : 'none',
               }}
             >
               {tab.icon} {tab.label}
@@ -376,20 +385,21 @@ const MarketAnalysis: React.FC = () => {
           ))}
         </div>
         
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.5rem', flexWrap:'wrap' }}>
-          <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Sort By:</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.5rem', flexWrap:'wrap' }}>
+          <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.45)', fontWeight: 600, letterSpacing: '0.03em' }}>Sort By:</span>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as any)}
             style={{
-              padding: '6px 12px', borderRadius: '8px', border: '1px solid #e2e8f0',
-              background: '#fff', fontSize: '13px', color: '#334155', fontWeight: 500, outline: 'none',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.05)', cursor: 'pointer'
+              padding: '7px 14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)',
+              background: 'rgba(255,255,255,0.07)', backdropFilter: 'blur(12px)',
+              fontSize: '13px', color: 'rgba(255,255,255,0.8)', fontWeight: 500, outline: 'none',
+              cursor: 'pointer'
             }}
           >
-            <option value="gainers">Top Gainers</option>
-            <option value="losers">Top Losers</option>
-            <option value="name">Alphabetical (A-Z)</option>
+            <option style={{ background:'#1a1830' }} value="gainers">🟢 Top Gainers</option>
+            <option style={{ background:'#1a1830' }} value="losers">🔴 Top Losers</option>
+            <option style={{ background:'#1a1830' }} value="name">🔤 Alphabetical (A-Z)</option>
           </select>
         </div>
 
@@ -399,56 +409,71 @@ const MarketAnalysis: React.FC = () => {
           gap:'12px',
         }}>
           {filtered.map(idx => {
-            const colors = getHeatColor(idx.change);
+            const c = idx.change;
+            const isPos = (c ?? 0) >= 0;
+            const isNull = c === null;
+            // glassmorphism tints
+            const tintBg = isNull
+              ? 'rgba(255,255,255,0.04)'
+              : isPos
+                ? `rgba(22,163,74,${Math.min(0.08 + Math.abs(c!) * 0.025, 0.25)})`
+                : `rgba(239,68,68,${Math.min(0.08 + Math.abs(c!) * 0.025, 0.25)})`;
+            const tintBorder = isNull
+              ? 'rgba(255,255,255,0.08)'
+              : isPos
+                ? `rgba(34,197,94,${Math.min(0.2 + Math.abs(c!) * 0.04, 0.6)})`
+                : `rgba(239,68,68,${Math.min(0.2 + Math.abs(c!) * 0.04, 0.6)})`;
+            const glowColor = isNull ? 'transparent' : isPos ? 'rgba(34,197,94,0.35)' : 'rgba(239,68,68,0.35)';
+            
             return (
               <div
                 key={idx.symbol}
                 onClick={() => setSelectedIndex(idx)}
                 style={{
-                  background: colors.bg,
-                  border:`1px solid ${colors.border}`,
-                  borderRadius:'16px',
-                  padding:'18px 16px',
+                  background: tintBg,
+                  backdropFilter: 'blur(20px)',
+                  WebkitBackdropFilter: 'blur(20px)',
+                  border: `1px solid ${tintBorder}`,
+                  borderRadius:'20px',
+                  padding:'20px 18px',
                   cursor:'pointer',
-                  transition:'transform 0.15s, box-shadow 0.15s',
-                  boxShadow: idx.change !== null && Math.abs(idx.change) > 2
-                    ? `0 4px 20px ${(idx.change ?? 0) > 0 ? 'rgba(22,163,74,0.25)' : 'rgba(239,68,68,0.25)'}`
-                    : '0 2px 8px rgba(0,0,0,0.1)',
+                  transition:'transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease',
+                  boxShadow: isNull ? 'none' : `0 4px 24px ${glowColor}`,
                 }}
                 onMouseEnter={e => {
-                  (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
-                  (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 24px rgba(0,0,0,0.2)';
+                  (e.currentTarget as HTMLElement).style.transform = 'translateY(-4px) scale(1.02)';
+                  (e.currentTarget as HTMLElement).style.boxShadow = `0 12px 36px ${glowColor}`;
                 }}
                 onMouseLeave={e => {
-                  (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
-                  (e.currentTarget as HTMLElement).style.boxShadow = idx.change !== null && Math.abs(idx.change) > 2 ? `0 4px 20px ${(idx.change ?? 0) > 0 ? 'rgba(22,163,74,0.25)' : 'rgba(239,68,68,0.25)'}` : '0 2px 8px rgba(0,0,0,0.1)';
+                  (e.currentTarget as HTMLElement).style.transform = 'translateY(0) scale(1)';
+                  (e.currentTarget as HTMLElement).style.boxShadow = isNull ? 'none' : `0 4px 24px ${glowColor}`;
                 }}
               >
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'8px' }}>
-                  <div style={{ color: colors.text, fontSize:'12px', fontWeight:700, letterSpacing:'0.03em', opacity:0.85 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'10px' }}>
+                  <div style={{ color:'rgba(255,255,255,0.75)', fontSize:'11px', fontWeight:700, letterSpacing:'0.06em', textTransform:'uppercase' }}>
                     {idx.name}
                   </div>
-                  <ExternalLink size={12} color={colors.text} style={{ opacity: 0.5 }} />
+                  <ExternalLink size={11} color="rgba(255,255,255,0.3)" />
                 </div>
 
                 {idx.loading ? (
                   <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
-                    <div style={{ height:'24px', background:'rgba(255,255,255,0.1)', borderRadius:'6px', animation:'pulse 1.5s ease-in-out infinite' }} />
-                    <div style={{ height:'16px', width:'60%', background:'rgba(255,255,255,0.07)', borderRadius:'6px', animation:'pulse 1.5s ease-in-out infinite' }} />
+                    <div style={{ height:'28px', background:'rgba(255,255,255,0.07)', borderRadius:'8px', animation:'pulse 1.5s ease-in-out infinite' }} />
+                    <div style={{ height:'16px', width:'55%', background:'rgba(255,255,255,0.04)', borderRadius:'8px', animation:'pulse 1.5s ease-in-out infinite' }} />
                   </div>
                 ) : idx.error || idx.price === null ? (
-                  <div style={{ color:'rgba(255,255,255,0.3)', fontSize:'12px' }}>Data unavailable</div>
+                  <div style={{ color:'rgba(255,255,255,0.2)', fontSize:'12px', fontStyle:'italic' }}>No data</div>
                 ) : (
                   <>
-                    <div style={{ color:'#fff', fontSize:'20px', fontWeight:800, letterSpacing:'-0.02em' }}>
+                    <div style={{ color:'#ffffff', fontSize:'22px', fontWeight:800, letterSpacing:'-0.025em', textShadow: isPos ? '0 0 20px rgba(34,197,94,0.4)' : '0 0 20px rgba(239,68,68,0.4)' }}>
                       {idx.price.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                     </div>
-                    <div style={{ display:'flex', alignItems:'center', gap:'4px', marginTop:'4px' }}>
-                      {(idx.change ?? 0) >= 0
-                        ? <TrendingUp size={13} color={colors.text} />
-                        : <TrendingDown size={13} color={colors.text} />}
-                      <span style={{ color: colors.text, fontSize:'13px', fontWeight:700 }}>
-                        {(idx.change ?? 0) >= 0 ? '+' : ''}{(idx.change ?? 0).toFixed(2)}%
+                    <div style={{ display:'flex', alignItems:'center', gap:'5px', marginTop:'6px' }}>
+                      <div style={{ width:'20px', height:'20px', borderRadius:'50%', background: isPos ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                        {isPos ? <TrendingUp size={11} color={isPos ? '#4ade80' : '#f87171'} /> : <TrendingDown size={11} color="#f87171" />}
+                      </div>
+                      <span style={{ color: isPos ? '#4ade80' : '#f87171', fontSize:'13px', fontWeight:700, letterSpacing:'0.01em' }}>
+                        {isPos ? '+' : ''}{(c ?? 0).toFixed(2)}%
                       </span>
                     </div>
                   </>
@@ -458,23 +483,24 @@ const MarketAnalysis: React.FC = () => {
           })}
         </div>
 
-        <div style={{ marginTop:'2rem', display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap' }}>
-          <span style={{ color:'#94a3b8', fontSize:'12px', marginRight:'4px' }}>Performance:</span>
+        <div style={{ marginTop:'2rem', display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap', padding:'12px 16px', background:'rgba(255,255,255,0.04)', backdropFilter:'blur(12px)', borderRadius:'12px', border:'1px solid rgba(255,255,255,0.07)' }}>
+          <span style={{ color:'rgba(255,255,255,0.35)', fontSize:'12px', marginRight:'4px' }}>Performance Scale:</span>
           {[
-            { label:'≤ −4%', bg:'rgba(127,29,29,0.85)' },
-            { label:'−2.5%', bg:'rgba(185,28,28,0.75)' },
-            { label:'−1%',   bg:'rgba(239,68,68,0.6)' },
-            { label:'0%',    bg:'rgba(55,65,81,0.6)' },
-            { label:'+1%',   bg:'rgba(34,197,94,0.5)' },
-            { label:'+2.5%', bg:'rgba(22,163,74,0.8)' },
-            { label:'≥ +4%', bg:'rgba(20,83,45,0.85)' },
+            { label:'≤ −4%', bg:'rgba(127,29,29,0.8)' },
+            { label:'−2.5%', bg:'rgba(185,28,28,0.7)' },
+            { label:'−1%',   bg:'rgba(239,68,68,0.5)' },
+            { label:'0%',    bg:'rgba(100,116,139,0.4)' },
+            { label:'+1%',   bg:'rgba(34,197,94,0.35)' },
+            { label:'+2.5%', bg:'rgba(22,163,74,0.6)' },
+            { label:'≥ +4%', bg:'rgba(20,83,45,0.8)' },
           ].map(l => (
-            <div key={l.label} style={{ display:'flex', alignItems:'center', gap:'4px' }}>
-              <div style={{ width:'20px', height:'14px', background:l.bg, borderRadius:'3px' }} />
-              <span style={{ color:'#94a3b8', fontSize:'11px' }}>{l.label}</span>
+            <div key={l.label} style={{ display:'flex', alignItems:'center', gap:'5px' }}>
+              <div style={{ width:'22px', height:'12px', background:l.bg, borderRadius:'4px', border:'1px solid rgba(255,255,255,0.1)' }} />
+              <span style={{ color:'rgba(255,255,255,0.35)', fontSize:'11px' }}>{l.label}</span>
             </div>
           ))}
         </div>
+      </div>
       </div>
 
       {selectedIndex && (
