@@ -2,11 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { TrendingUp, TrendingDown, RefreshCw, Activity, BarChart3, Globe, Layers, X, ExternalLink } from 'lucide-react';
 import { isMarketOpen } from '../utils/priceApi';
 
-// All major NSE Nifty sectoral indices with Yahoo Finance symbols
 const SECTORAL_INDICES = [
   { name: 'NIFTY 50',        symbol: '^NSEI',       sector: 'broad' },
   { name: 'NIFTY BANK',      symbol: '^NSEBANK',    sector: 'broad' },
-  { name: 'NIFTY MIDCAP 100',symbol: 'NIFMDCP100.NS', sector: 'broad' },
+  { name: 'NIFTY MIDCAP 100',symbol: 'NIFTY_MIDCAP_100.NS', sector: 'broad' },
   { name: 'NIFTY SMALLCAP', symbol: 'NIFSMCP250.NS', sector: 'broad' },
   { name: 'NIFTY NEXT 50',   symbol: '^NSMIDCP',    sector: 'broad' },
   { name: 'NIFTY AUTO',      symbol: '^CNXAUTO',    sector: 'sectoral' },
@@ -17,11 +16,11 @@ const SECTORAL_INDICES = [
   { name: 'NIFTY REALTY',    symbol: '^CNXREALTY',  sector: 'sectoral' },
   { name: 'NIFTY MEDIA',     symbol: '^CNXMEDIA',   sector: 'sectoral' },
   { name: 'NIFTY ENERGY',    symbol: '^CNXENERGY',  sector: 'sectoral' },
-  { name: 'NIFTY FIN SVC',   symbol: '^CNXFINANCE', sector: 'sectoral' },
+  { name: 'NIFTY FIN SVC',   symbol: '^CNXFIN',     sector: 'sectoral' },
   { name: 'NIFTY PSU BANK',  symbol: '^CNXPSUBANK', sector: 'sectoral' },
-  { name: 'NIFTY PVT BANK',  symbol: 'NIFTYPVTBNK.NS', sector: 'sectoral' },
+  { name: 'NIFTY PVT BANK',  symbol: 'NIFTY_PVT_BANK.NS', sector: 'sectoral' },
   { name: 'NIFTY INFRA',     symbol: '^CNXINFRA',   sector: 'thematic' },
-  { name: 'NIFTY CONSUME',   symbol: '^CNXCONSUMP', sector: 'thematic' },
+  { name: 'NIFTY CONSUME',   symbol: '^CNXCONSUM',  sector: 'thematic' },
   { name: 'NIFTY MNC',       symbol: '^CNXMNC',     sector: 'thematic' },
   { name: 'NIFTY COMMODITIES', symbol: '^CNXCMDT',  sector: 'thematic' },
   { name: 'NIFTY SERVICES',  symbol: '^CNXSERVICE', sector: 'thematic' },
@@ -131,7 +130,7 @@ const getHeatColor = (change: number | null): { bg: string; border: string; text
 const INDEX_CONSTITUENTS: Record<string, string[]> = {
   '^NSEI': ['RELIANCE.NS', 'HDFCBANK.NS', 'ICICIBANK.NS', 'INFY.NS', 'ITC.NS'],
   '^NSEBANK': ['HDFCBANK.NS', 'ICICIBANK.NS', 'SBIN.NS', 'KOTAKBANK.NS', 'AXISBANK.NS'],
-  'NIFMDCP100.NS': ['INDHOTEL.NS', 'CUMMINSIND.NS', 'YESBANK.NS', 'SUZLON.NS', 'OFSS.NS'],
+  'NIFTY_MIDCAP_100.NS': ['INDHOTEL.NS', 'CUMMINSIND.NS', 'YESBANK.NS', 'SUZLON.NS', 'OFSS.NS'],
   'NIFSMCP250.NS': ['BSE.NS', 'CDSL.NS', 'SUZLON.NS', 'RVNL.NS', 'IREDA.NS'],
   '^NSMIDCP': ['TRENT.NS', 'BEL.NS', 'HAL.NS', 'ZOMATO.NS', 'JIOFIN.NS'],
   '^CNXAUTO': ['M&M.NS', 'TATAMOTORS.NS', 'MARUTI.NS', 'BAJAJ-AUTO.NS', 'HEROMOTOCO.NS'],
@@ -142,11 +141,11 @@ const INDEX_CONSTITUENTS: Record<string, string[]> = {
   '^CNXREALTY': ['DLF.NS', 'MACROTECH.NS', 'GODREJPROP.NS', 'PRESTIGE.NS', 'OBEROIRLTY.NS'],
   '^CNXMEDIA': ['ZEEL.NS', 'SUNTV.NS', 'PVRINOX.NS', 'NETWORK18.NS', 'TV18BRDCST.NS'],
   '^CNXENERGY': ['RELIANCE.NS', 'ONGC.NS', 'NTPC.NS', 'POWERGRID.NS', 'TATAPOWER.NS'],
-  '^CNXFINANCE': ['HDFCBANK.NS', 'ICICIBANK.NS', 'BAJFINANCE.NS', 'BAJAJFINSV.NS', 'KOTAKBANK.NS'],
+  '^CNXFIN': ['HDFCBANK.NS', 'ICICIBANK.NS', 'BAJFINANCE.NS', 'BAJAJFINSV.NS', 'KOTAKBANK.NS'],
   '^CNXPSUBANK': ['SBIN.NS', 'PNB.NS', 'BANKBARODA.NS', 'CANBK.NS', 'UNIONBANK.NS'],
-  'NIFTYPVTBNK.NS': ['HDFCBANK.NS', 'ICICIBANK.NS', 'KOTAKBANK.NS', 'AXISBANK.NS', 'INDUSINDBK.NS'],
+  'NIFTY_PVT_BANK.NS': ['HDFCBANK.NS', 'ICICIBANK.NS', 'KOTAKBANK.NS', 'AXISBANK.NS', 'INDUSINDBK.NS'],
   '^CNXINFRA': ['LT.NS', 'RELIANCE.NS', 'BHARTIARTL.NS', 'NTPC.NS', 'ULTRACEMCO.NS'],
-  '^CNXCONSUMP': ['ITC.NS', 'HINDUNILVR.NS', 'M&M.NS', 'TITAN.NS', 'MARUTI.NS'],
+  '^CNXCONSUM': ['ITC.NS', 'HINDUNILVR.NS', 'M&M.NS', 'TITAN.NS', 'MARUTI.NS'],
   '^CNXMNC': ['MARUTI.NS', 'NESTLEIND.NS', 'BRITANNIA.NS', 'ASHOKLEY.NS', 'CUMMINSIND.NS'],
   '^CNXCMDT': ['RELIANCE.NS', 'TATASTEEL.NS', 'HINDALCO.NS', 'ULTRACEMCO.NS', 'JSWSTEEL.NS'],
   '^CNXSERVICE': ['TCS.NS', 'INFY.NS', 'HDFCBANK.NS', 'ICICIBANK.NS', 'BHARTIARTL.NS'],
