@@ -412,45 +412,53 @@ const MarketAnalysis: React.FC = () => {
             const c = idx.change;
             const isPos = (c ?? 0) >= 0;
             const isNull = c === null;
-            // glassmorphism tints
-            const tintBg = isNull
-              ? 'rgba(255,255,255,0.04)'
+            const absChange = Math.abs(c ?? 0);
+
+            // Simple gradient: intensity scales with % change
+            const bg = isNull
+              ? 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)'
               : isPos
-                ? `rgba(22,163,74,${Math.min(0.08 + Math.abs(c!) * 0.025, 0.25)})`
-                : `rgba(239,68,68,${Math.min(0.08 + Math.abs(c!) * 0.025, 0.25)})`;
-            const tintBorder = isNull
-              ? 'rgba(255,255,255,0.08)'
+                ? absChange >= 3
+                  ? 'linear-gradient(135deg, #15803d 0%, #052e16 100%)'
+                  : absChange >= 1.5
+                    ? 'linear-gradient(135deg, #166534 0%, #052e16 100%)'
+                    : 'linear-gradient(135deg, #14532d 0%, #071a0e 100%)'
+                : absChange >= 3
+                  ? 'linear-gradient(135deg, #b91c1c 0%, #450a0a 100%)'
+                  : absChange >= 1.5
+                    ? 'linear-gradient(135deg, #991b1b 0%, #3b0505 100%)'
+                    : 'linear-gradient(135deg, #7f1d1d 0%, #2d0505 100%)';
+
+            const border = isNull
+              ? '1px solid rgba(255,255,255,0.07)'
               : isPos
-                ? `rgba(34,197,94,${Math.min(0.2 + Math.abs(c!) * 0.04, 0.6)})`
-                : `rgba(239,68,68,${Math.min(0.2 + Math.abs(c!) * 0.04, 0.6)})`;
-            const glowColor = isNull ? 'transparent' : isPos ? 'rgba(34,197,94,0.35)' : 'rgba(239,68,68,0.35)';
-            
+                ? '1px solid rgba(34,197,94,0.25)'
+                : '1px solid rgba(239,68,68,0.25)';
+
             return (
               <div
                 key={idx.symbol}
                 onClick={() => setSelectedIndex(idx)}
                 style={{
-                  background: tintBg,
-                  backdropFilter: 'blur(20px)',
-                  WebkitBackdropFilter: 'blur(20px)',
-                  border: `1px solid ${tintBorder}`,
-                  borderRadius:'20px',
-                  padding:'20px 18px',
-                  cursor:'pointer',
-                  transition:'transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease',
-                  boxShadow: isNull ? 'none' : `0 4px 24px ${glowColor}`,
+                  background: bg,
+                  border,
+                  borderRadius: '16px',
+                  padding: '18px 16px',
+                  cursor: 'pointer',
+                  transition: 'transform 0.18s ease, box-shadow 0.18s ease',
+                  boxShadow: isNull ? 'none' : isPos ? '0 2px 12px rgba(22,101,52,0.35)' : '0 2px 12px rgba(153,27,27,0.35)',
                 }}
                 onMouseEnter={e => {
-                  (e.currentTarget as HTMLElement).style.transform = 'translateY(-4px) scale(1.02)';
-                  (e.currentTarget as HTMLElement).style.boxShadow = `0 12px 36px ${glowColor}`;
+                  (e.currentTarget as HTMLElement).style.transform = 'translateY(-3px)';
+                  (e.currentTarget as HTMLElement).style.boxShadow = isPos ? '0 8px 24px rgba(22,101,52,0.5)' : '0 8px 24px rgba(153,27,27,0.5)';
                 }}
                 onMouseLeave={e => {
-                  (e.currentTarget as HTMLElement).style.transform = 'translateY(0) scale(1)';
-                  (e.currentTarget as HTMLElement).style.boxShadow = isNull ? 'none' : `0 4px 24px ${glowColor}`;
+                  (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
+                  (e.currentTarget as HTMLElement).style.boxShadow = isNull ? 'none' : isPos ? '0 2px 12px rgba(22,101,52,0.35)' : '0 2px 12px rgba(153,27,27,0.35)';
                 }}
               >
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'10px' }}>
-                  <div style={{ color:'rgba(255,255,255,0.75)', fontSize:'11px', fontWeight:700, letterSpacing:'0.06em', textTransform:'uppercase' }}>
+                  <div style={{ color:'rgba(255,255,255,0.75)', fontSize:'11px', fontWeight:700, letterSpacing:'0.05em', textTransform:'uppercase' }}>
                     {idx.name}
                   </div>
                   <ExternalLink size={11} color="rgba(255,255,255,0.3)" />
@@ -458,21 +466,19 @@ const MarketAnalysis: React.FC = () => {
 
                 {idx.loading ? (
                   <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
-                    <div style={{ height:'28px', background:'rgba(255,255,255,0.07)', borderRadius:'8px', animation:'pulse 1.5s ease-in-out infinite' }} />
-                    <div style={{ height:'16px', width:'55%', background:'rgba(255,255,255,0.04)', borderRadius:'8px', animation:'pulse 1.5s ease-in-out infinite' }} />
+                    <div style={{ height:'26px', background:'rgba(255,255,255,0.1)', borderRadius:'6px', animation:'pulse 1.5s ease-in-out infinite' }} />
+                    <div style={{ height:'14px', width:'55%', background:'rgba(255,255,255,0.06)', borderRadius:'6px', animation:'pulse 1.5s ease-in-out infinite' }} />
                   </div>
                 ) : idx.error || idx.price === null ? (
-                  <div style={{ color:'rgba(255,255,255,0.2)', fontSize:'12px', fontStyle:'italic' }}>No data</div>
+                  <div style={{ color:'rgba(255,255,255,0.3)', fontSize:'12px' }}>No data</div>
                 ) : (
                   <>
-                    <div style={{ color:'#ffffff', fontSize:'22px', fontWeight:800, letterSpacing:'-0.025em', textShadow: isPos ? '0 0 20px rgba(34,197,94,0.4)' : '0 0 20px rgba(239,68,68,0.4)' }}>
+                    <div style={{ color:'#ffffff', fontSize:'21px', fontWeight:800, letterSpacing:'-0.02em' }}>
                       {idx.price.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                     </div>
                     <div style={{ display:'flex', alignItems:'center', gap:'5px', marginTop:'6px' }}>
-                      <div style={{ width:'20px', height:'20px', borderRadius:'50%', background: isPos ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                        {isPos ? <TrendingUp size={11} color={isPos ? '#4ade80' : '#f87171'} /> : <TrendingDown size={11} color="#f87171" />}
-                      </div>
-                      <span style={{ color: isPos ? '#4ade80' : '#f87171', fontSize:'13px', fontWeight:700, letterSpacing:'0.01em' }}>
+                      {isPos ? <TrendingUp size={13} color="#86efac" /> : <TrendingDown size={13} color="#fca5a5" />}
+                      <span style={{ color: isPos ? '#86efac' : '#fca5a5', fontSize:'13px', fontWeight:700 }}>
                         {isPos ? '+' : ''}{(c ?? 0).toFixed(2)}%
                       </span>
                     </div>
