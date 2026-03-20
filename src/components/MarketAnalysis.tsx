@@ -549,57 +549,25 @@ const MarketAnalysis: React.FC = () => {
                     ))}
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '8px' }}>
+                  <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
                     {constituents.length === 0 ? (
                       <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '13px', fontStyle: 'italic' }}>Constituent data not available for this index.</div>
                     ) : (constituents.map(stock => {
-                      const stockChange = stock.change;
-                      const isP = (stockChange ?? 0) >= 0;
-                      const isN = stockChange === null;
-                      const glowBg = isN
-                        ? 'rgba(255,255,255,0.04)'
-                        : isP
-                          ? `rgba(22,163,74,${Math.min(0.1 + Math.abs(stockChange!) * 0.03, 0.28)})`
-                          : `rgba(239,68,68,${Math.min(0.1 + Math.abs(stockChange!) * 0.03, 0.28)})`;
-                      const glowBorder = isN
-                        ? 'rgba(255,255,255,0.08)'
-                        : isP
-                          ? `rgba(34,197,94,${Math.min(0.25 + Math.abs(stockChange!) * 0.05, 0.7)})`
-                          : `rgba(239,68,68,${Math.min(0.25 + Math.abs(stockChange!) * 0.05, 0.7)})`;
-                      const glowShadow = isN ? 'none'
-                        : isP ? `0 4px 24px rgba(34,197,94,0.3)` : `0 4px 24px rgba(239,68,68,0.3)`;
+                      const heat = getHeatColor(stock.change);
                       return (
-                        <div key={stock.symbol} style={{
-                          minWidth: '168px',
-                          padding: '14px 16px',
-                          borderRadius: '16px',
-                          border: `1px solid ${glowBorder}`,
-                          background: glowBg,
-                          backdropFilter: 'blur(16px)',
-                          WebkitBackdropFilter: 'blur(16px)',
-                          boxShadow: glowShadow,
-                          transition: 'transform 0.2s, box-shadow 0.2s',
-                          flexShrink: 0,
-                        }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-3px)'; (e.currentTarget as HTMLElement).style.boxShadow = glowShadow.replace('0.3)', '0.5)'); }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLElement).style.boxShadow = glowShadow; }}
-                        >
-                          <div style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 700, fontSize: '11px', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {stock.name}
+                        <div key={stock.symbol} style={{ 
+                          minWidth: '160px', padding: '12px', borderRadius: '12px', border: `1px solid ${heat.border}`,
+                          background: `linear-gradient(to bottom right, ${heat.bg}, rgba(11,10,16,1))`
+                        }}>
+                          <div style={{ color: 'white', fontWeight: 600, fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stock.name}</div>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '4px' }}>
+                            <span style={{ color: '#fff', fontSize: '15px', fontWeight: 700 }}>
+                              {stock.price ? stock.price.toLocaleString('en-IN') : '--'}
+                            </span>
+                            <span style={{ color: heat.text, fontSize: '12px', fontWeight: 600 }}>
+                              {stock.change !== null ? `${stock.change > 0 ? '+' : ''}${stock.change.toFixed(2)}%` : ''}
+                            </span>
                           </div>
-                          <div style={{ color: '#ffffff', fontSize: '18px', fontWeight: 800, letterSpacing: '-0.02em', textShadow: isP ? '0 0 16px rgba(34,197,94,0.5)' : '0 0 16px rgba(239,68,68,0.5)' }}>
-                            {stock.price ? stock.price.toLocaleString('en-IN') : '--'}
-                          </div>
-                          {stockChange !== null && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '6px' }}>
-                              <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: isP ? 'rgba(34,197,94,0.18)' : 'rgba(239,68,68,0.18)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                                {isP ? <TrendingUp size={10} color="#4ade80" /> : <TrendingDown size={10} color="#f87171" />}
-                              </div>
-                              <span style={{ color: isP ? '#4ade80' : '#f87171', fontSize: '13px', fontWeight: 700 }}>
-                                {isP ? '+' : ''}{stockChange.toFixed(2)}%
-                              </span>
-                            </div>
-                          )}
                         </div>
                       );
                     }))}
