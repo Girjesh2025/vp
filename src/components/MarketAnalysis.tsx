@@ -127,6 +127,29 @@ const getHeatColor = (change: number | null): { bg: string; border: string; text
   if (change < 2.5)   return { bg: 'rgba(21,128,61,0.75)',  border: '#15803d', text: '#86efac' };
   if (change < 4)     return { bg: 'rgba(22,163,74,0.8)',   border: '#16a34a', text: '#4ade80' };
   return {              bg: 'rgba(20,83,45,0.85)',   border: '#14532d', text: '#4ade80' };
+};// Map of top 5 heavyweights for each index
+const INDEX_CONSTITUENTS: Record<string, string[]> = {
+  '^NSEI': ['RELIANCE.NS', 'HDFCBANK.NS', 'ICICIBANK.NS', 'INFY.NS', 'ITC.NS'],
+  '^NSEBANK': ['HDFCBANK.NS', 'ICICIBANK.NS', 'SBIN.NS', 'KOTAKBANK.NS', 'AXISBANK.NS'],
+  'NIFMDCP100.NS': ['INDHOTEL.NS', 'CUMMINSIND.NS', 'YESBANK.NS', 'SUZLON.NS', 'OFSS.NS'],
+  'NIFSMCP250.NS': ['BSE.NS', 'CDSL.NS', 'SUZLON.NS', 'RVNL.NS', 'IREDA.NS'],
+  '^NSMIDCP': ['TRENT.NS', 'BEL.NS', 'HAL.NS', 'ZOMATO.NS', 'JIOFIN.NS'],
+  '^CNXAUTO': ['M&M.NS', 'TATAMOTORS.NS', 'MARUTI.NS', 'BAJAJ-AUTO.NS', 'HEROMOTOCO.NS'],
+  '^CNXIT': ['TCS.NS', 'INFY.NS', 'HCLTECH.NS', 'WIPRO.NS', 'TECHM.NS'],
+  '^CNXFMCG': ['ITC.NS', 'HINDUNILVR.NS', 'NESTLEIND.NS', 'BRITANNIA.NS', 'TATACONSUM.NS'],
+  '^CNXPHARMA': ['SUNPHARMA.NS', 'DIVISLAB.NS', 'DRREDDY.NS', 'CIPLA.NS', 'LUPIN.NS'],
+  '^CNXMETAL': ['TATASTEEL.NS', 'HINDALCO.NS', 'JSWSTEEL.NS', 'VEDL.NS', 'COALINDIA.NS'],
+  '^CNXREALTY': ['DLF.NS', 'MACROTECH.NS', 'GODREJPROP.NS', 'PRESTIGE.NS', 'OBEROIRLTY.NS'],
+  '^CNXMEDIA': ['ZEEL.NS', 'SUNTV.NS', 'PVRINOX.NS', 'NETWORK18.NS', 'TV18BRDCST.NS'],
+  '^CNXENERGY': ['RELIANCE.NS', 'ONGC.NS', 'NTPC.NS', 'POWERGRID.NS', 'TATAPOWER.NS'],
+  '^CNXFINANCE': ['HDFCBANK.NS', 'ICICIBANK.NS', 'BAJFINANCE.NS', 'BAJAJFINSV.NS', 'KOTAKBANK.NS'],
+  '^CNXPSUBANK': ['SBIN.NS', 'PNB.NS', 'BANKBARODA.NS', 'CANBK.NS', 'UNIONBANK.NS'],
+  'NIFTYPVTBNK.NS': ['HDFCBANK.NS', 'ICICIBANK.NS', 'KOTAKBANK.NS', 'AXISBANK.NS', 'INDUSINDBK.NS'],
+  '^CNXINFRA': ['LT.NS', 'RELIANCE.NS', 'BHARTIARTL.NS', 'NTPC.NS', 'ULTRACEMCO.NS'],
+  '^CNXCONSUMP': ['ITC.NS', 'HINDUNILVR.NS', 'M&M.NS', 'TITAN.NS', 'MARUTI.NS'],
+  '^CNXMNC': ['MARUTI.NS', 'NESTLEIND.NS', 'BRITANNIA.NS', 'ASHOKLEY.NS', 'CUMMINSIND.NS'],
+  '^CNXCMDT': ['RELIANCE.NS', 'TATASTEEL.NS', 'HINDALCO.NS', 'ULTRACEMCO.NS', 'JSWSTEEL.NS'],
+  '^CNXSERVICE': ['TCS.NS', 'INFY.NS', 'HDFCBANK.NS', 'ICICIBANK.NS', 'BHARTIARTL.NS'],
 };
 
 const MarketAnalysis: React.FC = () => {
@@ -136,13 +159,15 @@ const MarketAnalysis: React.FC = () => {
   const [filter, setFilter] = useState<'all' | 'broad' | 'sectoral' | 'thematic'>('all');
   const [sortBy, setSortBy] = useState<'name' | 'gainers' | 'losers'>('gainers');
   const [selectedIndex, setSelectedIndex] = useState<IndexData | null>(null);
+  const [constituents, setConstituents] = useState<IndexData[]>([]);
+  const [loadingConstituents, setLoadingConstituents] = useState(false);
+  
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadAll = useCallback(async () => {
     setRefreshing(true);
 
-    // 1. Check Cache First (Instant Load)
     try {
       const cached = sessionStorage.getItem(CACHE_KEY);
       if (cached) {
@@ -156,12 +181,10 @@ const MarketAnalysis: React.FC = () => {
       }
     } catch (_) {}
 
-    // 2. Not cached or expired: Reset to loading state
     setIndices(prev => prev.map(i => ({ ...i, loading: true, error: false })));
 
-    // 3. Fire ONE single bulk request for all symbols
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10000); // 10s generous timeout
+    const timer = setTimeout(() => controller.abort(), 10000);
 
     const symbols = SECTORAL_INDICES.map(i => i.symbol);
     const resultsMap = await fetchAllIndices(symbols, controller.signal);
@@ -181,7 +204,6 @@ const MarketAnalysis: React.FC = () => {
 
     setIndices(newIndices);
 
-    // 4. Save to Cache
     try {
       sessionStorage.setItem(CACHE_KEY, JSON.stringify({
         timestamp: Date.now(),
@@ -195,10 +217,50 @@ const MarketAnalysis: React.FC = () => {
 
   useEffect(() => {
     loadAll();
-    // Auto-refresh every 3 minutes
     const interval = setInterval(loadAll, 3 * 60 * 1000);
     return () => clearInterval(interval);
   }, [loadAll]);
+
+  // Load constituents whenever a tile is selected
+  useEffect(() => {
+    if (!selectedIndex) {
+      setConstituents([]);
+      return;
+    }
+    
+    const fetchConstituents = async () => {
+      setLoadingConstituents(true);
+      const symbols = INDEX_CONSTITUENTS[selectedIndex.symbol] || [];
+      if (symbols.length === 0) {
+        setLoadingConstituents(false);
+        return;
+      }
+      
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      const resultsMap = await fetchAllIndices(symbols, controller.signal);
+      clearTimeout(timer);
+      
+      const mapped: IndexData[] = symbols.map(sym => {
+        const data = resultsMap?.get(sym);
+        return {
+          name: sym.replace('.NS', ''),
+          symbol: sym,
+          sector: '',
+          price: data?.price ?? null,
+          change: data?.change ?? null,
+          prevClose: data?.prevClose ?? null,
+          loading: false,
+          error: !data
+        };
+      });
+      
+      setConstituents(mapped);
+      setLoadingConstituents(false);
+    };
+    
+    fetchConstituents();
+  }, [selectedIndex]);
 
   const filtered = indices
     .filter(i => filter === 'all' || i.sector === filter)
@@ -208,6 +270,7 @@ const MarketAnalysis: React.FC = () => {
       if (sortBy === 'losers') return (a.change ?? 999) - (b.change ?? 999);
       return 0;
     });
+
   const marketOpen = isMarketOpen();
 
   const totalPositive = filtered.filter(i => (i.change ?? 0) > 0).length;
@@ -216,7 +279,6 @@ const MarketAnalysis: React.FC = () => {
 
   return (
     <div style={{ padding: '0', background: '#f8fafc', minHeight: '100vh' }}>
-      {/* Header banner */}
       <div style={{
         background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e3a5f 100%)',
         padding: '2rem 2rem 1.5rem',
@@ -224,7 +286,6 @@ const MarketAnalysis: React.FC = () => {
         marginBottom: '1.5rem',
         position: 'relative', overflow: 'hidden',
       }}>
-        {/* decorative blobs */}
         <div style={{ position:'absolute', top:'-60px', right:'-60px', width:'250px', height:'250px', background:'radial-gradient(circle,rgba(139,92,246,0.2) 0%,transparent 70%)', borderRadius:'50%' }}/>
         <div style={{ position:'absolute', bottom:'-40px', left:'30%', width:'200px', height:'200px', background:'radial-gradient(circle,rgba(59,130,246,0.15) 0%,transparent 70%)', borderRadius:'50%' }}/>
 
@@ -242,7 +303,6 @@ const MarketAnalysis: React.FC = () => {
           </div>
 
           <div style={{ display:'flex', alignItems:'center', gap:'12px', flexWrap:'wrap' }}>
-            {/* Market status */}
             <div style={{
               display:'flex', alignItems:'center', gap:'8px',
               background: marketOpen ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
@@ -255,7 +315,6 @@ const MarketAnalysis: React.FC = () => {
               </span>
             </div>
 
-            {/* Refresh */}
             <button
               onClick={loadAll}
               disabled={refreshing}
@@ -272,7 +331,6 @@ const MarketAnalysis: React.FC = () => {
           </div>
         </div>
 
-        {/* Scoreboard */}
         <div style={{ display:'flex', gap:'12px', marginTop:'1.25rem', flexWrap:'wrap', position:'relative', zIndex:1 }}>
           {[
             { label:'Advancing', value:totalPositive, color:'#4ade80', bg:'rgba(22,163,74,0.2)', border:'rgba(22,163,74,0.3)' },
@@ -294,7 +352,6 @@ const MarketAnalysis: React.FC = () => {
       </div>
 
       <div style={{ padding:'0 1.5rem 2rem' }}>
-        {/* Filter tabs */}
         <div style={{ display:'flex', gap:'8px', marginBottom:'1.5rem', flexWrap:'wrap' }}>
           {([
             { key:'all',       label:'All Indices', icon:<Globe size={14}/> },
@@ -337,7 +394,6 @@ const MarketAnalysis: React.FC = () => {
           </select>
         </div>
 
-        {/* Heatmap grid */}
         <div style={{
           display:'grid',
           gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))',
@@ -354,7 +410,7 @@ const MarketAnalysis: React.FC = () => {
                   border:`1px solid ${colors.border}`,
                   borderRadius:'16px',
                   padding:'18px 16px',
-                  cursor:'default',
+                  cursor:'pointer',
                   transition:'transform 0.15s, box-shadow 0.15s',
                   boxShadow: idx.change !== null && Math.abs(idx.change) > 2
                     ? `0 4px 20px ${(idx.change ?? 0) > 0 ? 'rgba(22,163,74,0.25)' : 'rgba(239,68,68,0.25)'}`
@@ -403,7 +459,6 @@ const MarketAnalysis: React.FC = () => {
           })}
         </div>
 
-        {/* Legend */}
         <div style={{ marginTop:'2rem', display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap' }}>
           <span style={{ color:'#94a3b8', fontSize:'12px', marginRight:'4px' }}>Performance:</span>
           {[
@@ -427,26 +482,24 @@ const MarketAnalysis: React.FC = () => {
         <div style={{
           position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem'
         }}>
-          {/* Backdrop */}
           <div 
             onClick={() => setSelectedIndex(null)}
             style={{ position: 'absolute', inset: 0, background: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(4px)' }} 
           />
           
-          {/* Modal Content */}
           <div style={{
             position: 'relative', background: '#0B0A10', border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: '20px', width: '100%', maxWidth: '900px', height: '70vh', display: 'flex', flexDirection: 'column',
+            borderRadius: '20px', width: '100%', maxWidth: '1000px', height: '80vh', display: 'flex', flexDirection: 'column',
             boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', overflow: 'hidden', animation: 'scaleUp 0.2s ease-out'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)', background: '#12101C' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)', background: '#12101C' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(99,102,241,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Activity size={18} color="#818cf8" />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, color: '#fff', fontSize: '1.1rem', fontWeight: 700 }}>{selectedIndex.name}</h3>
-                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px' }}>Live TradingView Chart</div>
+                  <h3 style={{ margin: 0, color: '#fff', fontSize: '1.2rem', fontWeight: 700 }}>{selectedIndex.name} Deep-Dive</h3>
+                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px' }}>Sector Constituents & Live Advanced Chart</div>
                 </div>
               </div>
               <button 
@@ -459,26 +512,67 @@ const MarketAnalysis: React.FC = () => {
               </button>
             </div>
             
-            <div style={{ flex: 1, position: 'relative', background: '#0B0A10' }}>
-              <iframe
-                title={`${selectedIndex.name} Chart`}
-                src={`https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${encodeURIComponent(
-                  selectedIndex.symbol === '^NSEI' ? 'NSE:NIFTY' :
-                  selectedIndex.symbol === '^NSEBANK' ? 'NSE:BANKNIFTY' :
-                  selectedIndex.symbol === '^NSMIDCP' ? 'NSE:MIDCPNIFTY' :
-                  selectedIndex.symbol === '^CNXIT' ? 'NSE:CNXIT' :
-                  selectedIndex.symbol === '^CNXAUTO' ? 'NSE:CNXAUTO' :
-                  selectedIndex.symbol === '^CNXFMCG' ? 'NSE:CNXFMCG' :
-                  selectedIndex.symbol === '^CNXMETAL' ? 'NSE:CNXMETAL' :
-                  selectedIndex.symbol === '^CNXPHARMA' ? 'NSE:CNXPHARMA' :
-                  selectedIndex.symbol === '^CNXENERGY' ? 'NSE:CNXENERGY' :
-                  selectedIndex.symbol === '^CNXMEDIA' ? 'NSE:CNXMEDIA' :
-                  selectedIndex.symbol === '^CNXREALTY' ? 'NSE:CNXREALTY' :
-                  selectedIndex.symbol === '^CNXPSUBANK' ? 'NSE:CNXPSUBANK' :
-                  (selectedIndex.symbol.includes('.NS') ? `NSE:${selectedIndex.symbol.replace('.NS', '')}` : selectedIndex.symbol.replace('^', ''))
-                )}&interval=D&hidesidetoolbar=1&symboledit=1&saveimage=1&toolbarbg=0B0A10&studies=%5B%5D&theme=dark&style=1&timezone=Asia%2FKolkata&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=en`}
-                style={{ width: '100%', height: '100%', border: 'none' }}
-              />
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', background: '#0B0A10', overflowY: 'auto' }}>
+              
+              {/* Constituents Banner */}
+              <div style={{ padding: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                <h4 style={{ color: '#94a3b8', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px', fontWeight: 600 }}>Top Movers Driving The Index</h4>
+                {loadingConstituents ? (
+                  <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
+                    {[1,2,3,4,5].map(i => (
+                      <div key={i} style={{ minWidth: '160px', height: '68px', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', animation: 'pulse 1.5s infinite' }} />
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
+                    {constituents.length === 0 ? (
+                      <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '13px', fontStyle: 'italic' }}>Constituent data not available for this index.</div>
+                    ) : (constituents.map(stock => {
+                      const heat = getHeatColor(stock.change);
+                      return (
+                        <div key={stock.symbol} style={{ 
+                          minWidth: '160px', padding: '12px', borderRadius: '12px', border: `1px solid ${heat.border}`,
+                          background: `linear-gradient(to bottom right, ${heat.bg}, rgba(11,10,16,1))`
+                        }}>
+                          <div style={{ color: 'white', fontWeight: 600, fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stock.name}</div>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '4px' }}>
+                            <span style={{ color: '#fff', fontSize: '15px', fontWeight: 700 }}>
+                              {stock.price ? stock.price.toLocaleString('en-IN') : '--'}
+                            </span>
+                            <span style={{ color: heat.text, fontSize: '12px', fontWeight: 600 }}>
+                              {stock.change !== null ? `${stock.change > 0 ? '+' : ''}${stock.change.toFixed(2)}%` : ''}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    }))}
+                  </div>
+                )}
+              </div>
+
+              {/* TradingView Advanced Chart Widget embedding */}
+              <div style={{ flex: 1, minHeight: '400px', width: '100%', position: 'relative' }}>
+                <iframe
+                  title={`${selectedIndex.name} Chart`}
+                  src={`https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${encodeURIComponent(
+                    selectedIndex.symbol === '^NSEI' ? 'NSE:NIFTY' :
+                    selectedIndex.symbol === '^NSEBANK' ? 'NSE:BANKNIFTY' :
+                    selectedIndex.symbol === '^NSMIDCP' ? 'NSE:MIDCPNIFTY' :
+                    selectedIndex.symbol === '^CNXIT' ? 'NSE:CNXIT' :
+                    selectedIndex.symbol === '^CNXAUTO' ? 'NSE:CNXAUTO' :
+                    selectedIndex.symbol === '^CNXFMCG' ? 'NSE:CNXFMCG' :
+                    selectedIndex.symbol === '^CNXMETAL' ? 'NSE:CNXMETAL' :
+                    selectedIndex.symbol === '^CNXPHARMA' ? 'NSE:CNXPHARMA' :
+                    selectedIndex.symbol === '^CNXENERGY' ? 'NSE:CNXENERGY' :
+                    selectedIndex.symbol === '^CNXMEDIA' ? 'NSE:CNXMEDIA' :
+                    selectedIndex.symbol === '^CNXREALTY' ? 'NSE:CNXREALTY' :
+                    selectedIndex.symbol === '^CNXPSUBANK' ? 'NSE:CNXPSUBANK' :
+                    (selectedIndex.symbol.includes('.NS') ? `NSE:${selectedIndex.symbol.replace('.NS', '')}` : selectedIndex.symbol.replace('^', ''))
+                  )}&interval=D&hidesidetoolbar=1&symboledit=0&saveimage=0&toolbarbg=0B0A10&studies=%5B%5D&theme=dark&style=1&timezone=Asia%2FKolkata&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=en`}
+                  style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }}
+                />
+              </div>
+
             </div>
           </div>
         </div>
