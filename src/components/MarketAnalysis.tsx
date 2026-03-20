@@ -414,20 +414,12 @@ const MarketAnalysis: React.FC = () => {
             const isNull = c === null;
             const absChange = Math.abs(c ?? 0);
 
-            // Simple gradient: intensity scales with % change
+            // Simple flat solid color — no gradient
             const bg = isNull
-              ? 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)'
+              ? '#1e293b'
               : isPos
-                ? absChange >= 3
-                  ? 'linear-gradient(135deg, #15803d 0%, #052e16 100%)'
-                  : absChange >= 1.5
-                    ? 'linear-gradient(135deg, #166534 0%, #052e16 100%)'
-                    : 'linear-gradient(135deg, #14532d 0%, #071a0e 100%)'
-                : absChange >= 3
-                  ? 'linear-gradient(135deg, #b91c1c 0%, #450a0a 100%)'
-                  : absChange >= 1.5
-                    ? 'linear-gradient(135deg, #991b1b 0%, #3b0505 100%)'
-                    : 'linear-gradient(135deg, #7f1d1d 0%, #2d0505 100%)';
+                ? absChange >= 2 ? '#166534' : '#14532d'
+                : absChange >= 2 ? '#991b1b' : '#7f1d1d';
 
             const border = isNull
               ? '1px solid rgba(255,255,255,0.07)'
