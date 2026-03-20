@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { TrendingUp, TrendingDown, RefreshCw, Activity, BarChart3, Globe, Layers } from 'lucide-react';
+import { TrendingUp, TrendingDown, RefreshCw, Activity, BarChart3, Globe, Layers, X, ExternalLink } from 'lucide-react';
 import { isMarketOpen } from '../utils/priceApi';
 
 // All major NSE Nifty sectoral indices with Yahoo Finance symbols
@@ -134,6 +134,8 @@ const MarketAnalysis: React.FC = () => {
     SECTORAL_INDICES.map(i => ({ ...i, price: null, change: null, prevClose: null, loading: true, error: false }))
   );
   const [filter, setFilter] = useState<'all' | 'broad' | 'sectoral' | 'thematic'>('all');
+  const [sortBy, setSortBy] = useState<'name' | 'gainers' | 'losers'>('gainers');
+  const [selectedIndex, setSelectedIndex] = useState<IndexData | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -198,7 +200,14 @@ const MarketAnalysis: React.FC = () => {
     return () => clearInterval(interval);
   }, [loadAll]);
 
-  const filtered = indices.filter(i => filter === 'all' || i.sector === filter);
+  const filtered = indices
+    .filter(i => filter === 'all' || i.sector === filter)
+    .sort((a, b) => {
+      if (sortBy === 'name') return a.name.localeCompare(b.name);
+      if (sortBy === 'gainers') return (b.change ?? -999) - (a.change ?? -999);
+      if (sortBy === 'losers') return (a.change ?? 999) - (b.change ?? 999);
+      return 0;
+    });
   const marketOpen = isMarketOpen();
 
   const totalPositive = filtered.filter(i => (i.change ?? 0) > 0).length;
@@ -310,6 +319,23 @@ const MarketAnalysis: React.FC = () => {
             </button>
           ))}
         </div>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.5rem', flexWrap:'wrap' }}>
+          <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Sort By:</span>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as any)}
+            style={{
+              padding: '6px 12px', borderRadius: '8px', border: '1px solid #e2e8f0',
+              background: '#fff', fontSize: '13px', color: '#334155', fontWeight: 500, outline: 'none',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.05)', cursor: 'pointer'
+            }}
+          >
+            <option value="gainers">Top Gainers</option>
+            <option value="losers">Top Losers</option>
+            <option value="name">Alphabetical (A-Z)</option>
+          </select>
+        </div>
 
         {/* Heatmap grid */}
         <div style={{
@@ -322,6 +348,7 @@ const MarketAnalysis: React.FC = () => {
             return (
               <div
                 key={idx.symbol}
+                onClick={() => setSelectedIndex(idx)}
                 style={{
                   background: colors.bg,
                   border:`1px solid ${colors.border}`,
@@ -342,8 +369,11 @@ const MarketAnalysis: React.FC = () => {
                   (e.currentTarget as HTMLElement).style.boxShadow = idx.change !== null && Math.abs(idx.change) > 2 ? `0 4px 20px ${(idx.change ?? 0) > 0 ? 'rgba(22,163,74,0.25)' : 'rgba(239,68,68,0.25)'}` : '0 2px 8px rgba(0,0,0,0.1)';
                 }}
               >
-                <div style={{ color: colors.text, fontSize:'12px', fontWeight:700, letterSpacing:'0.03em', marginBottom:'8px', opacity:0.85 }}>
-                  {idx.name}
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'8px' }}>
+                  <div style={{ color: colors.text, fontSize:'12px', fontWeight:700, letterSpacing:'0.03em', opacity:0.85 }}>
+                    {idx.name}
+                  </div>
+                  <ExternalLink size={12} color={colors.text} style={{ opacity: 0.5 }} />
                 </div>
 
                 {idx.loading ? (
@@ -393,9 +423,71 @@ const MarketAnalysis: React.FC = () => {
         </div>
       </div>
 
+      {selectedIndex && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem'
+        }}>
+          {/* Backdrop */}
+          <div 
+            onClick={() => setSelectedIndex(null)}
+            style={{ position: 'absolute', inset: 0, background: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(4px)' }} 
+          />
+          
+          {/* Modal Content */}
+          <div style={{
+            position: 'relative', background: '#0B0A10', border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: '20px', width: '100%', maxWidth: '900px', height: '70vh', display: 'flex', flexDirection: 'column',
+            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', overflow: 'hidden', animation: 'scaleUp 0.2s ease-out'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)', background: '#12101C' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(99,102,241,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Activity size={18} color="#818cf8" />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, color: '#fff', fontSize: '1.1rem', fontWeight: 700 }}>{selectedIndex.name}</h3>
+                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px' }}>Live TradingView Chart</div>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSelectedIndex(null)}
+                style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: '8px', borderRadius: '50%' }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div style={{ flex: 1, position: 'relative', background: '#0B0A10' }}>
+              <iframe
+                title={`${selectedIndex.name} Chart`}
+                src={`https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${encodeURIComponent(
+                  selectedIndex.symbol === '^NSEI' ? 'NSE:NIFTY' :
+                  selectedIndex.symbol === '^NSEBANK' ? 'NSE:BANKNIFTY' :
+                  selectedIndex.symbol === '^NSMIDCP' ? 'NSE:MIDCPNIFTY' :
+                  selectedIndex.symbol === '^CNXIT' ? 'NSE:CNXIT' :
+                  selectedIndex.symbol === '^CNXAUTO' ? 'NSE:CNXAUTO' :
+                  selectedIndex.symbol === '^CNXFMCG' ? 'NSE:CNXFMCG' :
+                  selectedIndex.symbol === '^CNXMETAL' ? 'NSE:CNXMETAL' :
+                  selectedIndex.symbol === '^CNXPHARMA' ? 'NSE:CNXPHARMA' :
+                  selectedIndex.symbol === '^CNXENERGY' ? 'NSE:CNXENERGY' :
+                  selectedIndex.symbol === '^CNXMEDIA' ? 'NSE:CNXMEDIA' :
+                  selectedIndex.symbol === '^CNXREALTY' ? 'NSE:CNXREALTY' :
+                  selectedIndex.symbol === '^CNXPSUBANK' ? 'NSE:CNXPSUBANK' :
+                  (selectedIndex.symbol.includes('.NS') ? `NSE:${selectedIndex.symbol.replace('.NS', '')}` : selectedIndex.symbol.replace('^', ''))
+                )}&interval=D&hidesidetoolbar=1&symboledit=1&saveimage=1&toolbarbg=0B0A10&studies=%5B%5D&theme=dark&style=1&timezone=Asia%2FKolkata&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=en`}
+                style={{ width: '100%', height: '100%', border: 'none' }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
         @keyframes spin  { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+        @keyframes scaleUp { from{opacity:0; transform:scale(0.95)} to{opacity:1; transform:scale(1)} }
       `}</style>
     </div>
   );
