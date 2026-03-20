@@ -46,26 +46,11 @@ const PROXIES = [
   (url: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
   (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
   (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-];
-
-const parseYahoo = (raw: any): { price: number; change: number; prevClose: number } | null => {
-  // allorigins wraps in .contents string; codetabs & corsproxy return JSON directly
-  let data = raw;
-  if (typeof raw?.contents === 'string') {
-    try { data = JSON.parse(raw.contents); } catch { return null; }
-  }
-  const meta = data?.chart?.result?.[0]?.meta;
-  if (!meta || typeof meta.regularMarketPrice !== 'number') return null;
-  const price = meta.regularMarketPrice;
-  const prevClose = meta.previousClose ?? meta.chartPreviousClose ?? price;
-  const change = prevClose ? ((price - prevClose) / prevClose) * 100 : 0;
-  return { price, change, prevClose };
-};
-
-// Single fastest proxy with AbortSignal support for timeout control
-const fetchIndexData = async (symbol: string, signal: AbortSignal): Promise<{ price: number; change: number; prevClose: number } | null> => {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`;
-  // Race all proxies — first non-null result wins
+];// Bulk fetch all 21 indices in ONE request
+const fetchAllIndices = async (symbols: string[], signal: AbortSignal): Promise<Map<string, { price: number; change: number; prevClose: number }> | null> => {
+  const symbolString = symbols.map(encodeURIComponent).join(',');
+  const url = `https://query1.finance.yahoo.com/v8/finance/spark?symbols=${symbolString}&interval=1d&range=1d`;
+  
   return new Promise((resolve) => {
     let settled = false;
     let pending = PROXIES.length;
@@ -75,13 +60,27 @@ const fetchIndexData = async (symbol: string, signal: AbortSignal): Promise<{ pr
         const r = await fetch(buildUrl(url), { signal });
         if (!r.ok) throw new Error('bad status');
         const raw = await r.json();
-        const result = parseYahoo(raw);
-        if (result && !settled) {
+        
+        let data = raw;
+        if (typeof raw?.contents === 'string') {
+          try { data = JSON.parse(raw.contents); } catch { throw new Error('parse error'); }
+        }
+        
+        if (data && typeof data === 'object' && Object.keys(data).length > 0 && !settled) {
           settled = true;
+          const result = new Map();
+          for (const [sym, info] of Object.entries(data)) {
+            const sparkInfo = info as any;
+            if (sparkInfo && Array.isArray(sparkInfo.close) && sparkInfo.close.length > 0) {
+              const price = sparkInfo.close[sparkInfo.close.length - 1];
+              const prevClose = sparkInfo.chartPreviousClose ?? sparkInfo.previousClose ?? price;
+              const change = prevClose ? ((price - prevClose) / prevClose) * 100 : 0;
+              result.set(sym, { price, change, prevClose });
+            }
+          }
           resolve(result);
         }
       } catch (_) {
-        // ignore
       } finally {
         pending--;
         if (pending === 0 && !settled) resolve(null);
@@ -131,45 +130,28 @@ const MarketAnalysis: React.FC = () => {
     // 2. Not cached or expired: Reset to loading state
     setIndices(prev => prev.map(i => ({ ...i, loading: true, error: false })));
 
-    const newIndices: IndexData[] = [...SECTORAL_INDICES.map(i => ({ ...i, price: null, change: null, prevClose: null, loading: true, error: false }))];
-
-    // 3. Process in chunks of 5 to avoid browser connection limits (6 max per domain)
-    const chunkSize = 5;
+    // 3. Fire ONE single bulk request for all symbols
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8000); // 8s total timeout
+    const timer = setTimeout(() => controller.abort(), 10000); // 10s generous timeout
 
-    for (let i = 0; i < SECTORAL_INDICES.length; i += chunkSize) {
-      const chunk = SECTORAL_INDICES.slice(i, i + chunkSize);
-      
-      await Promise.allSettled(
-        chunk.map(async (idx, chunkIndex) => {
-          const actualIndex = i + chunkIndex;
-          const data = await fetchIndexData(idx.symbol, controller.signal);
-          
-          const updatedItem = {
-            ...newIndices[actualIndex],
-            loading: false,
-            error: !data,
-            price: data?.price ?? null,
-            change: data?.change ?? null,
-            prevClose: data?.prevClose ?? null,
-          };
-          
-          newIndices[actualIndex] = updatedItem;
-
-          // Update tile immediately
-          setIndices(prev => prev.map(item => item.symbol === idx.symbol ? updatedItem : item));
-        })
-      );
-      
-      // Tiny delay between chunks to let browser breathe
-      if (i + chunkSize < SECTORAL_INDICES.length) {
-        await new Promise(r => setTimeout(r, 100));
-      }
-    }
-
+    const symbols = SECTORAL_INDICES.map(i => i.symbol);
+    const resultsMap = await fetchAllIndices(symbols, controller.signal);
     clearTimeout(timer);
-    
+
+    const newIndices: IndexData[] = SECTORAL_INDICES.map(idx => {
+      const data = resultsMap?.get(idx.symbol);
+      return {
+        ...idx,
+        loading: false,
+        error: !data,
+        price: data?.price ?? null,
+        change: data?.change ?? null,
+        prevClose: data?.prevClose ?? null,
+      };
+    });
+
+    setIndices(newIndices);
+
     // 4. Save to Cache
     try {
       sessionStorage.setItem(CACHE_KEY, JSON.stringify({
