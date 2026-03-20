@@ -553,45 +553,44 @@ const MarketAnalysis: React.FC = () => {
                     {constituents.length === 0 ? (
                       <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: '13px', fontStyle: 'italic' }}>Constituent data not available for this index.</div>
                     ) : (constituents.map(stock => {
-                      const heat = getHeatColor(stock.change);
                       const isPos = (stock.change ?? 0) >= 0;
-                      const gradientColor = isPos
-                        ? `rgba(34,197,94,0.18), rgba(20,83,45,0.08)`
-                        : `rgba(239,68,68,0.18), rgba(127,29,29,0.08)`;
+                      const noData = stock.change === null;
                       return (
                         <div
                           key={stock.symbol}
                           style={{
-                            minWidth: '160px',
+                            minWidth: '155px',
                             padding: '14px 16px',
-                            borderRadius: '16px',
-                            border: `1px solid ${isPos ? 'rgba(34,197,94,0.35)' : (stock.change === null ? 'rgba(255,255,255,0.08)' : 'rgba(239,68,68,0.35)')}`,
-                            background: stock.change === null
-                              ? 'rgba(255,255,255,0.04)'
-                              : `linear-gradient(135deg, ${gradientColor})`,
-                            backdropFilter: 'blur(14px)',
-                            WebkitBackdropFilter: 'blur(14px)',
-                            boxShadow: isPos ? '0 2px 16px rgba(34,197,94,0.12)' : stock.change === null ? 'none' : '0 2px 16px rgba(239,68,68,0.12)',
-                            transition: 'transform 0.18s ease, box-shadow 0.18s ease',
+                            borderRadius: '14px',
+                            background: noData
+                              ? 'linear-gradient(135deg, #1e293b, #0f172a)'
+                              : isPos
+                                ? 'linear-gradient(135deg, #166534 0%, #052e16 100%)'
+                                : 'linear-gradient(135deg, #991b1b 0%, #450a0a 100%)',
+                            border: `1px solid ${noData ? 'rgba(255,255,255,0.06)' : isPos ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                            boxShadow: noData ? 'none' : isPos ? '0 2px 12px rgba(22,101,52,0.4)' : '0 2px 12px rgba(153,27,27,0.4)',
+                            transition: 'transform 0.15s ease, box-shadow 0.15s ease',
                             cursor: 'default',
                             flexShrink: 0,
                           }}
                           onMouseEnter={e => {
-                            (e.currentTarget as HTMLElement).style.transform = 'translateY(-3px)';
-                            (e.currentTarget as HTMLElement).style.boxShadow = isPos ? '0 6px 24px rgba(34,197,94,0.22)' : '0 6px 24px rgba(239,68,68,0.22)';
+                            (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
                           }}
                           onMouseLeave={e => {
                             (e.currentTarget as HTMLElement).style.transform = 'translateY(0)';
-                            (e.currentTarget as HTMLElement).style.boxShadow = isPos ? '0 2px 16px rgba(34,197,94,0.12)' : '0 2px 16px rgba(239,68,68,0.12)';
                           }}
                         >
-                          <div style={{ color: 'rgba(255,255,255,0.65)', fontWeight: 700, fontSize: '11px', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '8px' }}>{stock.name}</div>
-                          <div style={{ color: '#fff', fontSize: '16px', fontWeight: 800, letterSpacing: '-0.01em' }}>
+                          <div style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 700, fontSize: '11px', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: '8px' }}>
+                            {stock.name}
+                          </div>
+                          <div style={{ color: '#ffffff', fontSize: '16px', fontWeight: 800 }}>
                             {stock.price ? stock.price.toLocaleString('en-IN') : '--'}
                           </div>
-                          <div style={{ color: heat.text, fontSize: '13px', fontWeight: 700, marginTop: '4px' }}>
-                            {stock.change !== null ? `${stock.change > 0 ? '+' : ''}${stock.change.toFixed(2)}%` : ''}
-                          </div>
+                          {stock.change !== null && (
+                            <div style={{ color: isPos ? '#86efac' : '#fca5a5', fontSize: '13px', fontWeight: 700, marginTop: '4px' }}>
+                              {isPos ? '+' : ''}{stock.change.toFixed(2)}%
+                            </div>
+                          )}
                         </div>
                       );
                     }))}
