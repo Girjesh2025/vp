@@ -552,22 +552,25 @@ const MarketAnalysis: React.FC = () => {
 
               {/* TradingView Advanced Chart Widget embedding */}
               <div style={{ flex: 1, minHeight: '400px', width: '100%', position: 'relative' }}>
+                <div style={{ position: 'absolute', top: '12px', right: '16px', zIndex: 10, background: 'rgba(0,0,0,0.6)', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', color: 'rgba(255,255,255,0.4)', pointerEvents: 'none' }}>
+                  *Chart shows BSE equivalent or top heavyweight proxy to bypass NSE embed restrictions
+                </div>
                 <iframe
                   title={`${selectedIndex.name} Chart`}
                   src={`https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${encodeURIComponent(
-                    selectedIndex.symbol === '^NSEI' ? 'NSE:NIFTY' :
-                    selectedIndex.symbol === '^NSEBANK' ? 'NSE:BANKNIFTY' :
-                    selectedIndex.symbol === '^NSMIDCP' ? 'NSE:MIDCPNIFTY' :
-                    selectedIndex.symbol === '^CNXIT' ? 'NSE:CNXIT' :
-                    selectedIndex.symbol === '^CNXAUTO' ? 'NSE:CNXAUTO' :
-                    selectedIndex.symbol === '^CNXFMCG' ? 'NSE:CNXFMCG' :
-                    selectedIndex.symbol === '^CNXMETAL' ? 'NSE:CNXMETAL' :
-                    selectedIndex.symbol === '^CNXPHARMA' ? 'NSE:CNXPHARMA' :
-                    selectedIndex.symbol === '^CNXENERGY' ? 'NSE:CNXENERGY' :
-                    selectedIndex.symbol === '^CNXMEDIA' ? 'NSE:CNXMEDIA' :
-                    selectedIndex.symbol === '^CNXREALTY' ? 'NSE:CNXREALTY' :
-                    selectedIndex.symbol === '^CNXPSUBANK' ? 'NSE:CNXPSUBANK' :
-                    (selectedIndex.symbol.includes('.NS') ? `NSE:${selectedIndex.symbol.replace('.NS', '')}` : selectedIndex.symbol.replace('^', ''))
+                    selectedIndex.symbol === '^NSEI' ? 'BSE:SENSEX' :
+                    selectedIndex.symbol === '^NSEBANK' ? 'BSE:BANKEX' :
+                    selectedIndex.symbol === '^NSMIDCP' ? 'BSE:MIDCAP' :
+                    selectedIndex.symbol === '^CNXIT' ? 'BSE:BSE-IT' :
+                    selectedIndex.symbol === '^CNXAUTO' ? 'BSE:BSE-AUTO' :
+                    selectedIndex.symbol === '^CNXFMCG' ? 'BSE:BSE-FMCG' :
+                    selectedIndex.symbol === '^CNXMETAL' ? 'BSE:BSE-METAL' :
+                    selectedIndex.symbol === '^CNXPHARMA' ? 'BSE:BSE-HC' :
+                    selectedIndex.symbol === '^CNXENERGY' ? 'BSE:ENERGY' :
+                    selectedIndex.symbol === '^CNXMEDIA' ? 'BSE:ZEEL' :
+                    selectedIndex.symbol === '^CNXREALTY' ? 'BSE:BSE-REALTY' :
+                    selectedIndex.symbol === '^CNXPSUBANK' ? 'NSE:SBIN' :
+                    `NSE:${(INDEX_CONSTITUENTS[selectedIndex.symbol]?.[0] || selectedIndex.symbol).replace('.NS', '').replace('^', '')}`
                   )}&interval=D&hidesidetoolbar=1&symboledit=0&saveimage=0&toolbarbg=0B0A10&studies=%5B%5D&theme=dark&style=1&timezone=Asia%2FKolkata&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=en`}
                   style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }}
                 />
