@@ -277,12 +277,8 @@ const MarketAnalysis: React.FC = () => {
   const totalNeutral = filtered.filter(i => i.change !== null && i.change === 0).length;
 
   return (
-    <div style={{ padding: '0', background: 'linear-gradient(135deg, #07060D 0%, #0F0E1A 50%, #0A1020 100%)', minHeight: '100vh', position: 'relative', overflow: 'hidden' }}>
-      {/* ambient blobs for glassmorphism */}
-      <div style={{ position:'fixed', top:'-20%', left:'-10%', width:'600px', height:'600px', background:'radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%)', borderRadius:'50%', pointerEvents:'none', zIndex:0 }} />
-      <div style={{ position:'fixed', bottom:'-10%', right:'-10%', width:'500px', height:'500px', background:'radial-gradient(circle, rgba(16,185,129,0.08) 0%, transparent 70%)', borderRadius:'50%', pointerEvents:'none', zIndex:0 }} />
-      <div style={{ position:'fixed', top:'40%', right:'20%', width:'300px', height:'300px', background:'radial-gradient(circle, rgba(239,68,68,0.06) 0%, transparent 70%)', borderRadius:'50%', pointerEvents:'none', zIndex:0 }} />
-      <div style={{ position:'relative', zIndex:1 }}>
+    <div style={{ padding: '0', background: '#f8fafc', minHeight: '100vh' }}>
+      <div>
       <div style={{
         background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e3a5f 100%)',
         padding: '2rem 2rem 1.5rem',
@@ -368,16 +364,12 @@ const MarketAnalysis: React.FC = () => {
               onClick={() => setFilter(tab.key)}
               style={{
                 display:'flex', alignItems:'center', gap:'6px',
-                padding:'8px 20px', borderRadius:'12px', fontSize:'13px', fontWeight:600, cursor:'pointer',
-                transition:'all 0.25s ease',
-                background: filter === tab.key
-                  ? 'linear-gradient(135deg, rgba(99,102,241,0.8), rgba(139,92,246,0.7))'
-                  : 'rgba(255,255,255,0.06)',
-                backdropFilter: 'blur(12px)',
-                WebkitBackdropFilter: 'blur(12px)',
-                border: filter === tab.key ? '1px solid rgba(139,92,246,0.5)' : '1px solid rgba(255,255,255,0.1)',
-                color: filter === tab.key ? 'white' : 'rgba(255,255,255,0.55)',
-                boxShadow: filter === tab.key ? '0 4px 20px rgba(99,102,241,0.4)' : 'none',
+                padding:'8px 20px', borderRadius:'10px', fontSize:'13px', fontWeight:600, cursor:'pointer',
+                transition:'all 0.2s',
+                background: filter === tab.key ? '#6366f1' : '#fff',
+                border: filter === tab.key ? '1px solid #6366f1' : '1px solid #e2e8f0',
+                color: filter === tab.key ? 'white' : '#475569',
+                boxShadow: filter === tab.key ? '0 4px 12px rgba(99,102,241,0.3)' : '0 1px 3px rgba(0,0,0,0.06)',
               }}
             >
               {tab.icon} {tab.label}
@@ -386,20 +378,19 @@ const MarketAnalysis: React.FC = () => {
         </div>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.5rem', flexWrap:'wrap' }}>
-          <span style={{ fontSize: '13px', color: 'rgba(255,255,255,0.45)', fontWeight: 600, letterSpacing: '0.03em' }}>Sort By:</span>
+          <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600 }}>Sort By:</span>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as any)}
             style={{
-              padding: '7px 14px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.1)',
-              background: 'rgba(255,255,255,0.07)', backdropFilter: 'blur(12px)',
-              fontSize: '13px', color: 'rgba(255,255,255,0.8)', fontWeight: 500, outline: 'none',
-              cursor: 'pointer'
+              padding: '7px 14px', borderRadius: '10px', border: '1px solid #e2e8f0',
+              background: '#fff', fontSize: '13px', color: '#334155', fontWeight: 500, outline: 'none',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.06)', cursor: 'pointer'
             }}
           >
-            <option style={{ background:'#1a1830' }} value="gainers">🟢 Top Gainers</option>
-            <option style={{ background:'#1a1830' }} value="losers">🔴 Top Losers</option>
-            <option style={{ background:'#1a1830' }} value="name">🔤 Alphabetical (A-Z)</option>
+            <option value="gainers">🟢 Top Gainers</option>
+            <option value="losers">🔴 Top Losers</option>
+            <option value="name">🔤 Alphabetical (A-Z)</option>
           </select>
         </div>
 
@@ -481,8 +472,8 @@ const MarketAnalysis: React.FC = () => {
           })}
         </div>
 
-        <div style={{ marginTop:'2rem', display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap', padding:'12px 16px', background:'rgba(255,255,255,0.04)', backdropFilter:'blur(12px)', borderRadius:'12px', border:'1px solid rgba(255,255,255,0.07)' }}>
-          <span style={{ color:'rgba(255,255,255,0.35)', fontSize:'12px', marginRight:'4px' }}>Performance Scale:</span>
+        <div style={{ marginTop:'2rem', display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap', padding:'12px 16px', background:'#fff', borderRadius:'12px', border:'1px solid #e2e8f0', boxShadow:'0 1px 3px rgba(0,0,0,0.06)' }}>
+          <span style={{ color:'#94a3b8', fontSize:'12px', marginRight:'4px' }}>Performance Scale:</span>
           {[
             { label:'≤ −4%', bg:'rgba(127,29,29,0.8)' },
             { label:'−2.5%', bg:'rgba(185,28,28,0.7)' },
@@ -494,7 +485,7 @@ const MarketAnalysis: React.FC = () => {
           ].map(l => (
             <div key={l.label} style={{ display:'flex', alignItems:'center', gap:'5px' }}>
               <div style={{ width:'22px', height:'12px', background:l.bg, borderRadius:'4px', border:'1px solid rgba(255,255,255,0.1)' }} />
-              <span style={{ color:'rgba(255,255,255,0.35)', fontSize:'11px' }}>{l.label}</span>
+              <span style={{ color:'#94a3b8', fontSize:'11px' }}>{l.label}</span>
             </div>
           ))}
         </div>
