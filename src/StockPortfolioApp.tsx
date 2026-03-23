@@ -796,8 +796,8 @@ const StockPortfolioApp: React.FC = () => {
                                 <td className="py-4 px-4">
                                   {priceData ? (
                                     <div className={`${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                      {change >= 0 ? '+' : ''}₹{change.toFixed(2)}
-                                      <div className="text-sm">({changePercent.toFixed(2)}%)</div>
+                                      {change >= 0 ? '+' : '-'}₹{Math.abs(change).toFixed(2)}
+                                      <div className="text-sm">({changePercent >= 0 ? '+' : ''}{changePercent.toFixed(2)}%)</div>
                                     </div>
                                   ) : (
                                     <span className="text-gray-400">Loading...</span>
@@ -877,8 +877,8 @@ const StockPortfolioApp: React.FC = () => {
                               <td className="py-4 px-4 text-gray-700">₹{marketValue.toLocaleString()}</td>
                               <td className="py-4 px-4">
                                 <div className={`${pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                  ₹{pnl.toFixed(2)}
-                                  <div className="text-sm">({pnlPercent.toFixed(2)}%)</div>
+                                  {pnl >= 0 ? '+' : '-'}₹{Math.abs(pnl).toFixed(2)}
+                                  <div className="text-sm">({pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%)</div>
                                 </div>
                               </td>
                               <td className="py-4 px-4">
