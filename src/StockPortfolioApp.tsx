@@ -429,6 +429,7 @@ const StockPortfolioApp: React.FC = () => {
       
       if (totalShares > 0) {
         totalStocks++;
+        // Calculate total invested (buy side only)
         const avgPrice = stockTransactions.reduce((sum, t) => 
           t.type === 'buy' ? sum + (t.price * t.quantity) : sum, 0
         ) / stockTransactions.reduce((sum, t) => 
@@ -437,23 +438,28 @@ const StockPortfolioApp: React.FC = () => {
         
         totalInvested += avgPrice * totalShares;
         
-        // Use calculated avgPrice as fallback if price fetch is entirely missing
         let currentPrice = avgPrice; 
-        let previousClose = avgPrice;
+        let dayChange = 0; // The absolute change in ₹ for today
         
         if (stockPrices[stock.symbol]) {
           currentPrice = stockPrices[stock.symbol].price;
-          // If previousClose is missing/0, default to currentPrice to avoid crazy percentages
-          previousClose = stockPrices[stock.symbol].previousClose || currentPrice;
+          // If we have previousClose, absolute change is (current - prevClose)
+          if (stockPrices[stock.symbol].previousClose) {
+             dayChange = currentPrice - stockPrices[stock.symbol].previousClose;
+          }
         }
         
         totalCurrent += currentPrice * totalShares;
-        yesterdayValue += previousClose * totalShares;
+        
+        // Today's P&L comes strictly from the daily absolute change * number of shares
+        todaysPnL += dayChange * totalShares;
+        
+        // We track yesterdayValue purely to calculate the global Today's P&L % 
+        yesterdayValue += (currentPrice - dayChange) * totalShares;
       }
     });
 
-    // Calculate today's P&L (current value vs yesterday's close value)
-    todaysPnL = totalCurrent - yesterdayValue;
+    // Calculate total Today's P&L %
     const todaysPnLPercent = yesterdayValue > 0 ? (todaysPnL / yesterdayValue) * 100 : 0;
 
     // Calculate total P&L (current value vs invested amount)

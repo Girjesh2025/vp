@@ -110,14 +110,17 @@ const AnalyticsDashboard: React.FC<Props> = ({ stocks, transactions, priceData, 
           .filter(t => t.type === 'buy')
           .reduce((sum, t) => sum + t.quantity, 0);
 
-        const currentPrice = priceData[stock.symbol]?.price || avgPrice;
+        const currentPrice = priceData[stock.symbol]?.price ?? avgPrice;
         const stockValue = totalShares * currentPrice;
         const stockInvested = totalShares * avgPrice;
         
         totalValue += stockValue;
         totalInvested += stockInvested;
         
-        const dayChange = priceData[stock.symbol]?.change || 0;
+        const dayChange = priceData[stock.symbol]?.previousClose
+          ? currentPrice - priceData[stock.symbol].previousClose
+          : (priceData[stock.symbol]?.change ?? 0);
+          
         todaysPnL += totalShares * dayChange;
       }
     });
