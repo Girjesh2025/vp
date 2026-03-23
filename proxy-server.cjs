@@ -190,6 +190,57 @@ app.get('/api/stock/:symbol', async (req, res) => {
   res.json(mockData);
 });
 
+// Search endpoint using Yahoo Finance
+app.get('/api/search', async (req, res) => {
+  const q = req.query.q;
+  
+  if (!q || typeof q !== 'string') {
+    return res.status(400).json({ error: 'Missing search query parameter' });
+  }
+
+  try {
+    const url = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=10&newsCount=0`;
+    console.log(`🔍 Searching for ${q} via Yahoo Finance...`);
+    
+    const fetchResponse = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!fetchResponse.ok) throw new Error(`Yahoo API returned ${fetchResponse.status}`);
+    const data = await fetchResponse.json();
+
+    // Map Yahoo results to our interface
+    const results = (data.quotes || [])
+      .filter(q => q.quoteType === 'EQUITY' && (q.exchange === 'NSI' || q.exchange === 'BSE' || q.symbol.endsWith('.NS') || q.symbol.endsWith('.BO')))
+      .map(q => {
+        let exchange = 'Unknown';
+        if (q.exchange === 'NSI' || q.symbol.endsWith('.NS')) exchange = 'NSE';
+        else if (q.exchange === 'BSE' || q.symbol.endsWith('.BO')) exchange = 'BSE';
+        
+        return {
+          symbol: q.symbol.replace(/\.(NS|BO)$/, ''),
+          name: q.longname || q.shortname || q.symbol,
+          exchange,
+          sector: q.sector || q.industry || 'Unknown',
+          isin: undefined
+        };
+      });
+
+    // Remove duplicates
+    const uniqueResults = results.filter((stock, index, self) => 
+      index === self.findIndex(s => s.symbol === stock.symbol)
+    );
+    
+    return res.status(200).json(uniqueResults);
+  } catch (error) {
+    console.error('Yahoo Search API Error:', error);
+    return res.status(500).json({ error: 'Failed to fetch search data' });
+  }
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ 
