@@ -30,16 +30,7 @@ const getMockPrice = (symbol: string): PriceData => {
   
   const basePrice = 100 + (random * 2000); // Price between 100-2100
   
-  // If market is closed, show no change (previous close price)
-  if (!isIndianMarketOpen()) {
-    return {
-      price: Number(basePrice.toFixed(2)),
-      change: 0, // No change when market is closed
-      previousClose: Number(basePrice.toFixed(2)),
-    };
-  }
-  
-  // Only show price changes when market is open
+  // Show price changes whether market is open or closed, so P&L doesn't disappear in the evening
   const changePercent = (random - 0.5) * 10; // Change between -5% to +5%
   const previousClose = basePrice / (1 + changePercent / 100);
   
@@ -101,7 +92,7 @@ const fetchYahooViaProxy = async (symbol: string): Promise<PriceData | null> => 
         return {
           price: Number(close.toFixed(2)),
           change: Number(change.toFixed(2)),
-          previousClose: Number(prevClose.toFixed(2))
+          previousClose: meta.previousClose !== undefined && meta.previousClose !== null ? Number(meta.previousClose.toFixed(2)) : undefined
         };
       }
     } catch (_) {
@@ -184,7 +175,7 @@ export const fetchStockPrice = async (symbol: string): Promise<PriceData | null>
           return {
             price: Number(data.close.toFixed(2)),
             change: Number(change.toFixed(2)),
-            previousClose: prevClose,
+            previousClose: data.previousClose !== undefined ? data.previousClose : undefined,
           };
         }
       } catch (_) {}

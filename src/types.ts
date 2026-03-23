@@ -23,5 +23,5 @@ export interface Transaction {
 export interface PriceData {
   price: number;
   change: number;
-  previousClose: number;
+  previousClose?: number;
 }

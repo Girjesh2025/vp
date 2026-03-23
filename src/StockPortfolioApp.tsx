@@ -444,8 +444,11 @@ const StockPortfolioApp: React.FC = () => {
         if (stockPrices[stock.symbol]) {
           currentPrice = stockPrices[stock.symbol].price;
           // If we have previousClose, absolute change is (current - prevClose)
-          if (stockPrices[stock.symbol].previousClose) {
+          if (stockPrices[stock.symbol].previousClose !== undefined) {
              dayChange = currentPrice - stockPrices[stock.symbol].previousClose;
+          } else {
+             // Fallback to calculating absolute change from percentage if previousClose is not provided
+             dayChange = (currentPrice * (stockPrices[stock.symbol].change || 0)) / 100;
           }
         }
         

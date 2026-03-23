@@ -75,6 +75,7 @@ async function fetchFromYahoo(symbol) {
     high: result.meta.regularMarketDayHigh,
     low: result.meta.regularMarketDayLow,
     volume: result.meta.regularMarketVolume,
+    previousClose: result.meta.previousClose,
     source: 'Yahoo Finance'
   };
 }
@@ -105,6 +106,7 @@ async function fetchFromAlphaVantage(symbol) {
     high: parseFloat(quote['03. high']),
     low: parseFloat(quote['04. low']),
     volume: parseInt(quote['06. volume']),
+    previousClose: parseFloat(quote['08. previous close']) || parseFloat(quote['05. price']),
     source: 'Alpha Vantage'
   };
 }
@@ -138,6 +140,7 @@ async function fetchFromEODHD(symbol) {
     high: data.high,
     low: data.low,
     volume: data.volume,
+    previousClose: data.previousClose || data.close,
     source: 'EODHD'
   };
 }
@@ -153,6 +156,7 @@ function generateMockData(symbol) {
     high: Math.round(basePrice * (1 + Math.random() * variation) * 100) / 100,
     low: Math.round(basePrice * (1 - Math.random() * variation) * 100) / 100,
     volume: Math.floor(Math.random() * 1000000) + 10000,
+    previousClose: basePrice,
     source: 'Mock Data',
     timestamp: new Date().toISOString()
   };

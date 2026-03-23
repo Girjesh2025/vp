@@ -117,9 +117,9 @@ const AnalyticsDashboard: React.FC<Props> = ({ stocks, transactions, priceData, 
         totalValue += stockValue;
         totalInvested += stockInvested;
         
-        const dayChange = priceData[stock.symbol]?.previousClose
+        const dayChange = priceData[stock.symbol]?.previousClose !== undefined
           ? currentPrice - priceData[stock.symbol].previousClose
-          : (priceData[stock.symbol]?.change ?? 0);
+          : (currentPrice * (priceData[stock.symbol]?.change || 0)) / 100;
           
         todaysPnL += totalShares * dayChange;
       }
@@ -181,8 +181,10 @@ const AnalyticsDashboard: React.FC<Props> = ({ stocks, transactions, priceData, 
       const pnlPercent = invested > 0 ? (pnl / invested) * 100 : 0;
       const weight = portfolioMetrics.totalValue > 0 ? (value / portfolioMetrics.totalValue) * 100 : 0;
       
-      const dayChange = priceData[stock.symbol]?.change || 0;
-      const dayChangePercent = currentPrice > 0 ? (dayChange / currentPrice) * 100 : 0;
+      const dayChange = priceData[stock.symbol]?.previousClose !== undefined
+        ? currentPrice - priceData[stock.symbol].previousClose
+        : (currentPrice * (priceData[stock.symbol]?.change || 0)) / 100;
+      const dayChangePercent = priceData[stock.symbol]?.change || 0;
 
       const stockInfo = getStockInfo(stock.symbol);
 

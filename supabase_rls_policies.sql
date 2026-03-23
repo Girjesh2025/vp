@@ -10,22 +10,22 @@ ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 -- Users can only view their own portfolios
 CREATE POLICY "Users can view their own portfolios" 
 ON portfolios FOR SELECT 
-USING (auth.uid() = user_id);
+USING (auth.uid()::text = user_id::text);
 
 -- Users can only insert their own portfolios
 CREATE POLICY "Users can insert their own portfolios" 
 ON portfolios FOR INSERT 
-WITH CHECK (auth.uid() = user_id);
+WITH CHECK (auth.uid()::text = user_id::text);
 
 -- Users can only update their own portfolios
 CREATE POLICY "Users can update their own portfolios" 
 ON portfolios FOR UPDATE 
-USING (auth.uid() = user_id);
+USING (auth.uid()::text = user_id::text);
 
 -- Users can only delete their own portfolios
 CREATE POLICY "Users can delete their own portfolios" 
 ON portfolios FOR DELETE 
-USING (auth.uid() = user_id);
+USING (auth.uid()::text = user_id::text);
 
 
 -- 3. Stocks Table Policies
@@ -36,7 +36,7 @@ USING (
   EXISTS (
     SELECT 1 FROM portfolios 
     WHERE portfolios.id = stocks.portfolio_id 
-    AND portfolios.user_id = auth.uid()
+    AND portfolios.user_id::text = auth.uid()::text
   )
 );
 
@@ -47,7 +47,7 @@ WITH CHECK (
   EXISTS (
     SELECT 1 FROM portfolios 
     WHERE portfolios.id = stocks.portfolio_id 
-    AND portfolios.user_id = auth.uid()
+    AND portfolios.user_id::text = auth.uid()::text
   )
 );
 
@@ -58,7 +58,7 @@ USING (
   EXISTS (
     SELECT 1 FROM portfolios 
     WHERE portfolios.id = stocks.portfolio_id 
-    AND portfolios.user_id = auth.uid()
+    AND portfolios.user_id::text = auth.uid()::text
   )
 );
 
@@ -69,7 +69,7 @@ USING (
   EXISTS (
     SELECT 1 FROM portfolios 
     WHERE portfolios.id = stocks.portfolio_id 
-    AND portfolios.user_id = auth.uid()
+    AND portfolios.user_id::text = auth.uid()::text
   )
 );
 
@@ -83,7 +83,7 @@ USING (
     SELECT 1 FROM stocks 
     JOIN portfolios ON stocks.portfolio_id = portfolios.id
     WHERE stocks.id = transactions.stock_id 
-    AND portfolios.user_id = auth.uid()
+    AND portfolios.user_id::text = auth.uid()::text
   )
 );
 
@@ -95,7 +95,7 @@ WITH CHECK (
     SELECT 1 FROM stocks 
     JOIN portfolios ON stocks.portfolio_id = portfolios.id
     WHERE stocks.id = transactions.stock_id 
-    AND portfolios.user_id = auth.uid()
+    AND portfolios.user_id::text = auth.uid()::text
   )
 );
 
@@ -107,6 +107,6 @@ USING (
     SELECT 1 FROM stocks 
     JOIN portfolios ON stocks.portfolio_id = portfolios.id
     WHERE stocks.id = transactions.stock_id 
-    AND portfolios.user_id = auth.uid()
+    AND portfolios.user_id::text = auth.uid()::text
   )
 );

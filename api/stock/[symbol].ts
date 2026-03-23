@@ -35,6 +35,7 @@ export default async function handler(req: any, res: any) {
       high: result.regularMarketDayHigh,
       low: result.regularMarketDayLow,
       volume: result.regularMarketVolume,
+      previousClose: result.previousClose,
       source: 'Yahoo Finance'
     };
   };
@@ -54,6 +55,7 @@ export default async function handler(req: any, res: any) {
       high: parseFloat(q['03. high']),
       low: parseFloat(q['04. low']),
       volume: parseInt(q['06. volume']),
+      previousClose: parseFloat(q['08. previous close']) || parseFloat(q['05. price']),
       source: 'Alpha Vantage'
     };
   };
@@ -72,6 +74,7 @@ export default async function handler(req: any, res: any) {
       high: d.h,
       low: d.l,
       volume: d.v,
+      previousClose: d.pc || d.c,
       source: 'Finnhub'
     };
   };
@@ -89,6 +92,7 @@ export default async function handler(req: any, res: any) {
       high: d.high,
       low: d.low,
       volume: d.volume,
+      previousClose: d.previousClose || d.close,
       source: 'EODHD'
     };
   };
@@ -102,6 +106,7 @@ export default async function handler(req: any, res: any) {
       high: Math.round(base * (1 + Math.random() * v) * 100) / 100,
       low: Math.round(base * (1 - Math.random() * v) * 100) / 100,
       volume: Math.floor(Math.random() * 1000000) + 10000,
+      previousClose: base,
       source: 'Mock Data'
     };
   };
