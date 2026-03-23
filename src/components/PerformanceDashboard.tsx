@@ -29,7 +29,7 @@ import BenchmarkComparison from './BenchmarkComparison';
 interface Props {
   stocks: Stock[];
   transactions: Transaction[];
-  priceData: Record<string, { price: number; change: number; previousClose: number }>;
+  priceData: Record<string, { price: number; change: number; previousClose?: number }>;
   getStockInfo: (symbol: string) => { sector?: string; name?: string } | null;
 }
 

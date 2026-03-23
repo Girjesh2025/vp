@@ -5,7 +5,7 @@ import type { Stock } from '../types';
 
 interface Props {
   stocks: Stock[];
-  priceData: { [symbol: string]: { price: number; change: number } };
+  priceData: Record<string, { price: number; change: number; previousClose?: number }>;
 }
 
 const PortfolioChart: React.FC<Props> = ({ stocks, priceData }) => {

@@ -22,7 +22,7 @@ import type { Stock, Transaction } from '../types';
 interface Props {
   stocks: Stock[];
   transactions: Transaction[];
-  priceData: Record<string, { price: number; change: number; previousClose: number }>;
+  priceData: Record<string, { price: number; change: number; previousClose?: number }>;
   getStockInfo: (symbol: string) => { sector?: string; name?: string } | null;
 }
 
@@ -117,8 +117,8 @@ const AnalyticsDashboard: React.FC<Props> = ({ stocks, transactions, priceData, 
         totalValue += stockValue;
         totalInvested += stockInvested;
         
-        const dayChange = priceData[stock.symbol]?.previousClose !== undefined
-          ? currentPrice - priceData[stock.symbol].previousClose
+        const dayChange = priceData[stock.symbol] && priceData[stock.symbol].previousClose !== undefined
+          ? currentPrice - priceData[stock.symbol].previousClose!
           : (currentPrice * (priceData[stock.symbol]?.change || 0)) / 100;
           
         todaysPnL += totalShares * dayChange;
@@ -181,8 +181,8 @@ const AnalyticsDashboard: React.FC<Props> = ({ stocks, transactions, priceData, 
       const pnlPercent = invested > 0 ? (pnl / invested) * 100 : 0;
       const weight = portfolioMetrics.totalValue > 0 ? (value / portfolioMetrics.totalValue) * 100 : 0;
       
-      const dayChange = priceData[stock.symbol]?.previousClose !== undefined
-        ? currentPrice - priceData[stock.symbol].previousClose
+      const dayChange = priceData[stock.symbol] && priceData[stock.symbol].previousClose !== undefined
+        ? currentPrice - priceData[stock.symbol].previousClose!
         : (currentPrice * (priceData[stock.symbol]?.change || 0)) / 100;
       const dayChangePercent = priceData[stock.symbol]?.change || 0;
 
@@ -234,7 +234,7 @@ const AnalyticsDashboard: React.FC<Props> = ({ stocks, transactions, priceData, 
     })).sort((a, b) => b.value - a.value);
   }, [stockAnalysis, portfolioMetrics.totalValue]);
 
-  const formatCurrency = (amount: number) => `₹${Math.abs(amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+  const formatCurrency = (amount: number) => `${amount >= 0 ? '' : '-'}₹${Math.abs(amount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
   const formatPercent = (percent: number) => `${percent >= 0 ? '+' : ''}${percent.toFixed(2)}%`;
 
   const getPerformanceColor = (value: number) => {

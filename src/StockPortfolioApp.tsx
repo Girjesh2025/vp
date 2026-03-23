@@ -203,8 +203,8 @@ const StockPortfolioApp: React.FC = () => {
         ...stock,
         currentPrice: stockPrices[stock.symbol]?.price,
         priceChange: stockPrices[stock.symbol]?.change,
-        priceChangePercent: stockPrices[stock.symbol]?.change ? 
-          (stockPrices[stock.symbol].change / stockPrices[stock.symbol].previousClose) * 100 : undefined
+        priceChangePercent: stockPrices[stock.symbol]?.change && stockPrices[stock.symbol]?.previousClose ? 
+          (stockPrices[stock.symbol].change / stockPrices[stock.symbol].previousClose!) * 100 : undefined
       })));
     }
   }, [portfolioStocks, portfolioLoading, stockPrices]);
@@ -445,7 +445,7 @@ const StockPortfolioApp: React.FC = () => {
           currentPrice = stockPrices[stock.symbol].price;
           // If we have previousClose, absolute change is (current - prevClose)
           if (stockPrices[stock.symbol].previousClose !== undefined) {
-             dayChange = currentPrice - stockPrices[stock.symbol].previousClose;
+             dayChange = currentPrice - stockPrices[stock.symbol].previousClose!;
           } else {
              // Fallback to calculating absolute change from percentage if previousClose is not provided
              dayChange = (currentPrice * (stockPrices[stock.symbol].change || 0)) / 100;
@@ -536,7 +536,7 @@ const StockPortfolioApp: React.FC = () => {
         <div className={`bg-gradient-to-br ${stats.totalPnL >= 0 ? 'from-emerald-400 to-emerald-600' : 'from-red-400 to-red-600'} rounded-2xl p-6 text-white relative overflow-hidden`}>
           <div className="relative z-10">
             <div className="text-white/80 text-sm font-medium">P&L</div>
-            <div className="text-2xl font-bold mt-1">₹{stats.totalPnL.toLocaleString()}</div>
+            <div className="text-2xl font-bold mt-1">{stats.totalPnL >= 0 ? '+' : '-'}₹{Math.abs(stats.totalPnL).toLocaleString()}</div>
             <div className="text-sm text-white/80">{stats.totalPnLPercent.toFixed(2)}%</div>
           </div>
           {stats.totalPnL >= 0 ? 
@@ -731,7 +731,7 @@ const StockPortfolioApp: React.FC = () => {
                 <div className={`bg-gradient-to-br ${stats.todaysPnL >= 0 ? 'from-emerald-400 to-emerald-600' : 'from-red-400 to-red-600'} rounded-2xl p-6 text-white`}>
                   <div className="text-white/80 text-sm font-medium">Today's P&L</div>
                   <div className="text-3xl font-bold mt-1">
-                    {stats.todaysPnL >= 0 ? '+' : ''}₹{stats.todaysPnL.toLocaleString()}
+                    {stats.todaysPnL >= 0 ? '+' : '-'}₹{Math.abs(stats.todaysPnL).toLocaleString()}
                   </div>
                   <div className="text-sm text-white/80 mt-2">{stats.todaysPnLPercent.toFixed(2)}%</div>
                 </div>
@@ -739,7 +739,7 @@ const StockPortfolioApp: React.FC = () => {
                 <div className={`bg-gradient-to-br ${stats.totalPnL >= 0 ? 'from-purple-400 to-purple-600' : 'from-orange-400 to-orange-600'} rounded-2xl p-6 text-white`}>
                   <div className="text-white/80 text-sm font-medium">Total P&L</div>
                   <div className="text-3xl font-bold mt-1">
-                    {stats.totalPnL >= 0 ? '+' : ''}₹{stats.totalPnL.toLocaleString()}
+                    {stats.totalPnL >= 0 ? '+' : '-'}₹{Math.abs(stats.totalPnL).toLocaleString()}
                   </div>
                   <div className="text-sm text-white/80 mt-2">{stats.totalPnLPercent.toFixed(2)}%</div>
                 </div>
