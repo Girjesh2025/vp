@@ -503,7 +503,7 @@ const MarketAnalysis: React.FC = () => {
           
           <div style={{
             position: 'relative', background: '#0B0A10', border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: '20px', width: '100%', maxWidth: '1000px', height: '80vh', display: 'flex', flexDirection: 'column',
+            borderRadius: '20px', width: '100%', maxWidth: '1000px', display: 'flex', flexDirection: 'column',
             boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)', overflow: 'hidden', animation: 'scaleUp 0.2s ease-out'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)', background: '#12101C' }}>
@@ -513,7 +513,7 @@ const MarketAnalysis: React.FC = () => {
                 </div>
                 <div>
                   <h3 style={{ margin: 0, color: '#fff', fontSize: '1.2rem', fontWeight: 700 }}>{selectedIndex.name} Deep-Dive</h3>
-                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px' }}>Sector Constituents & Live Advanced Chart</div>
+                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px' }}>Sector Constituents</div>
                 </div>
               </div>
               <button 
@@ -585,32 +585,6 @@ const MarketAnalysis: React.FC = () => {
                     }))}
                   </div>
                 )}
-              </div>
-
-              {/* TradingView Advanced Chart Widget embedding */}
-              <div style={{ flex: 1, minHeight: '400px', width: '100%', position: 'relative' }}>
-                <div style={{ position: 'absolute', top: '12px', right: '16px', zIndex: 10, background: 'rgba(0,0,0,0.6)', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', color: 'rgba(255,255,255,0.4)', pointerEvents: 'none' }}>
-                  *Chart shows BSE equivalent or top heavyweight proxy to bypass NSE embed restrictions
-                </div>
-                <iframe
-                  title={`${selectedIndex.name} Chart`}
-                  src={`https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${encodeURIComponent(
-                    selectedIndex.symbol === '^NSEI' ? 'BSE:SENSEX' :
-                    selectedIndex.symbol === '^NSEBANK' ? 'BSE:BANKEX' :
-                    selectedIndex.symbol === '^NSMIDCP' ? 'BSE:MIDCAP' :
-                    selectedIndex.symbol === '^CNXIT' ? 'BSE:BSE-IT' :
-                    selectedIndex.symbol === '^CNXAUTO' ? 'BSE:BSE-AUTO' :
-                    selectedIndex.symbol === '^CNXFMCG' ? 'BSE:BSE-FMCG' :
-                    selectedIndex.symbol === '^CNXMETAL' ? 'BSE:BSE-METAL' :
-                    selectedIndex.symbol === '^CNXPHARMA' ? 'BSE:BSE-HC' :
-                    selectedIndex.symbol === '^CNXENERGY' ? 'BSE:ENERGY' :
-                    selectedIndex.symbol === '^CNXMEDIA' ? 'BSE:ZEEL' :
-                    selectedIndex.symbol === '^CNXREALTY' ? 'BSE:BSE-REALTY' :
-                    selectedIndex.symbol === '^CNXPSUBANK' ? 'NSE:SBIN' :
-                    `NSE:${(INDEX_CONSTITUENTS[selectedIndex.symbol]?.[0] || selectedIndex.symbol).replace('.NS', '').replace('^', '')}`
-                  )}&interval=D&hidesidetoolbar=1&symboledit=0&saveimage=0&toolbarbg=0B0A10&studies=%5B%5D&theme=dark&style=1&timezone=Asia%2FKolkata&studies_overrides=%7B%7D&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=en`}
-                  style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }}
-                />
               </div>
 
             </div>
