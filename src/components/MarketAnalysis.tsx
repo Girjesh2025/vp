@@ -559,8 +559,12 @@ const MarketAnalysis: React.FC = () => {
                             border: `1px solid ${noData ? 'rgba(255,255,255,0.06)' : isPos ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
                             boxShadow: noData ? 'none' : isPos ? '0 2px 12px rgba(22,101,52,0.4)' : '0 2px 12px rgba(153,27,27,0.4)',
                             transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-                            cursor: 'default',
+                            cursor: 'pointer',
                             flexShrink: 0,
+                          }}
+                          onClick={() => {
+                            const tvSymbol = stock.symbol.replace('.NS', '').replace('^', '');
+                            window.open(`https://in.tradingview.com/chart/?symbol=NSE:${tvSymbol}`, '_blank');
                           }}
                           onMouseEnter={e => {
                             (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
