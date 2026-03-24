@@ -54,10 +54,9 @@ const PerformanceChart: React.FC<Props> = ({ stocks, priceData }) => {
   }
 
   // Calculate portfolio statistics with market-aware pricing
-  const marketOpen = isMarketOpen();
   const totalValue = stocks.reduce((sum, stock) => {
-    // Use current price only when market is open, otherwise use average price
-    const currentPrice = marketOpen ? (priceData[stock.symbol]?.price || stock.avgPrice) : stock.avgPrice;
+    // Use latest available price even when market is closed
+    const currentPrice = priceData[stock.symbol]?.price || stock.avgPrice;
     return sum + (stock.quantity * currentPrice);
   }, 0);
 
