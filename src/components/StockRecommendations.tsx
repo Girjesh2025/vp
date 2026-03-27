@@ -149,12 +149,12 @@ const StockRecommendations: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#020502] p-6">
+      <div className="min-h-screen bg-white p-6">
         <div className="max-w-7xl mx-auto">
           <div className="text-center py-12">
-            <RefreshCw className="h-12 w-12 text-green-500 animate-spin mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-white mb-2">Analyzing Market Data</h2>
-            <p className="text-gray-400">Our AI is researching the best stock recommendations for you...</p>
+            <RefreshCw className="h-12 w-12 text-blue-600 animate-spin mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Analyzing Market Data</h2>
+            <p className="text-gray-600">Our AI is researching the best stock recommendations for you...</p>
           </div>
         </div>
       </div>
@@ -162,23 +162,23 @@ const StockRecommendations: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#020502] p-6">
+    <div className="min-h-screen bg-white p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h1 className="text-3xl font-bold text-white flex items-center">
+              <h1 className="text-3xl font-bold text-gray-900 flex items-center">
                 <Star className="h-8 w-8 text-yellow-500 mr-3" />
                 Premium Stock Recommendations
               </h1>
-              <p className="text-gray-400 mt-2">
+              <p className="text-gray-600 mt-2">
                 Powered by advanced AI analysis of NSE & BSE top stocks
               </p>
             </div>
             <button
               onClick={loadRecommendations}
-              className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-[0_0_10px_rgba(34,197,94,0.4)]"
+              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
@@ -187,45 +187,45 @@ const StockRecommendations: React.FC = () => {
 
           {/* Market Summary */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-[#0a180a] border border-[#1f3a1f] p-4 rounded-xl shadow-sm">
+            <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm">
               <div className="flex items-center">
                 <TrendingUp className="h-8 w-8 text-green-500 mr-3" />
                 <div>
                   <p className="text-sm text-gray-400">Strong Buy</p>
-                  <p className="text-2xl font-bold text-green-400">
+                  <p className="text-2xl font-bold text-green-600">
                     {recommendations.filter(r => r.recommendation === 'STRONG_BUY').length}
                   </p>
                 </div>
               </div>
             </div>
-            <div className="bg-[#0a180a] border border-[#1f3a1f] p-4 rounded-xl shadow-sm">
+            <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm">
               <div className="flex items-center">
                 <BarChart3 className="h-8 w-8 text-blue-500 mr-3" />
                 <div>
                   <p className="text-sm text-gray-400">Buy Signals</p>
-                  <p className="text-2xl font-bold text-blue-400">
+                  <p className="text-2xl font-bold text-blue-600">
                     {recommendations.filter(r => r.recommendation === 'BUY').length}
                   </p>
                 </div>
               </div>
             </div>
-            <div className="bg-[#0a180a] border border-[#1f3a1f] p-4 rounded-xl shadow-sm">
+            <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm">
               <div className="flex items-center">
                 <Shield className="h-8 w-8 text-green-500 mr-3" />
                 <div>
                   <p className="text-sm text-gray-400">Low Risk</p>
-                  <p className="text-2xl font-bold text-green-400">
+                  <p className="text-2xl font-bold text-green-600">
                     {recommendations.filter(r => r.stock.riskLevel === 'LOW').length}
                   </p>
                 </div>
               </div>
             </div>
-            <div className="bg-[#0a180a] border border-[#1f3a1f] p-4 rounded-xl shadow-sm">
+            <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm">
               <div className="flex items-center">
                 <Target className="h-8 w-8 text-purple-500 mr-3" />
                 <div>
                   <p className="text-sm text-gray-400">Avg. AI Score</p>
-                  <p className="text-2xl font-bold text-purple-400">
+                  <p className="text-2xl font-bold text-purple-600">
                     {Math.round(recommendations.reduce((sum, r) => sum + r.aiScore, 0) / (recommendations.length || 1))}
                   </p>
                 </div>
@@ -234,11 +234,11 @@ const StockRecommendations: React.FC = () => {
           </div>
 
           {/* Filters */}
-          <div className="bg-[#0a180a] border border-[#1f3a1f] p-4 rounded-xl shadow-sm mb-6">
+          <div className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm mb-6">
             <div className="flex flex-wrap gap-4 items-center">
               <div className="flex items-center">
                 <Filter className="h-4 w-4 text-gray-400 mr-2" />
-                <span className="text-sm font-medium text-gray-300 mr-3">Filter & Sort:</span>
+                <span className="text-sm font-medium text-gray-700 mr-3">Filter & Sort:</span>
               </div>
               
               {/* Search */}
@@ -248,7 +248,7 @@ const StockRecommendations: React.FC = () => {
                   placeholder="Search stocks..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full px-3 py-1 bg-[#122412] border border-[#1f3a1f] text-white rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-green-500 placeholder-gray-500"
+                  className="w-full px-3 py-1 w-full px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
@@ -256,7 +256,7 @@ const StockRecommendations: React.FC = () => {
               <select
                 value={selectedSector}
                 onChange={(e) => setSelectedSector(e.target.value)}
-                className="px-3 py-1 bg-[#122412] border border-[#1f3a1f] text-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                className="px-3 py-1 px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="all">All Sectors</option>
                 {sectors.filter(s => s !== 'ALL').map(sector => (
@@ -268,7 +268,7 @@ const StockRecommendations: React.FC = () => {
               <select
                 value={selectedRisk}
                 onChange={(e) => setSelectedRisk(e.target.value)}
-                className="px-3 py-1 bg-[#122412] border border-[#1f3a1f] text-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                className="px-3 py-1 px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="all">All Risk Levels</option>
                 <option value="low">Low Risk</option>
@@ -280,7 +280,7 @@ const StockRecommendations: React.FC = () => {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as 'aiScore' | 'expectedReturn' | 'riskLevel')}
-                className="px-3 py-1 bg-[#122412] border border-[#1f3a1f] text-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-green-500"
+                className="px-3 py-1 px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="aiScore">Sort by AI Score</option>
                 <option value="expectedReturn">Sort by Expected Return</option>
@@ -328,9 +328,9 @@ const StockRecommendations: React.FC = () => {
 
         {filteredRecommendations.length === 0 && (
           <div className="text-center py-12">
-            <BarChart3 className="h-12 w-12 text-gray-600 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-white mb-2">No recommendations found</h3>
-            <p className="text-gray-400">Try adjusting your filters to see more results.</p>
+            <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No recommendations found</h3>
+            <p className="text-gray-600">Try adjusting your filters to see more results.</p>
           </div>
         )}
       </div>
