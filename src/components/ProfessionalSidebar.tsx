@@ -79,12 +79,14 @@ const ProfessionalSidebar: React.FC<ProfessionalSidebarProps> = ({
         <div className="flex items-center justify-between">
           {!isCollapsed && (
             <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-lg flex items-center justify-center">
+              <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-green-600 rounded-lg flex items-center justify-center">
                 <TrendingUp className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h2 className="font-semibold text-gray-900">Portfolio Pro</h2>
-                <p className="text-xs text-gray-500">Investment Suite</p>
+                <h2 className="font-black text-gray-900">
+                  <span className="text-emerald-600">Paper</span>Profit
+                </h2>
+                <p className="text-xs text-gray-500">NSE & BSE Paper Trading</p>
               </div>
             </div>
           )}
