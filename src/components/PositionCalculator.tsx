@@ -3,7 +3,6 @@ import {
   Calculator,
   TrendingUp,
   TrendingDown,
-  Target,
   Shield,
   IndianRupee,
   RotateCcw,
@@ -47,7 +46,8 @@ const PositionCalculator: React.FC = () => {
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [results, setResults] = useState<Results | null>(null);
 
-  const calc = () => {
+
+  useEffect(() => {
     const cap = parseFloat(capital);
     const entry = parseFloat(entryPrice);
     const risk = parseFloat(riskPct);
@@ -82,9 +82,7 @@ const PositionCalculator: React.FC = () => {
     const capitalUtilized = (investment / cap) * 100;
 
     setResults({ stopLossPrice: sl, targetPrice: tgt, quantity, investment, riskAmount: netLoss, rewardAmount, rrRatio, brokerage, netProfit, netLoss, breakEven, slPct, tgtPct, capitalUtilized });
-  };
-
-  useEffect(() => { calc(); }, [capital, entryPrice, stopLossPct, targetPct, riskPct, mode, slPrice, tgtPrice]);
+  }, [capital, entryPrice, stopLossPct, targetPct, riskPct, mode, slPrice, tgtPrice]);
 
   const reset = () => { setCapital('100000'); setEntryPrice('2500'); setStopLossPct('2'); setTargetPct('4'); setRiskPct('1'); setSlPrice(''); setTgtPrice(''); };
   const fmt = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 2 });
