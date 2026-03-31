@@ -114,40 +114,36 @@ const PremiumStockCard: React.FC<PremiumStockCardProps> = ({
         </div>
 
         {/* Progress Tracker Slider */}
-        <div className="px-2 mt-8 mb-6 relative">
-          <div className="flex justify-between items-end mb-1 w-full text-center relative z-10">
-            <div className="absolute left-0 -translate-y-6">
-              <span className="text-sm font-bold text-gray-300">SL</span>
-            </div>
-            
-            <div className="absolute left-[35%] -translate-x-1/2 -translate-y-8 flex flex-col items-center">
-              <span className="text-[13px] font-bold text-white mb-0.5">Entry</span>
-              <span className="text-[9px] font-bold text-white bg-red-500/90 px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(239,68,68,0.6)] flex items-center">
+        <div className="px-2 mb-4 relative" style={{ marginTop: '36px' }}>
+          {/* Labels row — sits ABOVE the bar */}
+          <div className="relative w-full h-10">
+            <span className="absolute left-0 bottom-0 text-sm font-bold text-gray-300">SL</span>
+            <div className="absolute flex flex-col items-center" style={{ left: '35%', transform: 'translateX(-50%)', bottom: 0 }}>
+              <span className="text-[13px] font-bold text-white leading-tight">Entry</span>
+              <span className="text-[9px] font-bold text-white bg-red-500/90 px-1.5 py-0.5 rounded shadow-[0_0_8px_rgba(239,68,68,0.6)] flex items-center mt-0.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-white mr-1 animate-pulse" /> Live
               </span>
             </div>
-            
-            <div className="absolute right-0 -translate-y-6">
-              <span className="text-sm font-bold text-white">Target</span>
-            </div>
+            <span className="absolute right-0 bottom-0 text-sm font-bold text-white">Target</span>
           </div>
-          
+
           {/* Progress Bar Line */}
-          <div className="relative h-1 w-full flex items-center mt-8">
+          <div className="relative h-1 w-full flex items-center mt-2">
             <div className="absolute w-[35%] h-[2px] bg-red-600 top-1/2 -translate-y-1/2 rounded-l-full" />
             <div className="absolute left-[35%] w-[65%] h-[2px] bg-white top-1/2 -translate-y-1/2 rounded-r-full" />
-            
-            {/* Dots */}
             <div className="absolute left-[35%] w-3 h-3 rounded-full bg-transparent border-2 border-white -translate-x-1/2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center">
               <div className="w-[4px] h-[4px] bg-white rounded-full" />
             </div>
             <div className="absolute right-0 w-1.5 h-1.5 rounded-full bg-white top-1/2 -translate-y-1/2" />
           </div>
-          
-          {/* Entry Date Label */}
+
+          {/* Entry Date Label below bar */}
           {entryDate && (
-             <div className="absolute left-[35%] -translate-x-1/2 mt-3 text-center w-24">
-              <span className="text-[10px] text-gray-400 block whitespace-pre-line leading-snug">
+            <div className="relative mt-2">
+              <span
+                className="absolute text-[10px] text-gray-400 whitespace-pre-line leading-snug text-center w-24"
+                style={{ left: '35%', transform: 'translateX(-50%)' }}
+              >
                 {entryDate}
               </span>
             </div>
@@ -155,7 +151,7 @@ const PremiumStockCard: React.FC<PremiumStockCardProps> = ({
         </div>
 
         {/* Grid Stats */}
-        <div className="grid grid-cols-2 mt-14 mb-8 relative">
+        <div className="grid grid-cols-2 mt-10 mb-6 relative">
           {/* Vertical and horizontal dividers */}
           <div className="absolute left-1/2 top-0 bottom-0 w-[1px] bg-gray-800/60 -translate-x-1/2" />
           <div className="absolute top-1/2 left-[10%] right-[10%] h-[1px] bg-gray-800/60 -translate-y-1/2" />
