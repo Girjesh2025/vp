@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Plus, ChevronDown, Edit2, Trash2, Briefcase, TrendingUp, DollarSign } from 'lucide-react';
 import type { Portfolio } from '../lib/supabase';
 
@@ -30,6 +30,22 @@ const PortfolioSelector: React.FC<PortfolioSelectorProps> = ({
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [newPortfolioName, setNewPortfolioName] = useState('');
   const [editPortfolioName, setEditPortfolioName] = useState('');
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close the dropdown when user clicks outside of it (e.g. sidebar buttons)
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    if (isDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDropdownOpen]);
 
   const handleCreatePortfolio = () => {
     if (newPortfolioName.trim()) {
@@ -62,7 +78,7 @@ const PortfolioSelector: React.FC<PortfolioSelectorProps> = ({
   };
 
   return (
-    <div className="relative">
+    <div className="relative" ref={dropdownRef}>
       {/* Current Portfolio Display */}
       <div 
         className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 cursor-pointer hover:shadow-md transition-shadow duration-200"
