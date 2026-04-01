@@ -88,7 +88,7 @@ const SectorRotation: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-[#0f1520] overflow-hidden text-slate-300">
-      <ProfessionalSidebar activeTab="tools" onTabChange={() => {}} portfolioCount={0} />
+      <ProfessionalSidebar activeTab="tools" onTabChange={(tabId) => navigate('/app', { state: { activeTab: tabId } })} portfolioCount={0} />
       
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         <ProfessionalHeader />

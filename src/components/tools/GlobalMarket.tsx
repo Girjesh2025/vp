@@ -8,7 +8,7 @@ const GlobalMarket: React.FC = () => {
   const navigate = useNavigate();
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
-      <ProfessionalSidebar activeTab="tools" onTabChange={() => {}} portfolioCount={0} />
+      <ProfessionalSidebar activeTab="tools" onTabChange={(tabId) => navigate('/app', { state: { activeTab: tabId } })} portfolioCount={0} />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         <ProfessionalHeader />
         <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 custom-scrollbar">

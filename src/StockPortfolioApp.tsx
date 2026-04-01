@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Plus, TrendingUp, TrendingDown, DollarSign, PieChart, BarChart3, Settings, User, Wallet, Activity, Trash2, Edit, Briefcase } from 'lucide-react';
 import AddStockModal from './components/AddStockModal';
 import TransactionModal from './components/TransactionModal';
@@ -67,7 +68,24 @@ const StockPortfolioApp: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
-  const [activeTab, setActiveTab] = useState('dashboard');
+  
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState(() => {
+    return (location.state as any)?.activeTab || localStorage.getItem('lastActiveTab') || 'dashboard';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('lastActiveTab', activeTab);
+  }, [activeTab]);
+
+  useEffect(() => {
+    if ((location.state as any)?.activeTab) {
+      setActiveTab((location.state as any).activeTab);
+      // Optional: Clear location state so refreshing doesn't force this tab if user navigated away
+      window.history.replaceState({}, document.title);
+    }
+  }, [(location.state as any)?.activeTab]);
+
   const [isLoading, setIsLoading] = useState(false);
   const [priceUpdateTime, setPriceUpdateTime] = useState<Date | null>(null);
   const [dataError, setDataError] = useState<string | null>(null);

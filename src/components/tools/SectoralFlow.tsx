@@ -103,9 +103,13 @@ const SectoralFlow: React.FC = () => {
     ...sectoralFlowData.slice(-6).map(s => ({ name: `NIFTY ${s.name}`, val: s.value })) 
   ].slice(0, 14); // Keep exactly 14 cards for grid symmetry
 
+  const handleTabChange = (tabId: string) => {
+    navigate('/app', { state: { activeTab: tabId } });
+  };
+
   return (
     <div className="flex h-screen bg-[#0f1520] overflow-hidden text-slate-300">
-      <ProfessionalSidebar activeTab="tools" onTabChange={() => {}} portfolioCount={0} />
+      <ProfessionalSidebar activeTab="tools" onTabChange={handleTabChange} portfolioCount={0} />
       
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         <ProfessionalHeader />
