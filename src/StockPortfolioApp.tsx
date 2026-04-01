@@ -619,7 +619,7 @@ const StockPortfolioApp: React.FC = () => {
 
   return (
     <>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 flex">
+      <div className="min-h-screen bg-[#0f1520] flex">
       {/* Error handling for portfolio loading */}
       {portfolioError && (
         <div className="fixed inset-0 bg-[#0f1520] flex items-center justify-center z-50">
