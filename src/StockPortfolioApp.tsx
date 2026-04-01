@@ -11,6 +11,7 @@ import ProfessionalSidebar from './components/ProfessionalSidebar';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import AlertsPage from './components/AlertsPage';
 import AITradingSuggestions from './components/AITradingSuggestions';
+import ToolsDashboard from './components/ToolsDashboard';
 import MarketAnalysis from './components/MarketAnalysis';
 import StockRecommendations from './components/StockRecommendations';
 import PositionCalculator from './components/PositionCalculator';
@@ -1044,6 +1045,7 @@ const StockPortfolioApp: React.FC = () => {
               portfolioSymbols={allPortfolioSymbols.length > 0 ? allPortfolioSymbols : memoPortfolioSymbols}
             />
           )}
+          {activeTab === 'tools' && <ToolsDashboard />}
           {activeTab === 'market-analysis' && (
             <MarketAnalysis />
           )}

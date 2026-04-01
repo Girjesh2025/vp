@@ -6,6 +6,10 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import ProtectedRoute from './components/ProtectedRoute'
 import { AuthProvider } from './contexts/AuthContext'
+import SectorRotation from './components/tools/SectorRotation'
+import GlobalMarket from './components/tools/GlobalMarket'
+import SectoralFlow from './components/tools/SectoralFlow'
+import ReturnsCalculator from './components/tools/ReturnsCalculator'
 import './App.css'
 
 function AppRoutes() {
@@ -34,6 +38,22 @@ function AppRoutes() {
             <StockPortfolioApp />
           </ProtectedRoute>
         }
+      />
+      <Route
+        path="/app/tools/sector-rotation"
+        element={<ProtectedRoute><SectorRotation /></ProtectedRoute>}
+      />
+      <Route
+        path="/app/tools/global-market"
+        element={<ProtectedRoute><GlobalMarket /></ProtectedRoute>}
+      />
+      <Route
+        path="/app/tools/sectoral-flow"
+        element={<ProtectedRoute><SectoralFlow /></ProtectedRoute>}
+      />
+      <Route
+        path="/app/tools/returns-calculator"
+        element={<ProtectedRoute><ReturnsCalculator /></ProtectedRoute>}
       />
     </Routes>
   )
