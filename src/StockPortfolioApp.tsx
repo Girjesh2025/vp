@@ -86,7 +86,7 @@ const StockPortfolioApp: React.FC = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{isOpen: boolean, stock: Stock | null}>({isOpen: false, stock: null});
 
-  const memoPortfolioSymbols = useMemo(() => portfolioStocks.map(stock => stock.symbol), [portfolioStocks]);
+  const memoPortfolioSymbols = useMemo(() => [...new Set(portfolioStocks.map(stock => stock.symbol))], [portfolioStocks]);
 
   // Keep refs in sync with state so price fetch closure always reads the latest data
   React.useEffect(() => { stocksRef.current = stocks; }, [stocks]);

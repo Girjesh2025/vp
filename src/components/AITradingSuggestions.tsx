@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  TrendingUp, TrendingDown, Minus, Brain, Target, Shield, Clock, BarChart3, 
-  AlertTriangle, RefreshCw, Activity, Zap, Eye, Star, Award, BarChart2,
-  DollarSign, PieChart, LineChart, ArrowUp, ArrowDown, ChevronDown, ChevronUp,
-  Info, CheckCircle, XCircle, AlertCircle
+import {
+  TrendingUp, TrendingDown, Minus, Brain, Target, Clock, BarChart3,
+  AlertTriangle, RefreshCw, Activity, ArrowUp, ArrowDown, ChevronDown, ChevronUp,
+  Info, CheckCircle, AlertCircle, BarChart2, PieChart
 } from 'lucide-react';
-import { aiTradingService, AIAnalysis, SwingTradingSignal } from '../utils/aiTradingService';
+import { aiTradingService, AIAnalysis } from '../utils/aiTradingService';
 
 interface AITradingSuggestionsProps {
   portfolioSymbols?: string[];
@@ -19,18 +18,25 @@ const AITradingSuggestions: React.FC<AITradingSuggestionsProps> = ({ portfolioSy
   const [sortBy, setSortBy] = useState<'aiScore' | 'confidence' | 'expectedReturn'>('aiScore');
   const [filterBy, setFilterBy] = useState<'all' | 'buy' | 'sell' | 'hold'>('all');
 
-  const stocksToAnalyze = portfolioSymbols && portfolioSymbols.length > 0 ? portfolioSymbols : [];
+  // Deduplicate symbols to avoid duplicate cards
+  const stocksToAnalyze = [...new Set(portfolioSymbols?.filter(Boolean) ?? [])];
 
   const analyzeStocks = async () => {
     setLoading(true);
     setError(null);
-    
     try {
       if (stocksToAnalyze.length === 0) {
         setAnalyses([]);
       } else {
         const results = await aiTradingService.analyzePortfolio(stocksToAnalyze);
-        setAnalyses(results);
+        // Remove any duplicate symbols from results
+        const seen = new Set<string>();
+        const unique = results.filter(r => {
+          if (seen.has(r.symbol)) return false;
+          seen.add(r.symbol);
+          return true;
+        });
+        setAnalyses(unique);
       }
     } catch (err) {
       setError('Failed to analyze stocks. Please try again.');
@@ -42,470 +48,408 @@ const AITradingSuggestions: React.FC<AITradingSuggestionsProps> = ({ portfolioSy
 
   useEffect(() => {
     analyzeStocks();
-  }, [portfolioSymbols]);
+  }, [portfolioSymbols?.join(',')]);
 
-  const getRecommendationIcon = (recommendation: string) => {
-    switch (recommendation) {
-      case 'STRONG_BUY':
-        return <TrendingUp className="w-5 h-5 text-green-600" />;
-      case 'BUY':
-        return <TrendingUp className="w-5 h-5 text-green-500" />;
-      case 'WEAK_BUY':
-        return <ArrowUp className="w-5 h-5 text-green-400" />;
-      case 'STRONG_SELL':
-        return <TrendingDown className="w-5 h-5 text-red-600" />;
-      case 'SELL':
-        return <TrendingDown className="w-5 h-5 text-red-500" />;
-      case 'WEAK_SELL':
-        return <ArrowDown className="w-5 h-5 text-red-400" />;
-      default:
-        return <Minus className="w-5 h-5 text-gray-500" />;
-    }
+  // ─── UI Helpers ──────────────────────────────────────────────────────────────
+
+  const recBg = (r: string) => {
+    if (r === 'STRONG_BUY') return { bg: '#dcfce7', border: '#86efac', text: '#15803d', dot: '#22c55e' };
+    if (r === 'BUY') return { bg: '#f0fdf4', border: '#bbf7d0', text: '#16a34a', dot: '#4ade80' };
+    if (r === 'WEAK_BUY') return { bg: '#f0fdf4', border: '#d1fae5', text: '#059669', dot: '#6ee7b7' };
+    if (r === 'STRONG_SELL') return { bg: '#fee2e2', border: '#fca5a5', text: '#dc2626', dot: '#ef4444' };
+    if (r === 'SELL') return { bg: '#fff1f2', border: '#fecaca', text: '#e11d48', dot: '#f87171' };
+    if (r === 'WEAK_SELL') return { bg: '#fff7ed', border: '#fed7aa', text: '#ea580c', dot: '#fb923c' };
+    return { bg: '#f8fafc', border: '#e2e8f0', text: '#475569', dot: '#94a3b8' };
   };
 
-  const getRecommendationColor = (recommendation: string) => {
-    switch (recommendation) {
-      case 'STRONG_BUY':
-        return 'bg-green-100 border-green-300 text-green-800';
-      case 'BUY':
-        return 'bg-green-50 border-green-200 text-green-700';
-      case 'WEAK_BUY':
-        return 'bg-green-25 border-green-100 text-green-600';
-      case 'STRONG_SELL':
-        return 'bg-red-100 border-red-300 text-red-800';
-      case 'SELL':
-        return 'bg-red-50 border-red-200 text-red-700';
-      case 'WEAK_SELL':
-        return 'bg-red-25 border-red-100 text-red-600';
-      default:
-        return 'bg-gray-50 border-gray-200 text-gray-800';
-    }
+  const recIcon = (r: string) => {
+    if (r.includes('BUY')) return <TrendingUp className="w-4 h-4" />;
+    if (r.includes('SELL')) return <TrendingDown className="w-4 h-4" />;
+    return <Minus className="w-4 h-4" />;
   };
 
-  const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 85) return 'text-green-600 bg-green-100';
-    if (confidence >= 70) return 'text-blue-600 bg-blue-100';
-    if (confidence >= 60) return 'text-yellow-600 bg-yellow-100';
-    return 'text-red-600 bg-red-100';
+  const sentimentIcon = (s: string) => {
+    if (s === 'VERY_BULLISH') return <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />;
+    if (s === 'BULLISH') return <TrendingUp className="w-3.5 h-3.5 text-green-500" />;
+    if (s === 'VERY_BEARISH') return <TrendingDown className="w-3.5 h-3.5 text-red-600" />;
+    if (s === 'BEARISH') return <TrendingDown className="w-3.5 h-3.5 text-red-500" />;
+    return <BarChart2 className="w-3.5 h-3.5 text-slate-400" />;
   };
 
-  const getRiskColor = (risk: string) => {
-    switch (risk) {
-      case 'VERY_LOW':
-        return 'text-green-700 bg-green-100 border-green-200';
-      case 'LOW':
-        return 'text-green-600 bg-green-50 border-green-200';
-      case 'MEDIUM':
-        return 'text-yellow-600 bg-yellow-50 border-yellow-200';
-      case 'HIGH':
-        return 'text-orange-600 bg-orange-50 border-orange-200';
-      case 'VERY_HIGH':
-        return 'text-red-600 bg-red-50 border-red-200';
-      default:
-        return 'text-gray-600 bg-gray-50 border-gray-200';
-    }
+  const aiScoreGrad = (score: number) => {
+    if (score >= 85) return 'from-emerald-500 to-green-400';
+    if (score >= 70) return 'from-blue-500 to-cyan-400';
+    if (score >= 55) return 'from-amber-500 to-yellow-400';
+    return 'from-red-500 to-orange-400';
   };
 
-  const getSentimentIcon = (sentiment: string) => {
-    switch (sentiment) {
-      case 'VERY_BULLISH':
-        return <TrendingUp className="w-4 h-4 text-green-600" />;
-      case 'BULLISH':
-        return <TrendingUp className="w-4 h-4 text-green-500" />;
-      case 'VERY_BEARISH':
-        return <TrendingDown className="w-4 h-4 text-red-600" />;
-      case 'BEARISH':
-        return <TrendingDown className="w-4 h-4 text-red-500" />;
-      default:
-        return <BarChart2 className="w-4 h-4 text-gray-500" />;
-    }
+  const riskBg = (r: string) => {
+    if (r === 'VERY_LOW' || r === 'LOW') return 'bg-green-50 text-green-700 border-green-200';
+    if (r === 'MEDIUM') return 'bg-amber-50 text-amber-700 border-amber-200';
+    return 'bg-red-50 text-red-700 border-red-200';
   };
 
-  const getTrendStrengthColor = (strength: string) => {
-    switch (strength) {
-      case 'VERY_STRONG':
-        return 'text-purple-700 bg-purple-100';
-      case 'STRONG':
-        return 'text-purple-600 bg-purple-50';
-      case 'MODERATE':
-        return 'text-blue-600 bg-blue-50';
-      case 'WEAK':
-        return 'text-gray-600 bg-gray-50';
-      case 'VERY_WEAK':
-        return 'text-gray-500 bg-gray-25';
-      default:
-        return 'text-gray-600 bg-gray-50';
-    }
+  const fmt = (n: number) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+  const fmtPct = (n: number) => `${n > 0 ? '+' : ''}${n.toFixed(2)}%`;
+
+  const sectorColors: Record<string, string> = {
+    Technology: '#6366f1', Banking: '#0ea5e9', Energy: '#f59e0b',
+    Pharma: '#10b981', Auto: '#ef4444', FMCG: '#8b5cf6', Diversified: '#64748b',
   };
 
-  const formatPrice = (price: number) => {
-    return `₹${price.toFixed(2)}`;
-  };
-
-  const formatPercentage = (percentage: number) => {
-    return `${percentage > 0 ? '+' : ''}${percentage.toFixed(2)}%`;
-  };
-
-  const formatLargeNumber = (num: number) => {
-    if (num >= 1e9) return `₹${(num / 1e9).toFixed(1)}B`;
-    if (num >= 1e7) return `₹${(num / 1e7).toFixed(1)}Cr`;
-    if (num >= 1e5) return `₹${(num / 1e5).toFixed(1)}L`;
-    return `₹${num.toFixed(0)}`;
-  };
-
-  // Filter and sort analyses
-  const filteredAnalyses = analyses.filter(analysis => {
-    if (filterBy === 'all') return true;
-    if (filterBy === 'buy') return analysis.signals.recommendation.includes('BUY');
-    if (filterBy === 'sell') return analysis.signals.recommendation.includes('SELL');
-    if (filterBy === 'hold') return analysis.signals.recommendation === 'HOLD';
+  // Filter + Sort
+  const filtered = analyses.filter(a => {
+    if (filterBy === 'buy') return a.signals.recommendation.includes('BUY');
+    if (filterBy === 'sell') return a.signals.recommendation.includes('SELL');
+    if (filterBy === 'hold') return a.signals.recommendation === 'HOLD';
     return true;
   }).sort((a, b) => {
-    switch (sortBy) {
-      case 'aiScore':
-        return b.aiScore - a.aiScore;
-      case 'confidence':
-        return b.signals.confidence - a.signals.confidence;
-      case 'expectedReturn':
-        return Math.abs(b.signals.expectedReturn) - Math.abs(a.signals.expectedReturn);
-      default:
-        return 0;
-    }
+    if (sortBy === 'confidence') return b.signals.confidence - a.signals.confidence;
+    if (sortBy === 'expectedReturn') return Math.abs(b.signals.expectedReturn) - Math.abs(a.signals.expectedReturn);
+    return b.aiScore - a.aiScore;
   });
 
+  // ─── RENDER ──────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
-      {/* Enhanced Header */}
-      <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-xl p-6 text-white">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="p-3 bg-white/20 rounded-lg backdrop-blur-sm">
-              <Brain className="w-8 h-8" />
+    <div className="space-y-5 p-1">
+
+      {/* ── Header ── */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 p-6 text-white shadow-2xl border border-slate-700/50">
+        {/* glow */}
+        <div className="absolute top-0 left-0 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+        <div className="absolute bottom-0 right-0 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl translate-x-1/2 translate-y-1/2 pointer-events-none" />
+        <div className="relative flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-emerald-500/20 rounded-xl border border-emerald-500/30">
+              <Brain className="w-7 h-7 text-emerald-400" />
             </div>
             <div>
-              <h2 className="text-3xl font-bold">AI Trading Suggestions</h2>
-              <p className="text-purple-100 text-lg">Advanced AI-powered swing trading recommendations</p>
+              <h2 className="text-2xl font-black text-white">AI Trading Signals</h2>
+              <p className="text-slate-400 text-sm mt-0.5">Technical analysis for your portfolio stocks</p>
             </div>
           </div>
-          <div className="flex items-center space-x-4">
-            <div className="text-right">
-              <div className="text-sm text-purple-100">Analyzed Stocks</div>
-              <div className="text-2xl font-bold">{analyses.length}</div>
+          <div className="flex items-center gap-4">
+            <div className="text-center">
+              <div className="text-2xl font-black text-emerald-400">{analyses.length}</div>
+              <div className="text-xs text-slate-400">Stocks Analyzed</div>
             </div>
             <button
               onClick={analyzeStocks}
               disabled={loading}
-              className="flex items-center space-x-2 px-6 py-3 bg-white/20 backdrop-blur-sm text-white rounded-lg hover:bg-white/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 rounded-xl font-semibold text-sm disabled:opacity-50 transition-all duration-200"
             >
-              <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-              <span className="font-medium">{loading ? 'Analyzing...' : 'Refresh Analysis'}</span>
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              {loading ? 'Analyzing…' : 'Refresh'}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg">
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <label className="text-sm font-medium text-gray-700">Sort by:</label>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+      {/* ── Controls ── */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          {/* Filter pills */}
+          {(['all', 'buy', 'sell', 'hold'] as const).map(f => (
+            <button
+              key={f}
+              onClick={() => setFilterBy(f)}
+              className={`px-4 py-1.5 rounded-full text-sm font-semibold border transition-all duration-200 ${
+                filterBy === f
+                  ? 'bg-slate-900 text-white border-slate-700 shadow'
+                  : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+              }`}
             >
-              <option value="aiScore">AI Score</option>
-              <option value="confidence">Confidence</option>
-              <option value="expectedReturn">Expected Return</option>
-            </select>
-          </div>
-          <div className="flex items-center space-x-2">
-            <label className="text-sm font-medium text-gray-700">Filter:</label>
-            <select
-              value={filterBy}
-              onChange={(e) => setFilterBy(e.target.value as any)}
-              className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-            >
-              <option value="all">All Signals</option>
-              <option value="buy">Buy Signals</option>
-              <option value="sell">Sell Signals</option>
-              <option value="hold">Hold Signals</option>
-            </select>
-          </div>
+              {f === 'all' ? 'All Signals' : f === 'buy' ? '🟢 Buy' : f === 'sell' ? '🔴 Sell' : '🔵 Hold'}
+            </button>
+          ))}
         </div>
-        <div className="flex items-center space-x-2 text-sm text-gray-600">
-          <Activity className="w-4 h-4" />
-          <span>Real-time AI Analysis</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-slate-500">Sort:</span>
+          <select
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value as typeof sortBy)}
+            className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+          >
+            <option value="aiScore">AI Score</option>
+            <option value="confidence">Confidence</option>
+            <option value="expectedReturn">Expected Return</option>
+          </select>
+          <div className="flex items-center gap-1.5 text-xs text-slate-400 pl-2">
+            <Activity className="w-3.5 h-3.5" />
+            Real-time Analysis
+          </div>
         </div>
       </div>
 
-      {/* Error Message */}
+      {/* ── Error ── */}
       {error && (
-        <div className="p-5 bg-red-50 border border-red-200 rounded-xl">
-          <div className="flex items-start space-x-3">
-            <AlertTriangle className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-red-800 font-semibold">Analysis Failed</p>
-              <p className="text-red-600 text-sm mt-1">{error}</p>
-              <p className="text-red-500 text-xs mt-2">The AI Trading feature requires real historical market data from Yahoo Finance. Please check your internet connection and try again.</p>
-            </div>
+        <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
+          <AlertTriangle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="text-red-800 font-semibold text-sm">Analysis Failed</p>
+            <p className="text-red-600 text-xs mt-0.5">{error}</p>
           </div>
         </div>
       )}
 
-      {/* Loading State */}
+      {/* ── Loading skeletons ── */}
       {loading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="p-6 bg-white rounded-xl border border-gray-200 animate-pulse">
-              <div className="flex items-center justify-between mb-4">
-                <div className="h-6 bg-gray-200 rounded w-20"></div>
-                <div className="h-8 bg-gray-200 rounded w-16"></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {[...Array(Math.min(stocksToAnalyze.length || 6, 6))].map((_, i) => (
+            <div key={i} className="p-5 bg-white rounded-2xl border border-slate-100 shadow-sm animate-pulse">
+              <div className="flex justify-between mb-4">
+                <div className="h-5 bg-slate-100 rounded-lg w-20" />
+                <div className="h-6 bg-slate-100 rounded-full w-16" />
               </div>
-              <div className="h-8 bg-gray-200 rounded w-24 mb-4"></div>
-              <div className="space-y-3">
-                <div className="h-4 bg-gray-200 rounded"></div>
-                <div className="h-4 bg-gray-200 rounded w-5/6"></div>
-                <div className="h-4 bg-gray-200 rounded w-4/6"></div>
-              </div>
+              <div className="h-8 bg-slate-100 rounded-lg w-28 mb-3" />
+              <div className="h-4 bg-slate-100 rounded w-full mb-2" />
+              <div className="h-4 bg-slate-100 rounded w-4/5" />
             </div>
           ))}
         </div>
       )}
 
-      {/* Enhanced Analysis Results */}
-      {!loading && filteredAnalyses.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredAnalyses.map((analysis) => (
-            <div
-              key={analysis.symbol}
-              className="bg-white rounded-xl border border-gray-200 hover:shadow-xl transition-all duration-300 cursor-pointer overflow-hidden"
-              onClick={() => setSelectedStock(selectedStock === analysis.symbol ? null : analysis.symbol)}
-            >
-              {/* Card Header */}
-              <div className="p-6 border-b border-gray-100">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="flex items-center space-x-2">
-                      <h3 className="text-xl font-bold text-gray-900">{analysis.symbol}</h3>
-                      {analysis.marketData.sector && (
-                        <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
-                          {analysis.marketData.sector}
-                        </span>
-                      )}
+      {/* ── Cards Grid ── */}
+      {!loading && filtered.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filtered.map(a => {
+            const c = recBg(a.signals.recommendation);
+            const expanded = selectedStock === a.symbol;
+            const sColor = sectorColors[a.marketData.sector ?? ''] ?? '#64748b';
+
+            return (
+              <div
+                key={a.symbol}
+                className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden cursor-pointer group"
+                onClick={() => setSelectedStock(expanded ? null : a.symbol)}
+              >
+                {/* Top accent stripe coloured by rec */}
+                <div className="h-1 w-full" style={{ background: c.dot }} />
+
+                {/* ── Card body ── */}
+                <div className="p-5">
+                  {/* Row 1 — symbol + AI score */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-black"
+                        style={{ background: sColor }}
+                      >
+                        {a.symbol.slice(0, 2)}
+                      </div>
+                      <div>
+                        <div className="font-black text-slate-900 text-base leading-tight">{a.symbol}</div>
+                        {a.marketData.sector && (
+                          <div className="text-xs text-slate-400">{a.marketData.sector}</div>
+                        )}
+                      </div>
+                    </div>
+                    <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gradient-to-r ${aiScoreGrad(a.aiScore)} text-white text-xs font-bold shadow-sm`}>
+                      <Brain className="w-3 h-3" />
+                      {a.aiScore}
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <div className={`px-2 py-1 rounded-full text-xs font-medium ${getConfidenceColor(analysis.aiScore)}`}>
-                      AI: {analysis.aiScore}
+
+                  {/* Row 2 — price + recommendation */}
+                  <div className="flex items-end justify-between mb-4">
+                    <div>
+                      <div className="text-2xl font-black text-slate-900">{fmt(a.currentPrice)}</div>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        {sentimentIcon(a.marketSentiment)}
+                        <span className="text-xs text-slate-500">{a.marketSentiment.replace('_', ' ')}</span>
+                      </div>
                     </div>
-                    {selectedStock === analysis.symbol ? 
-                      <ChevronUp className="w-5 h-5 text-gray-400" /> : 
-                      <ChevronDown className="w-5 h-5 text-gray-400" />
-                    }
+                    <div
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold"
+                      style={{ background: c.bg, borderColor: c.border, color: c.text }}
+                    >
+                      <span style={{ color: c.dot }}>{recIcon(a.signals.recommendation)}</span>
+                      {a.signals.recommendation.replace('_', ' ')}
+                    </div>
+                  </div>
+
+                  {/* Row 3 — metrics */}
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    <div className="bg-slate-50 rounded-xl p-2.5 text-center">
+                      <div className="text-xs text-slate-400 mb-0.5">Confidence</div>
+                      <div className="text-sm font-bold text-slate-800">{a.signals.confidence}%</div>
+                    </div>
+                    <div className="bg-slate-50 rounded-xl p-2.5 text-center">
+                      <div className="text-xs text-slate-400 mb-0.5">Return</div>
+                      <div className={`text-sm font-bold ${a.signals.expectedReturn >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {fmtPct(a.signals.expectedReturn)}
+                      </div>
+                    </div>
+                    <div className="bg-slate-50 rounded-xl p-2.5 text-center">
+                      <div className="text-xs text-slate-400 mb-0.5">R:R</div>
+                      <div className="text-sm font-bold text-blue-600">{a.signals.riskRewardRatio.toFixed(1)}x</div>
+                    </div>
+                  </div>
+
+                  {/* SL / Target mini row */}
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1 text-red-500 font-semibold">
+                      <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                      SL {fmt(a.signals.stopLoss)}
+                    </div>
+                    <div className="h-px flex-1 bg-slate-100 mx-2" />
+                    <div className="flex items-center gap-1 text-emerald-600 font-semibold">
+                      TGT {fmt(a.signals.targetPrice)}
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                    </div>
+                  </div>
+
+                  {/* Expand hint */}
+                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-50">
+                    <span className={`text-xs px-2 py-0.5 rounded-full border ${riskBg(a.signals.riskLevel)}`}>
+                      {a.signals.riskLevel.replace('_', ' ')} Risk
+                    </span>
+                    <div className="flex items-center gap-1 text-xs text-slate-400">
+                      {expanded ? <><ChevronUp className="w-3.5 h-3.5" /> Less</> : <><ChevronDown className="w-3.5 h-3.5" /> Details</>}
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="text-3xl font-bold text-gray-900">{formatPrice(analysis.currentPrice)}</p>
-                    <div className="flex items-center space-x-2 mt-1">
-                      {getSentimentIcon(analysis.marketSentiment)}
-                      <span className="text-sm text-gray-600">{analysis.marketSentiment.replace('_', ' ')}</span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className={`inline-flex items-center space-x-2 px-3 py-2 rounded-lg border ${getRecommendationColor(analysis.signals.recommendation)}`}>
-                      {getRecommendationIcon(analysis.signals.recommendation)}
-                      <span className="font-semibold text-sm">
-                        {analysis.signals.recommendation.replace('_', ' ')}
-                      </span>
-                    </div>
-                    <div className="mt-2 text-sm text-gray-600">
-                      {analysis.signals.confidence}% confidence
-                    </div>
-                  </div>
-                </div>
-
-                {/* Key Metrics */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="text-center p-3 bg-gray-50 rounded-lg">
-                    <div className="text-sm text-gray-600">Expected Return</div>
-                    <div className={`text-lg font-bold ${analysis.signals.expectedReturn >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {formatPercentage(analysis.signals.expectedReturn)}
-                    </div>
-                  </div>
-                  <div className="text-center p-3 bg-gray-50 rounded-lg">
-                    <div className="text-sm text-gray-600">Risk Level</div>
-                    <div className={`text-sm font-medium px-2 py-1 rounded border ${getRiskColor(analysis.signals.riskLevel)}`}>
-                      {analysis.signals.riskLevel.replace('_', ' ')}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Expanded Details */}
-              {selectedStock === analysis.symbol && (
-                <div className="p-6 space-y-6 bg-gray-50">
-                  {/* Technical Analysis */}
-                  <div>
-                    <h4 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                      <BarChart3 className="w-5 h-5 mr-2 text-purple-600" />
-                      Technical Analysis
-                    </h4>
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                      <div className="bg-white p-3 rounded-lg">
-                        <div className="text-sm text-gray-600">RSI</div>
-                        <div className="text-lg font-bold">{analysis.signals.technicalIndicators.rsi.toFixed(1)}</div>
-                        <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-                          <div 
-                            className={`h-2 rounded-full ${analysis.signals.technicalIndicators.rsi < 30 ? 'bg-green-500' : analysis.signals.technicalIndicators.rsi > 70 ? 'bg-red-500' : 'bg-blue-500'}`}
-                            style={{ width: `${analysis.signals.technicalIndicators.rsi}%` }}
-                          ></div>
-                        </div>
+                {/* ── Expanded details ── */}
+                {expanded && (
+                  <div className="border-t border-slate-100 bg-slate-50 p-5 space-y-4">
+                    {/* Technical indicators */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <BarChart3 className="w-4 h-4 text-slate-500" />
+                        <span className="text-sm font-bold text-slate-700">Technical Indicators</span>
                       </div>
-                      <div className="bg-white p-3 rounded-lg">
-                        <div className="text-sm text-gray-600">ADX (Trend)</div>
-                        <div className="text-lg font-bold">{analysis.signals.technicalIndicators.adx.toFixed(1)}</div>
-                        <div className={`text-xs px-2 py-1 rounded mt-1 ${getTrendStrengthColor(analysis.trendStrength)}`}>
-                          {analysis.trendStrength.replace('_', ' ')}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-white p-3 rounded-lg">
-                        <div className="text-sm text-gray-600">Stochastic %K</div>
-                        <div className="text-lg font-bold">{analysis.signals.technicalIndicators.stochastic.k.toFixed(1)}</div>
-                      </div>
-                      <div className="bg-white p-3 rounded-lg">
-                        <div className="text-sm text-gray-600">Williams %R</div>
-                        <div className="text-lg font-bold">{analysis.signals.technicalIndicators.williams.toFixed(1)}</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Price Targets */}
-                  <div>
-                    <h4 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                      <Target className="w-5 h-5 mr-2 text-green-600" />
-                      Price Targets
-                    </h4>
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                        <span className="text-sm font-medium text-green-800">Target Price</span>
-                        <span className="text-lg font-bold text-green-600">{formatPrice(analysis.signals.targetPrice)}</span>
-                      </div>
-                      <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
-                        <span className="text-sm font-medium text-red-800">Stop Loss</span>
-                        <span className="text-lg font-bold text-red-600">{formatPrice(analysis.signals.stopLoss)}</span>
-                      </div>
-                      <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
-                        <span className="text-sm font-medium text-blue-800">Risk/Reward Ratio</span>
-                        <span className="text-lg font-bold text-blue-600">{analysis.signals.riskRewardRatio.toFixed(2)}:1</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Market Data */}
-                  <div>
-                    <h4 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                      <PieChart className="w-5 h-5 mr-2 text-blue-600" />
-                      Market Data
-                    </h4>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-white p-3 rounded-lg">
-                        <div className="text-sm text-gray-600">52W High</div>
-                        <div className="text-lg font-bold">{formatPrice(analysis.marketData.week52High)}</div>
-                      </div>
-                      <div className="bg-white p-3 rounded-lg">
-                        <div className="text-sm text-gray-600">52W Low</div>
-                        <div className="text-lg font-bold">{formatPrice(analysis.marketData.week52Low)}</div>
-                      </div>
-                      {analysis.marketData.pe && (
-                        <div className="bg-white p-3 rounded-lg">
-                          <div className="text-sm text-gray-600">P/E Ratio</div>
-                          <div className="text-lg font-bold">{analysis.marketData.pe.toFixed(1)}</div>
-                        </div>
-                      )}
-                      {analysis.marketData.marketCap && (
-                        <div className="bg-white p-3 rounded-lg">
-                          <div className="text-sm text-gray-600">Market Cap</div>
-                          <div className="text-lg font-bold">{formatLargeNumber(analysis.marketData.marketCap)}</div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* AI Reasoning */}
-                  <div>
-                    <h4 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                      <Brain className="w-5 h-5 mr-2 text-purple-600" />
-                      AI Analysis Reasoning
-                    </h4>
-                    <div className="bg-white p-4 rounded-lg">
-                      <div className="space-y-2">
-                        {analysis.signals.reasoning.map((reason, index) => (
-                          <div key={index} className="flex items-start space-x-2">
-                            <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                            <span className="text-sm text-gray-700">{reason}</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { label: 'RSI', value: a.signals.technicalIndicators.rsi.toFixed(1),
+                            note: a.signals.technicalIndicators.rsi < 30 ? 'Oversold' : a.signals.technicalIndicators.rsi > 70 ? 'Overbought' : 'Neutral',
+                            color: a.signals.technicalIndicators.rsi < 30 ? '#10b981' : a.signals.technicalIndicators.rsi > 70 ? '#ef4444' : '#3b82f6' },
+                          { label: 'ADX', value: a.signals.technicalIndicators.adx.toFixed(1),
+                            note: a.trendStrength.replace('_', ' '), color: '#8b5cf6' },
+                          { label: 'Stoch %K', value: a.signals.technicalIndicators.stochastic.k.toFixed(1), note: '', color: '#0ea5e9' },
+                          { label: 'Williams %R', value: a.signals.technicalIndicators.williams.toFixed(1), note: '', color: '#f59e0b' },
+                        ].map(ind => (
+                          <div key={ind.label} className="bg-white rounded-xl p-3 border border-slate-100">
+                            <div className="text-xs text-slate-400">{ind.label}</div>
+                            <div className="text-lg font-bold" style={{ color: ind.color }}>{ind.value}</div>
+                            {ind.note && <div className="text-xs text-slate-500">{ind.note}</div>}
                           </div>
                         ))}
                       </div>
                     </div>
-                  </div>
 
-                  {/* Time Horizon & Additional Info */}
-                  <div className="flex items-center justify-between p-4 bg-white rounded-lg">
-                    <div className="flex items-center space-x-2">
-                      <Clock className="w-5 h-5 text-gray-500" />
-                      <span className="text-sm text-gray-600">Time Horizon:</span>
-                      <span className="font-medium">{analysis.signals.timeHorizon}</span>
+                    {/* Price targets */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <Target className="w-4 h-4 text-slate-500" />
+                        <span className="text-sm font-bold text-slate-700">Price Targets</span>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center p-2.5 bg-emerald-50 rounded-xl border border-emerald-100">
+                          <span className="text-xs font-semibold text-emerald-700">🎯 Target</span>
+                          <span className="font-bold text-emerald-600">{fmt(a.signals.targetPrice)}</span>
+                        </div>
+                        <div className="flex justify-between items-center p-2.5 bg-red-50 rounded-xl border border-red-100">
+                          <span className="text-xs font-semibold text-red-700">🛡️ Stop Loss</span>
+                          <span className="font-bold text-red-600">{fmt(a.signals.stopLoss)}</span>
+                        </div>
+                        <div className="flex justify-between items-center p-2.5 bg-blue-50 rounded-xl border border-blue-100">
+                          <span className="text-xs font-semibold text-blue-700">⚖️ R:R Ratio</span>
+                          <span className="font-bold text-blue-600">{a.signals.riskRewardRatio.toFixed(2)}:1</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <Activity className="w-5 h-5 text-gray-500" />
-                      <span className="text-sm text-gray-600">Momentum:</span>
-                      <span className="font-medium">{analysis.momentum.replace('_', ' ')}</span>
+
+                    {/* Market data */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <PieChart className="w-4 h-4 text-slate-500" />
+                        <span className="text-sm font-bold text-slate-700">Market Data</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-white rounded-xl p-3 border border-slate-100">
+                          <div className="text-xs text-slate-400">52W High</div>
+                          <div className="font-bold text-slate-800">{fmt(a.marketData.week52High)}</div>
+                        </div>
+                        <div className="bg-white rounded-xl p-3 border border-slate-100">
+                          <div className="text-xs text-slate-400">52W Low</div>
+                          <div className="font-bold text-slate-800">{fmt(a.marketData.week52Low)}</div>
+                        </div>
+                        {a.marketData.pe && (
+                          <div className="bg-white rounded-xl p-3 border border-slate-100">
+                            <div className="text-xs text-slate-400">P/E Ratio</div>
+                            <div className="font-bold text-slate-800">{a.marketData.pe.toFixed(1)}</div>
+                          </div>
+                        )}
+                        <div className="bg-white rounded-xl p-3 border border-slate-100">
+                          <div className="text-xs text-slate-400">Time Horizon</div>
+                          <div className="font-bold text-slate-800 text-sm">{a.signals.timeHorizon}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* AI Reasoning */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <Brain className="w-4 h-4 text-slate-500" />
+                        <span className="text-sm font-bold text-slate-700">AI Reasoning</span>
+                      </div>
+                      <div className="bg-white rounded-xl border border-slate-100 p-3 space-y-2">
+                        {a.signals.reasoning.slice(0, 4).map((r, i) => (
+                          <div key={i} className="flex items-start gap-2">
+                            <CheckCircle className="w-3.5 h-3.5 text-emerald-500 mt-0.5 flex-shrink-0" />
+                            <span className="text-xs text-slate-600 leading-relaxed">{r}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Time + Momentum */}
+                    <div className="flex items-center justify-between bg-white rounded-xl border border-slate-100 p-3">
+                      <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                        <Clock className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Horizon:</span>
+                        <span className="font-semibold text-slate-800">{a.signals.timeHorizon}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                        <Activity className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Momentum:</span>
+                        <span className="font-semibold text-slate-800">{a.momentum.replace('_', ' ')}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
-            </div>
-          ))}
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {/* No Results */}
-      {!loading && filteredAnalyses.length === 0 && analyses.length > 0 && (
-        <div className="text-center py-12">
-          <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No stocks match your filter</h3>
-          <p className="text-gray-600">Try adjusting your filter criteria to see more results.</p>
+      {/* ── No filter matches ── */}
+      {!loading && filtered.length === 0 && analyses.length > 0 && (
+        <div className="text-center py-16">
+          <AlertCircle className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+          <h3 className="font-semibold text-slate-700 mb-1">No stocks match this filter</h3>
+          <p className="text-slate-400 text-sm">Try "All Signals" to see all results.</p>
         </div>
       )}
 
+      {/* ── Empty portfolio ── */}
       {!loading && analyses.length === 0 && (
-        <div className="text-center py-12">
-          <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No stocks to analyze</h3>
-          <p className="text-gray-600">Add stocks to your portfolio to see AI trading suggestions.</p>
+        <div className="text-center py-16">
+          <Brain className="w-16 h-16 text-slate-200 mx-auto mb-4" />
+          <h3 className="font-semibold text-slate-700 mb-1">No stocks to analyze</h3>
+          <p className="text-slate-400 text-sm">Add stocks to your portfolio to get AI trading signals.</p>
         </div>
       )}
 
-      {/* Footer Info */}
+      {/* ── Disclaimer ── */}
       {!loading && analyses.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-start space-x-3">
-            <Info className="w-5 h-5 text-blue-600 mt-0.5" />
-            <div className="text-sm text-blue-800">
-              <p className="font-medium mb-1">AI Trading Suggestions Disclaimer</p>
-              <p>
-                These AI-generated suggestions are for educational purposes only and should not be considered as financial advice. 
-                Always conduct your own research and consult with a qualified financial advisor before making investment decisions. 
-                Past performance does not guarantee future results.
-              </p>
-            </div>
-          </div>
+        <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+          <Info className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+          <p className="text-xs text-amber-800 leading-relaxed">
+            <span className="font-semibold">Disclaimer:</span> These AI-generated signals are for educational purposes only and are not financial advice. Always do your own research. Past performance does not guarantee future results. This is a paper trading platform — no real money is involved.
+          </p>
         </div>
       )}
     </div>
