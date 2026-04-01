@@ -163,7 +163,10 @@ const AITradingSuggestions: React.FC<AITradingSuggestionsProps> = ({ portfolioSy
   });
 
   const isPortfolioMode = mode === 'portfolio';
-  const totalStocksToScan = isPortfolioMode ? portfolioSymbolsUniq.length : [...new Set([...portfolioSymbolsUniq, ...TOP_NSE_BSE_STOCKS])].length;
+  
+  // totalStocksToScan for Market mode includes portfolio stocks + curated stocks (deduplicated)
+  const totalMarketStocks = [...new Set([...portfolioSymbolsUniq, ...TOP_NSE_BSE_STOCKS])].length;
+  const totalStocksToScan = isPortfolioMode ? portfolioSymbolsUniq.length : totalMarketStocks;
 
   // ─── RENDER ──────────────────────────────────────────────────────────────────
   return (
@@ -237,7 +240,7 @@ const AITradingSuggestions: React.FC<AITradingSuggestionsProps> = ({ portfolioSy
           }`}
         >
           <Sparkles className="w-4 h-4 text-emerald-500" />
-          🇮🇳 AI Market Picks ({totalStocksToScan} NSE/BSE stocks)
+          🇮🇳 AI Market Picks ({totalMarketStocks} NSE/BSE stocks)
         </button>
       </div>
 
