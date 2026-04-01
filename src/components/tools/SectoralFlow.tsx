@@ -27,12 +27,15 @@ const SectoralFlow: React.FC = () => {
   
   const [liveData, setLiveData] = useState<Record<string, { price: number; change: number }>>({});
   const [loading, setLoading] = useState(true);
+  const [highlightedSector, setHighlightedSector] = useState<string | null>(null);
   const sectorRefs = React.useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   const scrollToSector = (sectorTitle: string) => {
     const target = sectorRefs.current[sectorTitle];
     if (target) {
       target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setHighlightedSector(sectorTitle);
+      setTimeout(() => setHighlightedSector(null), 2500); // Remove highlight after 2.5s
     }
   };
 
@@ -252,35 +255,39 @@ const SectoralFlow: React.FC = () => {
                       <div 
                         key={sector.title} 
                         ref={el => (sectorRefs.current[sector.title] = el)}
-                        className="bg-[#172030] border border-slate-800/60 rounded-xl overflow-hidden shadow-lg scroll-mt-24 transition-all duration-500"
+                        className={`bg-[#172030] border rounded-xl overflow-hidden shadow-lg scroll-mt-24 transition-all duration-700 ${
+                          highlightedSector === sector.title 
+                            ? 'border-emerald-500 ring-4 ring-emerald-500/30' 
+                            : 'border-slate-800/60'
+                        }`}
                       >
-                        <div className="flex justify-between items-center bg-[#1e293b] p-3 border-b border-slate-800/60">
-                          <h3 className="font-bold text-[11px] text-white tracking-widest">{sector.ext || sector.title}</h3>
-                          <span className="text-[9px] font-semibold text-slate-400 bg-slate-800 px-2 py-0.5 rounded">{sector.stocks.length} STOCKS</span>
+                        <div className="flex justify-between items-center bg-[#1e293b] p-3.5 border-b border-slate-800/60">
+                          <h3 className="font-bold text-xs text-white tracking-widest">{sector.ext || sector.title}</h3>
+                          <span className="text-[10px] font-semibold text-slate-400 bg-slate-800 px-2.5 py-1 rounded">{sector.stocks.length} STOCKS</span>
                         </div>
                         
                         <div className="p-1">
                           {/* Table Header */}
-                          <div className="flex text-[8px] font-semibold text-slate-500 uppercase tracking-widest p-2 pb-1 border-b border-slate-800/40 mx-2">
+                          <div className="flex text-[9px] font-bold text-slate-500 uppercase tracking-widest p-2 pb-2 border-b border-slate-800/40 mx-2">
                             <div className="flex-1">SYMBOL</div>
                             <div className="w-16 text-right">LTP</div>
                             <div className="w-16 text-right">%CHG</div>
                           </div>
                           
                           {/* Rows */}
-                          <div className="px-1 py-1 max-h-[220px] overflow-y-auto custom-scrollbar">
+                          <div className="px-1 py-1 max-h-[380px] overflow-y-auto custom-scrollbar">
                             {sector.stocks.map((stockSym, idx) => {
                               const stock = liveData[stockSym] || { price: 0, change: 0 };
                               const isPositive = stock.change >= 0;
                               return (
-                                <div key={idx} className="flex items-center text-[10px] py-1.5 px-2 hover:bg-slate-800/50 rounded transition-colors group">
-                                  <div className="flex-1 font-bold text-slate-400 group-hover:text-white transition-colors">
-                                    {stockSym} <span className="opacity-40 font-normal">EQ</span>
+                                <div key={idx} className="flex items-center text-xs py-2 px-3 hover:bg-slate-800/70 rounded transition-colors group">
+                                  <div className="flex-1 font-bold text-slate-300 group-hover:text-white transition-colors">
+                                    {stockSym} <span className="opacity-40 font-normal text-[10px] ml-1">EQ</span>
                                   </div>
-                                  <div className="w-16 text-right font-medium text-slate-300">
+                                  <div className="w-16 text-right font-medium text-slate-200">
                                     {stock.price > 0 ? stock.price.toFixed(2) : '-'}
                                   </div>
-                                  <div className={`w-16 text-right font-bold ${isPositive ? 'text-[#3eb665]' : 'text-[#e74c3c]'}`}>
+                                  <div className={`w-16 text-right font-bold tracking-tight ${isPositive ? 'text-[#3eb665]' : 'text-[#e74c3c]'}`}>
                                     {stock.price > 0 ? `${isPositive ? '+' : ''}${stock.change.toFixed(2)}%` : '-'}
                                   </div>
                                 </div>
