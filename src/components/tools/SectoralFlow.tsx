@@ -263,7 +263,7 @@ const SectoralFlow: React.FC = () => {
                       >
                         <div className="flex justify-between items-center bg-[#1e293b] p-3.5 border-b border-slate-800/60">
                           <h3 className="font-bold text-xs text-white tracking-widest">{sector.ext || sector.title}</h3>
-                          <span className="text-[10px] font-semibold text-slate-400 bg-slate-800 px-2.5 py-1 rounded">{sector.stocks.length} STOCKS</span>
+                          <span className="text-[10px] font-semibold text-slate-400 bg-slate-800 px-2.5 py-1 rounded">{Math.min(12, sector.stocks.length)} ASSETS</span>
                         </div>
                         
                         <div className="p-1">
@@ -275,8 +275,8 @@ const SectoralFlow: React.FC = () => {
                           </div>
                           
                           {/* Rows */}
-                          <div className="px-1 py-1 max-h-[380px] overflow-y-auto custom-scrollbar">
-                            {sector.stocks.map((stockSym, idx) => {
+                          <div className="px-1 py-1 h-[270px] overflow-y-auto custom-scrollbar">
+                            {sector.stocks.slice(0, 12).map((stockSym, idx) => {
                               const stock = liveData[stockSym] || { price: 0, change: 0 };
                               const isPositive = stock.change >= 0;
                               return (
