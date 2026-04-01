@@ -76,7 +76,11 @@ const PremiumStockCard: React.FC<PremiumStockCardProps> = ({
         <div className="flex justify-between items-start mb-6">
           <div className="flex items-center space-x-3">
             {/* Logo */}
-            <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center p-0.5 shrink-0 overflow-hidden">
+            <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center p-0.5 shrink-0 overflow-hidden" 
+              style={{
+                borderRadius:'18px',
+                boxShadow:'0 0 30px rgba(16,185,129,0.5)',
+                marginBottom:'1rem', display:'block', margin:'0 auto 1rem' }}>
               {logo ? (
                 <img src={logo} alt={symbol} className="w-full h-full object-contain rounded-full" />
               ) : (
