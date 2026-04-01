@@ -8,18 +8,18 @@ import { fetchStockPrice } from '../../utils/priceApi';
 
 // Define the core constituents we want to track for our sectoral flow proxy
 const SECTOR_DEFINITIONS = [
-  { title: 'DEFENCE', ext: 'NIFTY IND DEFENCE', count: 15, stocks: ['HAL', 'BEL', 'MAZAGON', 'BDL'] },
-  { title: 'PSU BANK', ext: 'NIFTY PSU BANK', count: 12, stocks: ['SBIN', 'PNB', 'BOI', 'CANBK'] },
-  { title: 'MEDIA', ext: 'NIFTY MEDIA', count: 15, stocks: ['ZEEL', 'NETWORK18', 'PVRINOX', 'NDTV'] },
-  { title: 'BANK', ext: 'NIFTY BANK', count: 12, stocks: ['HDFCBANK', 'ICICIBANK', 'SBIN', 'AXISBANK'] },
-  { title: 'REALTY', ext: 'NIFTY REALTY', count: 10, stocks: ['DLF', 'GODREJPROP', 'OBEROIRLTY', 'PRESTIGE'] },
-  { title: 'METAL', ext: 'NIFTY METAL', count: 15, stocks: ['TATASTEEL', 'HINDALCO', 'JSWSTEEL', 'COALINDIA'] },
-  { title: 'IT', ext: 'NIFTY IT', count: 10, stocks: ['TCS', 'INFY', 'HCLTECH', 'WIPRO'] },
-  { title: 'AUTO', ext: 'NIFTY AUTO', count: 15, stocks: ['TATAMOTORS', 'M&M', 'MARUTI', 'BAJAJ-AUTO'] },
-  { title: 'PHARMA', ext: 'NIFTY PHARMA', count: 20, stocks: ['SUNPHARMA', 'CIPLA', 'DRREDDY', 'DIVISLAB'] },
-  { title: 'FMCG', ext: 'NIFTY FMCG', count: 15, stocks: ['ITC', 'HINDUNILVR', 'NESTLEIND', 'BRITANNIA'] },
-  { title: 'ENERGY', ext: 'NIFTY ENERGY', count: 10, stocks: ['RELIANCE', 'ONGC', 'NTPC', 'POWERGRID'] },
-  { title: 'INFRA', ext: 'NIFTY INFRA', count: 30, stocks: ['LT', 'ADANIPORTS', 'ULTRACEMCO', 'GRASIM'] },
+  { title: 'DEFENCE', ext: 'NIFTY IND DEFENCE', count: 15, stocks: ['MAZAGON', 'BEL', 'SOLARIND', 'HAL', 'BDL', 'ASTRAMICRO', 'PARAS', 'MTARTECH'] },
+  { title: 'PSU BANK', ext: 'NIFTY PSU BANK', count: 12, stocks: ['SBIN', 'PNB', 'BOI', 'CANBK', 'UNIONBANK', 'INDIANB', 'BANKBARODA', 'MAHABANK'] },
+  { title: 'MEDIA', ext: 'NIFTY MEDIA', count: 15, stocks: ['ZEEL', 'NETWORK18', 'PVRINOX', 'NDTV', 'SUNTV', 'TV18BRDCST', 'DISHTV'] },
+  { title: 'BANK', ext: 'NIFTY BANK', count: 12, stocks: ['HDFCBANK', 'ICICIBANK', 'SBIN', 'AXISBANK', 'KOTAKBANK', 'INDUSINDBK', 'PNB', 'AUBANK'] },
+  { title: 'REALTY', ext: 'NIFTY REALTY', count: 10, stocks: ['DLF', 'GODREJPROP', 'OBEROIRLTY', 'PRESTIGE', 'LODHA', 'BRIGADE', 'SOBHA'] },
+  { title: 'METAL', ext: 'NIFTY METAL', count: 15, stocks: ['TATASTEEL', 'HINDALCO', 'JSWSTEEL', 'COALINDIA', 'VEDL', 'SAIL', 'NMDC', 'JINDALSTEL'] },
+  { title: 'IT', ext: 'NIFTY IT', count: 10, stocks: ['TCS', 'INFY', 'HCLTECH', 'WIPRO', 'TECHM', 'LTIM', 'PERSISTENT', 'OFSS'] },
+  { title: 'AUTO', ext: 'NIFTY AUTO', count: 15, stocks: ['TATAMOTORS', 'M&M', 'MARUTI', 'BAJAJ-AUTO', 'EICHERMOT', 'HEROMOTOCO', 'TVSMOTOR', 'BOSCHLTD'] },
+  { title: 'PHARMA', ext: 'NIFTY PHARMA', count: 20, stocks: ['SUNPHARMA', 'CIPLA', 'DRREDDY', 'DIVISLAB', 'LUPIN', 'AUROPHARMA', 'APOLLOHOSP', 'TORNTPHARM'] },
+  { title: 'FMCG', ext: 'NIFTY FMCG', count: 15, stocks: ['ITC', 'HINDUNILVR', 'NESTLEIND', 'BRITANNIA', 'DABUR', 'GODREJCP', 'TATACONSUM', 'MARICO'] },
+  { title: 'ENERGY', ext: 'NIFTY ENERGY', count: 10, stocks: ['RELIANCE', 'ONGC', 'NTPC', 'POWERGRID', 'BPCL', 'COALINDIA', 'TATAPOWER', 'IOC'] },
+  { title: 'INFRA', ext: 'NIFTY INFRA', count: 30, stocks: ['LT', 'ADANIPORTS', 'ULTRACEMCO', 'GRASIM', 'AMBUJACEM', 'SHREECEM', 'BHARTIARTL', 'ACC'] },
 ];
 
 const SectoralFlow: React.FC = () => {
@@ -27,6 +27,14 @@ const SectoralFlow: React.FC = () => {
   
   const [liveData, setLiveData] = useState<Record<string, { price: number; change: number }>>({});
   const [loading, setLoading] = useState(true);
+  const sectorRefs = React.useRef<{ [key: string]: HTMLDivElement | null }>({});
+
+  const scrollToSector = (sectorTitle: string) => {
+    const target = sectorRefs.current[sectorTitle];
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -36,8 +44,8 @@ const SectoralFlow: React.FC = () => {
       
       const allSymbols = new Set<string>();
       SECTOR_DEFINITIONS.forEach(sec => sec.stocks.forEach(s => allSymbols.add(s)));
-      const indices = ['^NSEI', '^NSEBANK', '^CNXIT', '^CNXAUTO', '^CNXMETAL', '^CNXFMCG', '^CNXPHARMA', '^CNXREALTY'];
-      indices.forEach(idx => allSymbols.add(idx));
+      // Note: Removed indices fetch since Yahoo indices time out easily.
+      // We will generate the Sector Heatmap exclusively via valid component aggregates.
 
       const symbolArray = Array.from(allSymbols);
       
@@ -100,18 +108,13 @@ const SectoralFlow: React.FC = () => {
   }).sort((a, b) => a.value - b.value); // Sort ascending so top bar in horizontal layout holds the highest momentum
 
   // Market Heatmap Data Preparation
-  const heatmapData = [
-    { name: 'NIFTY 50 INDEX', val: liveData['^NSEI']?.change ?? 0 },
-    { name: 'NIFTY BANK', val: liveData['^NSEBANK']?.change ?? 0 },
-    { name: 'NIFTY IT', val: liveData['^CNXIT']?.change ?? 0 },
-    { name: 'NIFTY AUTO', val: liveData['^CNXAUTO']?.change ?? 0 },
-    { name: 'NIFTY METAL', val: liveData['^CNXMETAL']?.change ?? 0 },
-    { name: 'NIFTY FMCG', val: liveData['^CNXFMCG']?.change ?? 0 },
-    { name: 'NIFTY PHARMA', val: liveData['^CNXPHARMA']?.change ?? 0 },
-    { name: 'NIFTY REALTY', val: liveData['^CNXREALTY']?.change ?? 0 },
-    // Fill remaining with calculated sector averages if native index fails
-    ...sectoralFlowData.slice(-6).map(s => ({ name: `NIFTY ${s.name}`, val: s.value })) 
-  ].slice(0, 14); // Keep exactly 14 cards for grid symmetry
+  // Display the sectors from the BarChart as the Grid Heatmap
+  const heatmapData = sectoralFlowData.map(s => ({
+    // For visual mapping, if the title isn't already prefixed with NIFTY
+    name: s.name.startsWith('NIFTY') ? s.name : `NIFTY ${s.name}`,
+    val: s.value,
+    originalName: s.name // used for scroll targeting
+  }));
 
   const handleTabChange = (tabId: string) => {
     navigate('/app', { state: { activeTab: tabId } });
@@ -184,7 +187,13 @@ const SectoralFlow: React.FC = () => {
                         />
                         <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={16}>
                           {sectoralFlowData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.value > 0 ? '#10b981' : '#ef4444'} />
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={entry.value > 0 ? '#10b981' : '#ef4444'} 
+                              onClick={() => scrollToSector(entry.name)}
+                              style={{ cursor: 'pointer', transition: 'filter 0.2s' }}
+                              className="hover:brightness-125"
+                            />
                           ))}
                         </Bar>
                       </BarChart>
@@ -206,12 +215,13 @@ const SectoralFlow: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
                     {heatmapData.map((idx, index) => {
                       const isPositive = idx.val >= 0;
                       return (
-                        <div 
+                        <button 
                           key={`${idx.name}-${index}`}
+                          onClick={() => scrollToSector(idx.originalName)}
                           className={`rounded-xl p-4 flex flex-col items-center justify-center text-center shadow-lg transition-transform hover:scale-105 ${
                             isPositive ? 'bg-[#3eb665] text-white' : 'bg-[#e74c3c] text-white'
                           }`}
@@ -222,7 +232,7 @@ const SectoralFlow: React.FC = () => {
                           <div className="text-lg font-black tracking-tight drop-shadow-md">
                             {idx.val > 0 ? '+' : ''}{idx.val.toFixed(2)}%
                           </div>
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
@@ -239,10 +249,14 @@ const SectoralFlow: React.FC = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
                     {SECTOR_DEFINITIONS.map((sector) => (
-                      <div key={sector.title} className="bg-[#172030] border border-slate-800/60 rounded-xl overflow-hidden shadow-lg">
+                      <div 
+                        key={sector.title} 
+                        ref={el => (sectorRefs.current[sector.title] = el)}
+                        className="bg-[#172030] border border-slate-800/60 rounded-xl overflow-hidden shadow-lg scroll-mt-24 transition-all duration-500"
+                      >
                         <div className="flex justify-between items-center bg-[#1e293b] p-3 border-b border-slate-800/60">
                           <h3 className="font-bold text-[11px] text-white tracking-widest">{sector.ext || sector.title}</h3>
-                          <span className="text-[9px] font-semibold text-slate-400 bg-slate-800 px-2 py-0.5 rounded">{sector.count} STOCKS</span>
+                          <span className="text-[9px] font-semibold text-slate-400 bg-slate-800 px-2 py-0.5 rounded">{sector.stocks.length} STOCKS</span>
                         </div>
                         
                         <div className="p-1">
@@ -254,7 +268,7 @@ const SectoralFlow: React.FC = () => {
                           </div>
                           
                           {/* Rows */}
-                          <div className="px-1 py-1">
+                          <div className="px-1 py-1 max-h-[220px] overflow-y-auto custom-scrollbar">
                             {sector.stocks.map((stockSym, idx) => {
                               const stock = liveData[stockSym] || { price: 0, change: 0 };
                               const isPositive = stock.change >= 0;
