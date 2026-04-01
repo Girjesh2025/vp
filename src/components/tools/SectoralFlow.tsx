@@ -178,6 +178,8 @@ const SectoralFlow: React.FC = () => {
                         <Tooltip 
                           cursor={{ fill: '#1e293b', opacity: 0.4 }}
                           contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px', color: '#fff' }}
+                          itemStyle={{ color: '#e2e8f0' }}
+                          labelStyle={{ color: '#94a3b8', fontWeight: 600, marginBottom: '4px' }}
                           formatter={(value: number) => [`${value > 0 ? '+' : ''}${value}%`, 'Momentum']}
                         />
                         <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={16}>
