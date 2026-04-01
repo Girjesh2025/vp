@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Plus, TrendingUp, TrendingDown, DollarSign, PieChart, BarChart3, Settings, User, Wallet, Activity, Trash2, Edit, Briefcase } from 'lucide-react';
 import AddStockModal from './components/AddStockModal';
 import TransactionModal from './components/TransactionModal';
@@ -87,6 +87,34 @@ const StockPortfolioApp: React.FC = () => {
   const [deleteConfirmation, setDeleteConfirmation] = useState<{isOpen: boolean, stock: Stock | null}>({isOpen: false, stock: null});
 
   const memoPortfolioSymbols = useMemo(() => [...new Set(portfolioStocks.map(stock => stock.symbol))], [portfolioStocks]);
+
+  // Fetch symbols from ALL portfolios for AI Trading (not just current one)
+  const [allPortfolioSymbols, setAllPortfolioSymbols] = useState<string[]>([]);
+  const allPortfoliosRef = useRef<string>('[]');
+  useEffect(() => {
+    if (!portfolios || portfolios.length === 0) { setAllPortfolioSymbols(memoPortfolioSymbols); return; }
+    const portfolioIds = portfolios.map(p => p.id).filter(id => !id.startsWith('demo-portfolio'));
+    if (portfolioIds.length === 0) { setAllPortfolioSymbols(memoPortfolioSymbols); return; }
+    const key = JSON.stringify([...portfolioIds].sort());
+    if (key === allPortfoliosRef.current) return;
+    allPortfoliosRef.current = key;
+    import('./lib/supabase').then(({ supabase }) => {
+      supabase
+        .from('stocks')
+        .select('symbol')
+        .in('portfolio_id', portfolioIds)
+        .then(({ data }: { data: Array<{ symbol: string }> | null }) => {
+          if (data && data.length > 0) {
+            const symbols: string[] = [...new Set(data.map(s => s.symbol))];
+            setAllPortfolioSymbols(symbols);
+          } else {
+            setAllPortfolioSymbols(memoPortfolioSymbols);
+          }
+        });
+    });
+  }, [portfolios, memoPortfolioSymbols]);
+
+
 
   // Keep refs in sync with state so price fetch closure always reads the latest data
   React.useEffect(() => { stocksRef.current = stocks; }, [stocks]);
@@ -1013,7 +1041,7 @@ const StockPortfolioApp: React.FC = () => {
               )}
           {activeTab === 'ai-trading' && (
             <AITradingSuggestions 
-              portfolioSymbols={memoPortfolioSymbols}
+              portfolioSymbols={allPortfolioSymbols.length > 0 ? allPortfolioSymbols : memoPortfolioSymbols}
             />
           )}
           {activeTab === 'market-analysis' && (
