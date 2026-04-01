@@ -8,18 +8,18 @@ import { fetchStockPrice } from '../../utils/priceApi';
 
 // Define the core constituents we want to track for our sectoral flow proxy
 const SECTOR_DEFINITIONS = [
-  { title: 'DEFENCE', ext: 'NIFTY IND DEFENCE', count: 15, stocks: ['MAZAGON', 'BEL', 'SOLARIND', 'HAL', 'BDL'] },
-  { title: 'PSU BANK', ext: 'NIFTY PSU BANK', count: 12, stocks: ['PNB', 'INDIANB', 'UNIONBANK', 'BOI', 'SBIN', 'PSB', 'CANBK'] },
-  { title: 'MEDIA', ext: 'NIFTY MEDIA', count: 15, stocks: ['NDTV', 'NETWORK18', 'HATHWAY', 'ZEEL', 'PVRINOX'] },
-  { title: 'BANK', ext: 'NIFTY BANK', count: 12, stocks: ['INDUSINDBK', 'SBIN', 'PNB', 'AUBANK', 'CANBK', 'FEDERALBNK', 'AXISBANK'] },
-  { title: 'REALTY', ext: 'NIFTY REALTY', count: 10, stocks: ['DLF', 'GODREJPROP', 'PHOENIXLTD', 'OBEROIRLTY', 'PRESTIGE'] },
-  { title: 'METAL', ext: 'NIFTY METAL', count: 15, stocks: ['TATASTEEL', 'HINDALCO', 'JSWSTEEL', 'VEDL', 'COALINDIA'] },
-  { title: 'IT', ext: 'NIFTY IT', count: 10, stocks: ['TCS', 'INFY', 'HCLTECH', 'WIPRO', 'TECHM'] },
-  { title: 'AUTO', ext: 'NIFTY AUTO', count: 15, stocks: ['TATAMOTORS', 'M&M', 'MARUTI', 'BAJAJ-AUTO', 'EICHERMOT'] },
-  { title: 'PHARMA', ext: 'NIFTY PHARMA', count: 20, stocks: ['SUNPHARMA', 'CIPLA', 'DRREDDY', 'LUPIN', 'DIVISLAB'] },
-  { title: 'FMCG', ext: 'NIFTY FMCG', count: 15, stocks: ['ITC', 'HINDUNILVR', 'NESTLEIND', 'BRITANNIA', 'DABUR'] },
-  { title: 'ENERGY', ext: 'NIFTY ENERGY', count: 10, stocks: ['RELIANCE', 'ONGC', 'NTPC', 'POWERGRID', 'BPCL'] },
-  { title: 'INFRA', ext: 'NIFTY INFRA', count: 30, stocks: ['LT', 'ADANIPORTS', 'ULTRACEMCO', 'GRASIM', 'AMBUJACEM'] },
+  { title: 'DEFENCE', ext: 'NIFTY IND DEFENCE', count: 15, stocks: ['HAL', 'BEL', 'MAZAGON', 'BDL'] },
+  { title: 'PSU BANK', ext: 'NIFTY PSU BANK', count: 12, stocks: ['SBIN', 'PNB', 'BOI', 'CANBK'] },
+  { title: 'MEDIA', ext: 'NIFTY MEDIA', count: 15, stocks: ['ZEEL', 'NETWORK18', 'PVRINOX', 'NDTV'] },
+  { title: 'BANK', ext: 'NIFTY BANK', count: 12, stocks: ['HDFCBANK', 'ICICIBANK', 'SBIN', 'AXISBANK'] },
+  { title: 'REALTY', ext: 'NIFTY REALTY', count: 10, stocks: ['DLF', 'GODREJPROP', 'OBEROIRLTY', 'PRESTIGE'] },
+  { title: 'METAL', ext: 'NIFTY METAL', count: 15, stocks: ['TATASTEEL', 'HINDALCO', 'JSWSTEEL', 'COALINDIA'] },
+  { title: 'IT', ext: 'NIFTY IT', count: 10, stocks: ['TCS', 'INFY', 'HCLTECH', 'WIPRO'] },
+  { title: 'AUTO', ext: 'NIFTY AUTO', count: 15, stocks: ['TATAMOTORS', 'M&M', 'MARUTI', 'BAJAJ-AUTO'] },
+  { title: 'PHARMA', ext: 'NIFTY PHARMA', count: 20, stocks: ['SUNPHARMA', 'CIPLA', 'DRREDDY', 'DIVISLAB'] },
+  { title: 'FMCG', ext: 'NIFTY FMCG', count: 15, stocks: ['ITC', 'HINDUNILVR', 'NESTLEIND', 'BRITANNIA'] },
+  { title: 'ENERGY', ext: 'NIFTY ENERGY', count: 10, stocks: ['RELIANCE', 'ONGC', 'NTPC', 'POWERGRID'] },
+  { title: 'INFRA', ext: 'NIFTY INFRA', count: 30, stocks: ['LT', 'ADANIPORTS', 'ULTRACEMCO', 'GRASIM'] },
 ];
 
 const SectoralFlow: React.FC = () => {
@@ -32,39 +32,49 @@ const SectoralFlow: React.FC = () => {
     let isMounted = true;
 
     const loadLiveMarketData = async () => {
-      setLoading(true);
+      // Show the UI immediately so it responds fast. Loading stays true for maybe 1 render tick, then clears.
       
-      // 1. Gather all unique stock symbols across our sectors
       const allSymbols = new Set<string>();
       SECTOR_DEFINITIONS.forEach(sec => sec.stocks.forEach(s => allSymbols.add(s)));
-      
-      // 2. Add some core indices 
       const indices = ['^NSEI', '^NSEBANK', '^CNXIT', '^CNXAUTO', '^CNXMETAL', '^CNXFMCG', '^CNXPHARMA', '^CNXREALTY'];
       indices.forEach(idx => allSymbols.add(idx));
 
       const symbolArray = Array.from(allSymbols);
       
-      // 3. Fetch in parallel chunks to avoid overwhelming the proxy/browser
-      const results: Record<string, { price: number; change: number }> = {};
-      const chunkSize = 15;
-      
+      // Let the component start rendering skeleton data initially
+      setLoading(false);
+
+      const chunkSize = 12; // Moderate chunk size
       for (let i = 0; i < symbolArray.length; i += chunkSize) {
         const chunk = symbolArray.slice(i, i + chunkSize);
-        await Promise.all(
+        
+        const chunkResults: Record<string, { price: number; change: number }> = {};
+        
+        // Use Promise.allSettled to not fail the chunk if one timeouts
+        await Promise.allSettled(
           chunk.map(async (sym) => {
-            // For stocks, append .NSE for accurate Indian market lookup inside priceApi
             const querySym = sym.startsWith('^') ? sym : `${sym}.NSE`;
-            const data = await fetchStockPrice(querySym);
+            
+            // Limit each individual fetch to 4.5 seconds to forcefully free up proxy congestion
+            const timeoutPromise = new Promise<{price: number, change: number} | null>((resolve) => 
+               setTimeout(() => resolve(null), 4500)
+            );
+            
+            const data = await Promise.race([
+               fetchStockPrice(querySym),
+               timeoutPromise
+            ]);
+
             if (data && isMounted) {
-              results[sym] = { price: data.price, change: data.change || 0 };
+              chunkResults[sym] = { price: data.price, change: data.change || 0 };
             }
           })
         );
-      }
-      
-      if (isMounted) {
-        setLiveData(results);
-        setLoading(false);
+        
+        // Progressively incrementally update the UI with new data chunks
+        if (isMounted && Object.keys(chunkResults).length > 0) {
+           setLiveData(prev => ({ ...prev, ...chunkResults }));
+        }
       }
     };
 
@@ -125,8 +135,8 @@ const SectoralFlow: React.FC = () => {
             {loading ? (
               <div className="flex flex-col items-center justify-center h-[60vh] text-center">
                 <Loader2 className="w-12 h-12 text-emerald-500 animate-spin mb-4" />
-                <h3 className="text-xl font-bold text-white mb-2">Fetching Live Market Data</h3>
-                <p className="text-slate-400 max-w-md">Querying Yahoo Finance for real-time sector indices and constituent stocks. This may take a few seconds...</p>
+                <h3 className="text-xl font-bold text-white mb-2">Connecting to Live Feed</h3>
+                <p className="text-slate-400 max-w-md">Initializing dashboard...</p>
               </div>
             ) : (
               <>
