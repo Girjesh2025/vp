@@ -370,10 +370,10 @@ const StockPortfolioApp: React.FC = () => {
   // Show loading state while portfolio is loading
   if (portfolioLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-[#0f1520] flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading your portfolio...</p>
+          <p className="text-slate-400">Loading your portfolio...</p>
         </div>
       </div>
     );
@@ -382,11 +382,11 @@ const StockPortfolioApp: React.FC = () => {
   // Show error state if portfolio failed to load
   if (portfolioError) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-[#0f1520] flex items-center justify-center">
         <div className="text-center">
           <div className="text-red-500 text-6xl mb-4">⚠️</div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Failed to Load Portfolio</h2>
-          <p className="text-gray-600 mb-4">{portfolioError}</p>
+          <h2 className="text-xl font-semibold text-white mb-2">Failed to Load Portfolio</h2>
+          <p className="text-slate-400 mb-4">{portfolioError}</p>
           <button 
             onClick={() => window.location.reload()} 
             className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
@@ -604,13 +604,13 @@ const StockPortfolioApp: React.FC = () => {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl p-6 shadow-lg">
-          <h3 className="text-xl font-bold text-gray-800 mb-4">Portfolio Allocation</h3>
+        <div className="bg-[#172030] rounded-2xl p-6 shadow-lg">
+          <h3 className="text-xl font-bold text-slate-200 mb-4">Portfolio Allocation</h3>
           <PortfolioChart stocks={enrichedStocks} priceData={stockPrices} />
         </div>
         
-        <div className="bg-white rounded-2xl p-6 shadow-lg">
-          <h3 className="text-xl font-bold text-gray-800 mb-4">Performance Trends</h3>
+        <div className="bg-[#172030] rounded-2xl p-6 shadow-lg">
+          <h3 className="text-xl font-bold text-slate-200 mb-4">Performance Trends</h3>
           <PerformanceChart stocks={enrichedStocks} priceData={stockPrices} />
         </div>
       </div>
@@ -622,15 +622,15 @@ const StockPortfolioApp: React.FC = () => {
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50 to-purple-50 flex">
       {/* Error handling for portfolio loading */}
       {portfolioError && (
-        <div className="fixed inset-0 bg-gray-50 flex items-center justify-center z-50">
-          <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-[#0f1520] flex items-center justify-center z-50">
+          <div className="bg-[#172030] p-8 rounded-lg shadow-lg max-w-md w-full mx-4">
             <div className="text-center">
               <div className="text-red-500 text-6xl mb-4">⚠️</div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-4">Connection Error</h2>
-              <p className="text-gray-600 mb-6">
+              <h2 className="text-2xl font-bold text-slate-200 mb-4">Connection Error</h2>
+              <p className="text-slate-400 mb-6">
                 Unable to connect to the database. This might be due to:
               </p>
-              <ul className="text-left text-gray-600 mb-6 space-y-2">
+              <ul className="text-left text-slate-400 mb-6 space-y-2">
                 <li>• Network connectivity issues</li>
                 <li>• Database configuration problems</li>
                 <li>• Missing environment variables</li>
@@ -648,12 +648,12 @@ const StockPortfolioApp: React.FC = () => {
 
       {/* Loading state for portfolio */}
       {portfolioLoading && (
-        <div className="fixed inset-0 bg-gray-50 flex items-center justify-center z-50">
-          <div className="bg-white p-8 rounded-lg shadow-lg">
+        <div className="fixed inset-0 bg-[#0f1520] flex items-center justify-center z-50">
+          <div className="bg-[#172030] p-8 rounded-lg shadow-lg">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <h2 className="text-xl font-semibold text-gray-800">Loading Portfolio...</h2>
-              <p className="text-gray-600 mt-2">Setting up your investment dashboard</p>
+              <h2 className="text-xl font-semibold text-slate-200">Loading Portfolio...</h2>
+              <p className="text-slate-400 mt-2">Setting up your investment dashboard</p>
             </div>
           </div>
         </div>
@@ -687,7 +687,7 @@ const StockPortfolioApp: React.FC = () => {
         />
 
         {/* Main Content Area */}
-        <div className="flex-1 p-6">
+        <div className="flex-1 p-6 bg-[#0f1520] min-h-[calc(100vh-64px)]">
           <div className="max-w-7xl mx-auto">
             {/* Portfolio Selector */}
             <div className="mb-8">
@@ -710,7 +710,7 @@ const StockPortfolioApp: React.FC = () => {
           {activeTab === 'portfolio' && (
             <div className="space-y-6">
               <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-gray-800">Portfolio Overview</h2>
+                <h2 className="text-2xl font-bold text-slate-200">Portfolio Overview</h2>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => {
@@ -727,7 +727,7 @@ const StockPortfolioApp: React.FC = () => {
                   </button>
                   <button
                     onClick={() => setIsAddModalOpen(true)}
-                    className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+                    className="bg-indigo-900/200 hover:bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
                   >
                     <Plus className="w-4 h-4" />
                     Add Stock
@@ -737,17 +737,17 @@ const StockPortfolioApp: React.FC = () => {
 
               {/* Market Status Indicator */}
               <div className={`p-4 rounded-lg border ${isMarketOpen() 
-                ? 'bg-green-500 border-green-200' 
-                : 'bg-gray-50 border-gray-200'
+                ? 'bg-emerald-900/200 border-emerald-800/30' 
+                : 'bg-[#0f1520] border-[#1e293b]'
               }`}>
                 <div className="flex items-center gap-2">
                   <div className={`w-3 h-3 rounded-full ${isMarketOpen() 
-                    ? 'bg-green-500 animate-pulse' 
+                    ? 'bg-emerald-900/200 animate-pulse' 
                     : 'bg-gray-400'
                   }`}></div>
                   <span className={`text-sm font-medium ${isMarketOpen() 
-                    ? 'text-green-700' 
-                    : 'text-gray-600'
+                    ? 'text-emerald-400' 
+                    : 'text-slate-400'
                   }`}>
                     {isMarketOpen() 
                       ? 'Market Open - Live Prices' 
@@ -756,7 +756,7 @@ const StockPortfolioApp: React.FC = () => {
                   </span>
                 </div>
                 {!isMarketOpen() && (
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-slate-500 mt-1">
                     Indian stock market is closed. P&L shows last trading day values.
                   </p>
                 )}
@@ -794,18 +794,18 @@ const StockPortfolioApp: React.FC = () => {
               </div>
 
               {/* Detailed Holdings Table */}
-        <div className="bg-white/90 backdrop-blur rounded-2xl p-6 shadow-xl">
-                <h3 className="text-xl font-bold text-gray-800 mb-6">All Holdings</h3>
+        <div className="bg-[#172030] backdrop-blur rounded-2xl p-6 shadow-xl">
+                <h3 className="text-xl font-bold text-slate-200 mb-6">All Holdings</h3>
                 
                 {(!portfolioStocks || portfolioStocks.length === 0) && popularStocks.length > 0 ? (
                   // Show popular stocks when portfolio is empty
                   <div>
-                    <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      <div className="flex items-center gap-2 text-blue-700 mb-2">
+                    <div className="mb-4 p-4 bg-indigo-900/20 rounded-lg border border-indigo-800/30">
+                      <div className="flex items-center gap-2 text-indigo-400 mb-2">
                         <TrendingUp className="w-5 h-5" />
                         <span className="font-semibold">Popular Indian Stocks</span>
                       </div>
-                      <p className="text-blue-600 text-sm">
+                      <p className="text-indigo-400 text-sm">
                         Your portfolio is empty. Here are some popular Indian stocks to get you started. Click the + button to add them to your portfolio.
                       </p>
                     </div>
@@ -813,12 +813,12 @@ const StockPortfolioApp: React.FC = () => {
                     <div className="overflow-x-auto">
                       <table className="w-full">
                         <thead>
-                          <tr className="border-b border-gray-200">
-                            <th className="text-left py-3 px-4 font-semibold text-gray-600">Stock</th>
-                            <th className="text-left py-3 px-4 font-semibold text-gray-600">Exchange</th>
-                            <th className="text-left py-3 px-4 font-semibold text-gray-600">Current Price</th>
-                            <th className="text-left py-3 px-4 font-semibold text-gray-600">Change</th>
-                            <th className="text-left py-3 px-4 font-semibold text-gray-600">Actions</th>
+                          <tr className="border-b border-[#1e293b]">
+                            <th className="text-left py-3 px-4 font-semibold text-slate-400">Stock</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-400">Exchange</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-400">Current Price</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-400">Change</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-400">Actions</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -830,25 +830,25 @@ const StockPortfolioApp: React.FC = () => {
                               ((currentPrice - priceData.previousClose) / priceData.previousClose) * 100 : 0;
 
                             return (
-                              <tr key={stock.symbol} className="border-b border-gray-100 hover:bg-gray-50">
+                              <tr key={stock.symbol} className="border-b border-slate-800/60 hover:bg-[#0f1520]">
                                 <td className="py-4 px-4">
                                   <div>
-                                    <div className="font-semibold text-gray-800">{stock.symbol}</div>
-                                    <div className="text-sm text-gray-500">{stock.name}</div>
+                                    <div className="font-semibold text-slate-200">{stock.symbol}</div>
+                                    <div className="text-sm text-slate-500">{stock.name}</div>
                                   </div>
                                 </td>
-                                <td className="py-4 px-4 text-gray-700">{(stock.displaySymbol.split('-')[1] || 'NSE')}</td>
-                                <td className="py-4 px-4 text-gray-700">
+                                <td className="py-4 px-4 text-slate-300">{(stock.displaySymbol.split('-')[1] || 'NSE')}</td>
+                                <td className="py-4 px-4 text-slate-300">
                                   {currentPrice > 0 ? `₹${currentPrice.toFixed(2)}` : 'Loading...'}
                                 </td>
                                 <td className="py-4 px-4">
                                   {priceData ? (
-                                    <div className={`${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    <div className={`${change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                       {change >= 0 ? '+' : '-'}₹{Math.abs(change).toFixed(2)}
                                       <div className="text-sm">({changePercent >= 0 ? '+' : ''}{changePercent.toFixed(2)}%)</div>
                                     </div>
                                   ) : (
-                                    <span className="text-gray-400">Loading...</span>
+                                    <span className="text-slate-600">Loading...</span>
                                   )}
                                 </td>
                                 <td className="py-4 px-4">
@@ -863,7 +863,7 @@ const StockPortfolioApp: React.FC = () => {
                                       };
                                       await addStock(stockForModal);
                                     }}
-                                    className="p-2 text-green-600 hover:bg-green-100 rounded-lg transition-colors"
+                                    className="p-2 text-emerald-400 hover:bg-emerald-900/40 rounded-lg transition-colors"
                                     title="Add to portfolio"
                                   >
                                     <Plus className="w-4 h-4" />
@@ -881,14 +881,14 @@ const StockPortfolioApp: React.FC = () => {
                    <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-4 font-semibold text-gray-600">Stock</th>
-                          <th className="text-left py-3 px-4 font-semibold text-gray-600">Quantity</th>
-                          <th className="text-left py-3 px-4 font-semibold text-gray-600">Avg Price</th>
-                          <th className="text-left py-3 px-4 font-semibold text-gray-600">Current Price</th>
-                          <th className="text-left py-3 px-4 font-semibold text-gray-600">Market Value</th>
-                          <th className="text-left py-3 px-4 font-semibold text-gray-600">P&L</th>
-                          <th className="text-left py-3 px-4 font-semibold text-gray-600">Actions</th>
+                        <tr className="border-b border-[#1e293b]">
+                          <th className="text-left py-3 px-4 font-semibold text-slate-400">Stock</th>
+                          <th className="text-left py-3 px-4 font-semibold text-slate-400">Quantity</th>
+                          <th className="text-left py-3 px-4 font-semibold text-slate-400">Avg Price</th>
+                          <th className="text-left py-3 px-4 font-semibold text-slate-400">Current Price</th>
+                          <th className="text-left py-3 px-4 font-semibold text-slate-400">Market Value</th>
+                          <th className="text-left py-3 px-4 font-semibold text-slate-400">P&L</th>
+                          <th className="text-left py-3 px-4 font-semibold text-slate-400">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -912,19 +912,19 @@ const StockPortfolioApp: React.FC = () => {
                           const pnlPercent = avgPrice > 0 ? ((currentPrice - avgPrice) / avgPrice) * 100 : 0;
 
                           return (
-                            <tr key={stock.symbol} className="border-b border-gray-100 hover:bg-gray-50">
+                            <tr key={stock.symbol} className="border-b border-slate-800/60 hover:bg-[#0f1520]">
                               <td className="py-4 px-4">
                                 <div>
-                                  <div className="font-semibold text-gray-800">{stock.symbol}</div>
-                                  <div className="text-sm text-gray-500">{stock.name}</div>
+                                  <div className="font-semibold text-slate-200">{stock.symbol}</div>
+                                  <div className="text-sm text-slate-500">{stock.name}</div>
                                 </div>
                               </td>
-                              <td className="py-4 px-4 text-gray-700">{totalShares}</td>
-                              <td className="py-4 px-4 text-gray-700">₹{avgPrice.toFixed(2)}</td>
-                              <td className="py-4 px-4 text-gray-700">₹{currentPrice.toFixed(2)}</td>
-                              <td className="py-4 px-4 text-gray-700">₹{marketValue.toLocaleString()}</td>
+                              <td className="py-4 px-4 text-slate-300">{totalShares}</td>
+                              <td className="py-4 px-4 text-slate-300">₹{avgPrice.toFixed(2)}</td>
+                              <td className="py-4 px-4 text-slate-300">₹{currentPrice.toFixed(2)}</td>
+                              <td className="py-4 px-4 text-slate-300">₹{marketValue.toLocaleString()}</td>
                               <td className="py-4 px-4">
-                                <div className={`${pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                <div className={`${pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                   {pnl >= 0 ? '+' : '-'}₹{Math.abs(pnl).toFixed(2)}
                                   <div className="text-sm">({pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%)</div>
                                 </div>
@@ -936,14 +936,14 @@ const StockPortfolioApp: React.FC = () => {
                                       setSelectedStock(stock);
                                       setIsTransactionModalOpen(true);
                                     }}
-                                    className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                                    className="p-2 text-indigo-400 hover:bg-indigo-900/40 rounded-lg transition-colors"
                                     title={totalShares === 0 ? "Add your first transaction" : "Add transaction"}
                                   >
                                     {totalShares === 0 ? <Plus className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
                                   </button>
                                   <button
                                     onClick={() => handleDeleteClick(stock)}
-                                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors group"
+                                    className="p-2 text-red-400 hover:bg-red-900/40 rounded-lg transition-colors group"
                                     title="Delete stock from portfolio"
                                   >
                                     <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
@@ -964,7 +964,7 @@ const StockPortfolioApp: React.FC = () => {
           {activeTab === 'transactions' && (
                 <div className="space-y-6">
                   <div className="flex justify-between items-center">
-                    <h2 className="text-2xl font-bold text-gray-800">Transaction History</h2>
+                    <h2 className="text-2xl font-bold text-slate-200">Transaction History</h2>
                   </div>
 
                   {/* Transaction Stats */}
@@ -997,32 +997,32 @@ const StockPortfolioApp: React.FC = () => {
                   </div>
 
                   {/* Transactions Table */}
-        <div className="bg-white/90 backdrop-blur rounded-2xl p-6 shadow-xl">
-                    <h3 className="text-xl font-bold text-gray-800 mb-6">All Transactions</h3>
+        <div className="bg-[#172030] backdrop-blur rounded-2xl p-6 shadow-xl">
+                    <h3 className="text-xl font-bold text-slate-200 mb-6">All Transactions</h3>
                     <div className="overflow-x-auto">
                       <table className="w-full">
                         <thead>
-                          <tr className="border-b border-gray-200">
-                            <th className="text-left py-3 px-4 font-semibold text-gray-600">Date</th>
-                            <th className="text-left py-3 px-4 font-semibold text-gray-600">Stock</th>
-                            <th className="text-left py-3 px-4 font-semibold text-gray-600">Type</th>
-                            <th className="text-left py-3 px-4 font-semibold text-gray-600">Quantity</th>
-                            <th className="text-left py-3 px-4 font-semibold text-gray-600">Price</th>
-                            <th className="text-left py-3 px-4 font-semibold text-gray-600">Total</th>
+                          <tr className="border-b border-[#1e293b]">
+                            <th className="text-left py-3 px-4 font-semibold text-slate-400">Date</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-400">Stock</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-400">Type</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-400">Quantity</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-400">Price</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-400">Total</th>
                           </tr>
                         </thead>
                         <tbody>
                           {transactions
                             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                             .map((transaction) => (
-                              <tr key={transaction.id} className="border-b border-gray-100 hover:bg-gray-50">
-                                <td className="py-4 px-4 text-gray-700">
+                              <tr key={transaction.id} className="border-b border-slate-800/60 hover:bg-[#0f1520]">
+                                <td className="py-4 px-4 text-slate-300">
                                   {new Date(transaction.date).toLocaleDateString()}
                                 </td>
                                 <td className="py-4 px-4">
                                   <div>
-                                    <div className="font-semibold text-gray-800">{transaction.symbol}</div>
-                                    <div className="text-sm text-gray-500">{transaction.name}</div>
+                                    <div className="font-semibold text-slate-200">{transaction.symbol}</div>
+                                    <div className="text-sm text-slate-500">{transaction.name}</div>
                                   </div>
                                 </td>
                                 <td className="py-4 px-4">
@@ -1034,15 +1034,15 @@ const StockPortfolioApp: React.FC = () => {
                                     {transaction.type.toUpperCase()}
                                   </span>
                                 </td>
-                                <td className="py-4 px-4 text-gray-700">{transaction.quantity}</td>
-                                <td className="py-4 px-4 text-gray-700">₹{transaction.price.toFixed(2)}</td>
-                                <td className="py-4 px-4 text-gray-700">₹{transaction.total.toLocaleString()}</td>
+                                <td className="py-4 px-4 text-slate-300">{transaction.quantity}</td>
+                                <td className="py-4 px-4 text-slate-300">₹{transaction.price.toFixed(2)}</td>
+                                <td className="py-4 px-4 text-slate-300">₹{transaction.total.toLocaleString()}</td>
                               </tr>
                             ))}
                         </tbody>
                       </table>
                       {transactions.length === 0 && (
-                        <div className="text-center py-8 text-gray-500">
+                        <div className="text-center py-8 text-slate-500">
                           No transactions found. Add some stocks to get started!
                         </div>
                       )}
@@ -1091,15 +1091,15 @@ const StockPortfolioApp: React.FC = () => {
               {activeTab === 'settings' && (
                 <div className="space-y-6">
                   <div className="flex justify-between items-center">
-                    <h2 className="text-2xl font-bold text-gray-800">Settings</h2>
+                    <h2 className="text-2xl font-bold text-slate-200">Settings</h2>
                   </div>
 
                   {/* Profile Settings */}
-                  <div className="bg-white rounded-2xl p-6 shadow-lg">
-                    <h3 className="text-xl font-bold text-gray-800 mb-6">Profile Settings</h3>
+                  <div className="bg-[#172030] rounded-2xl p-6 shadow-lg">
+                    <h3 className="text-xl font-bold text-slate-200 mb-6">Profile Settings</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <label className="block text-sm font-semibold text-slate-300 mb-2">
                           Full Name
                         </label>
                         <input
@@ -1109,7 +1109,7 @@ const StockPortfolioApp: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <label className="block text-sm font-semibold text-slate-300 mb-2">
                           Email
                         </label>
                         <input
@@ -1119,7 +1119,7 @@ const StockPortfolioApp: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <label className="block text-sm font-semibold text-slate-300 mb-2">
                           Phone
                         </label>
                         <input
@@ -1129,7 +1129,7 @@ const StockPortfolioApp: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <label className="block text-sm font-semibold text-slate-300 mb-2">
                           Investment Experience
                         </label>
                         <select className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
@@ -1142,11 +1142,11 @@ const StockPortfolioApp: React.FC = () => {
                   </div>
 
                   {/* Portfolio Preferences */}
-                  <div className="bg-white rounded-2xl p-6 shadow-lg">
-                    <h3 className="text-xl font-bold text-gray-800 mb-6">Portfolio Preferences</h3>
+                  <div className="bg-[#172030] rounded-2xl p-6 shadow-lg">
+                    <h3 className="text-xl font-bold text-slate-200 mb-6">Portfolio Preferences</h3>
                     <div className="space-y-6">
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <label className="block text-sm font-semibold text-slate-300 mb-2">
                           Default Currency
                         </label>
                         <select className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
@@ -1157,24 +1157,24 @@ const StockPortfolioApp: React.FC = () => {
                       </div>
                       
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <label className="block text-sm font-semibold text-slate-300 mb-2">
                           Risk Tolerance
                         </label>
                         <div className="flex gap-2">
-                          <button className="flex-1 py-3 px-4 rounded-lg font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
+                          <button className="flex-1 py-3 px-4 rounded-lg font-semibold bg-gray-100 text-slate-300 hover:bg-gray-200 transition-colors">
                             Conservative
                           </button>
                           <button className="flex-1 py-3 px-4 rounded-lg font-semibold bg-indigo-600 text-white transition-colors">
                             Moderate
                           </button>
-                          <button className="flex-1 py-3 px-4 rounded-lg font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
+                          <button className="flex-1 py-3 px-4 rounded-lg font-semibold bg-gray-100 text-slate-300 hover:bg-gray-200 transition-colors">
                             Aggressive
                           </button>
                         </div>
                       </div>
                       
                       <div>
-                        <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        <label className="block text-sm font-semibold text-slate-300 mb-2">
                           Investment Goal
                         </label>
                         <select className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
@@ -1188,15 +1188,15 @@ const StockPortfolioApp: React.FC = () => {
                   </div>
 
                   {/* API & Data Settings */}
-                  <div className="bg-white rounded-2xl p-6 shadow-lg">
-                    <h3 className="text-xl font-bold text-gray-800 mb-6">API & Data Settings</h3>
+                  <div className="bg-[#172030] rounded-2xl p-6 shadow-lg">
+                    <h3 className="text-xl font-bold text-slate-200 mb-6">API & Data Settings</h3>
                     <div className="space-y-6">
                       <div className="flex items-center justify-between">
                         <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-1">
+                          <label className="block text-sm font-semibold text-slate-300 mb-1">
                             Auto-refresh Stock Prices
                           </label>
-                          <p className="text-sm text-gray-500">
+                          <p className="text-sm text-slate-500">
                             Automatically update stock prices every 5 minutes to conserve API usage
                           </p>
                         </div>
@@ -1207,7 +1207,7 @@ const StockPortfolioApp: React.FC = () => {
                             onChange={(e) => setAutoRefreshEnabled(e.target.checked)}
                             className="sr-only peer"
                           />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#172030] after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                         </label>
                       </div>
                       
@@ -1231,7 +1231,7 @@ const StockPortfolioApp: React.FC = () => {
                       </div>
                       
                       {/* API Usage Tracker */}
-                      <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="p-4 bg-indigo-900/20 rounded-lg border border-indigo-800/30">
                         <div className="flex items-center justify-between mb-2">
                           <h4 className="text-sm font-semibold text-blue-800">Daily API Usage</h4>
                           <span className="text-sm font-bold text-blue-900">
@@ -1242,15 +1242,15 @@ const StockPortfolioApp: React.FC = () => {
                           <div 
                             className={`h-2 rounded-full transition-all duration-300 ${
                               apiCallCount / dailyApiLimit > 0.8 
-                                ? 'bg-red-500' 
+                                ? 'bg-red-900/200' 
                                 : apiCallCount / dailyApiLimit > 0.6 
                                 ? 'bg-yellow-500' 
-                                : 'bg-blue-500'
+                                : 'bg-indigo-900/200'
                             }`}
                             style={{ width: `${Math.min((apiCallCount / dailyApiLimit) * 100, 100)}%` }}
                           ></div>
                         </div>
-                        <p className="text-xs text-blue-700 mt-2">
+                        <p className="text-xs text-indigo-400 mt-2">
                           {apiCallCount >= dailyApiLimit * 0.8 
                             ? '⚠️ Approaching daily limit' 
                             : apiCallCount >= dailyApiLimit * 0.6 
@@ -1263,13 +1263,13 @@ const StockPortfolioApp: React.FC = () => {
                   </div>
 
                   {/* Notifications */}
-                  <div className="bg-white rounded-2xl p-6 shadow-lg">
-                    <h3 className="text-xl font-bold text-gray-800 mb-6">Notifications</h3>
+                  <div className="bg-[#172030] rounded-2xl p-6 shadow-lg">
+                    <h3 className="text-xl font-bold text-slate-200 mb-6">Notifications</h3>
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <div>
-                          <div className="font-semibold text-gray-800">Price Alerts</div>
-                          <div className="text-sm text-gray-600">Get notified when stock prices change significantly</div>
+                          <div className="font-semibold text-slate-200">Price Alerts</div>
+                          <div className="text-sm text-slate-400">Get notified when stock prices change significantly</div>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
                           <input 
@@ -1278,14 +1278,14 @@ const StockPortfolioApp: React.FC = () => {
                             onChange={(e) => setPriceAlertsEnabled(e.target.checked)}
                             className="sr-only peer" 
                           />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#172030] after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                         </label>
                       </div>
 
                       <div className="flex items-center justify-between">
                         <div>
-                          <div className="font-semibold text-gray-800">Portfolio Updates</div>
-                          <div className="text-sm text-gray-600">Daily portfolio performance summaries</div>
+                          <div className="font-semibold text-slate-200">Portfolio Updates</div>
+                          <div className="text-sm text-slate-400">Daily portfolio performance summaries</div>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
                           <input 
@@ -1294,14 +1294,14 @@ const StockPortfolioApp: React.FC = () => {
                             onChange={(e) => setPortfolioUpdatesEnabled(e.target.checked)}
                             className="sr-only peer" 
                           />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#172030] after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                         </label>
                       </div>
 
                       <div className="flex items-center justify-between">
                         <div>
-                          <div className="font-semibold text-gray-800">Market News</div>
-                          <div className="text-sm text-gray-600">Breaking news and market updates</div>
+                          <div className="font-semibold text-slate-200">Market News</div>
+                          <div className="text-sm text-slate-400">Breaking news and market updates</div>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
                           <input 
@@ -1310,7 +1310,7 @@ const StockPortfolioApp: React.FC = () => {
                             onChange={(e) => setMarketNewsEnabled(e.target.checked)}
                             className="sr-only peer" 
                           />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#172030] after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                         </label>
                       </div>
                     </div>
@@ -1323,33 +1323,33 @@ const StockPortfolioApp: React.FC = () => {
                   />
 
                   {/* Security */}
-                  <div className="bg-white rounded-2xl p-6 shadow-lg">
-                    <h3 className="text-xl font-bold text-gray-800 mb-6">Security</h3>
+                  <div className="bg-[#172030] rounded-2xl p-6 shadow-lg">
+                    <h3 className="text-xl font-bold text-slate-200 mb-6">Security</h3>
                     <div className="space-y-4">
-                      <button className="w-full text-left p-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                      <div className="font-semibold text-gray-800">Change Password</div>
-                      <div className="text-sm text-gray-600">Update your account password</div>
+                      <button className="w-full text-left p-4 border border-gray-300 rounded-lg hover:bg-[#0f1520] transition-colors">
+                      <div className="font-semibold text-slate-200">Change Password</div>
+                      <div className="text-sm text-slate-400">Update your account password</div>
                     </button>
                     
-                    <button className="w-full text-left p-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                      <div className="font-semibold text-gray-800">Two-Factor Authentication</div>
-                      <div className="text-sm text-gray-600">Add an extra layer of security</div>
+                    <button className="w-full text-left p-4 border border-gray-300 rounded-lg hover:bg-[#0f1520] transition-colors">
+                      <div className="font-semibold text-slate-200">Two-Factor Authentication</div>
+                      <div className="text-sm text-slate-400">Add an extra layer of security</div>
                     </button>
                     
-                    <button className="w-full text-left p-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                      <div className="font-semibold text-gray-800">Login History</div>
-                      <div className="text-sm text-gray-600">View recent account activity</div>
+                    <button className="w-full text-left p-4 border border-gray-300 rounded-lg hover:bg-[#0f1520] transition-colors">
+                      <div className="font-semibold text-slate-200">Login History</div>
+                      <div className="text-sm text-slate-400">View recent account activity</div>
                     </button>
                   </div>
                 </div>
 
                 {/* Performance Testing */}
-                <div className="bg-white rounded-2xl p-6 shadow-lg">
-                  <h3 className="text-xl font-bold text-gray-800 mb-6">Search Performance</h3>
+                <div className="bg-[#172030] rounded-2xl p-6 shadow-lg">
+                  <h3 className="text-xl font-bold text-slate-200 mb-6">Search Performance</h3>
                   <div className="space-y-4">
-                    <div className="p-4 bg-blue-50 rounded-lg">
+                    <div className="p-4 bg-indigo-900/20 rounded-lg">
                       <div className="font-semibold text-blue-800 mb-2">Database Statistics</div>
-                      <div className="text-sm text-blue-700">
+                      <div className="text-sm text-indigo-400">
                         Total stocks: {getSearchPerformanceStats().totalStocks} | 
                         Cache size: {getSearchPerformanceStats().cacheStats.size}/{getSearchPerformanceStats().cacheStats.maxSize}
                       </div>
@@ -1366,7 +1366,7 @@ const StockPortfolioApp: React.FC = () => {
                       <div className="text-sm opacity-90">Test optimized search functions (check console)</div>
                     </button>
                     
-                    <div className="text-xs text-gray-500 mt-2">
+                    <div className="text-xs text-slate-500 mt-2">
                       Performance test results will be displayed in the browser console (F12 → Console)
                     </div>
                   </div>
@@ -1405,18 +1405,18 @@ const StockPortfolioApp: React.FC = () => {
     {/* Delete Confirmation Dialog */}
     {deleteConfirmation.isOpen && deleteConfirmation.stock && (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+        <div className="bg-[#172030] rounded-lg p-6 max-w-md w-full mx-4">
           <div className="flex items-center mb-4">
             <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mr-4">
-              <Trash2 className="w-6 h-6 text-red-600" />
+              <Trash2 className="w-6 h-6 text-red-400" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Delete Stock</h3>
-              <p className="text-sm text-gray-500">This action cannot be undone</p>
+              <h3 className="text-lg font-semibold text-white">Delete Stock</h3>
+              <p className="text-sm text-slate-500">This action cannot be undone</p>
             </div>
           </div>
           
-          <p className="text-gray-700 mb-6">
+          <p className="text-slate-300 mb-6">
             Are you sure you want to delete <strong>{deleteConfirmation.stock.symbol}</strong> ({deleteConfirmation.stock.name}) from your portfolio? 
             This will remove all associated transactions and data.
           </p>
@@ -1424,7 +1424,7 @@ const StockPortfolioApp: React.FC = () => {
           <div className="flex gap-3 justify-end">
             <button
               onClick={() => setDeleteConfirmation({isOpen: false, stock: null})}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors"
+              className="px-4 py-2 text-slate-400 hover:text-slate-200 font-medium transition-colors"
             >
               Cancel
             </button>
