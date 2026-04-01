@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis 
 } from 'recharts';
 
@@ -153,7 +153,7 @@ const SectorRotation: React.FC = () => {
                       />
                       <Bar dataKey="value" radius={[2, 2, 2, 2]}>
                         {performanceTrendsData.map((entry, index) => (
-                          <cell key={`cell-${index}`} fill={entry.value > 0 ? '#22c55e' : '#ef4444'} />
+                          <Cell key={`cell-${index}`} fill={entry.value > 0 ? '#22c55e' : '#ef4444'} />
                         ))}
                       </Bar>
                     </BarChart>
