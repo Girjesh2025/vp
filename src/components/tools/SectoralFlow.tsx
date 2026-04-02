@@ -280,7 +280,11 @@ const SectoralFlow: React.FC = () => {
                               const stock = liveData[stockSym] || { price: 0, change: 0 };
                               const isPositive = stock.change >= 0;
                               return (
-                                <div key={idx} className="flex items-center text-xs py-2 px-3 hover:bg-slate-800/70 rounded transition-colors group">
+                                <div 
+                                  key={idx} 
+                                  onClick={() => window.open(`https://in.tradingview.com/chart/?symbol=NSE:${stockSym}`, '_blank')}
+                                  className="flex items-center text-xs py-2 px-3 hover:bg-slate-800/70 rounded transition-colors group cursor-pointer"
+                                >
                                   <div className="flex-1 font-bold text-slate-300 group-hover:text-white transition-colors">
                                     {stockSym} <span className="opacity-40 font-normal text-[10px] ml-1">EQ</span>
                                   </div>
