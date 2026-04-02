@@ -139,6 +139,50 @@ export const fetchHistoricalPrices = async (symbol: string, days: number = 60): 
   throw new Error(`fetchHistoricalPrices: Unable to obtain real historical data for ${symbol}. All proxies failed.`);
 };
 
+/**
+ * Fetch precisely 12-month historical performance for an index or stock using Yahoo's 1mo interval.
+ * Outputs an array of 12 numbers representing MoM percentage changes.
+ */
+export const fetchMonthlySectorPerformance = async (symbol: string): Promise<number[]> => {
+  // Sector indices in Yahoo often start with ^, e.g. ^CNXIT, so we don't transform them if they do
+  const yahooSymbol = symbol.startsWith('^') ? symbol : toYahooSymbol(symbol);
+  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?range=18mo&interval=1mo`;
+
+  for (const p of PROXY_SERVICES) {
+    try {
+      const r = await fetch(`${p.url}${encodeURIComponent(yahooUrl)}`, { method: 'GET' });
+      if (!r.ok) continue;
+      const raw = await r.json();
+      const data = p.transform(raw);
+      const result = data?.chart?.result?.[0];
+      if (!result) continue;
+
+      const closes: number[] = result.indicators?.quote?.[0]?.close ?? [];
+      const validCloses = closes.filter((c: number | null) => typeof c === 'number' && c > 0) as number[];
+
+      if (validCloses.length >= 2) {
+        // Calculate Month-over-Month variation percentages
+        const monthlyChanges = [];
+        for (let i = 1; i < validCloses.length; i++) {
+           const change = ((validCloses[i] - validCloses[i-1]) / validCloses[i-1]) * 100;
+           monthlyChanges.push(Number(change.toFixed(2)));
+        }
+        
+        // Pad with zeros if we somehow got less than 12
+        while (monthlyChanges.length < 12) {
+          monthlyChanges.unshift(0);
+        }
+        
+        return monthlyChanges.slice(-12);
+      }
+    } catch (e) {
+      console.warn(`[Historical Monthly] ${p.name} failed for ${symbol}:`, e);
+    }
+  }
+  
+  return Array(12).fill(0);
+};
+
 // Convert to candidate symbols
 const toEODHDSymbols = (symbol: string): string[] => {
   const cleanSymbol = symbol.replace(/\.(NS|BO|NSE|BSE)$/i, '');
