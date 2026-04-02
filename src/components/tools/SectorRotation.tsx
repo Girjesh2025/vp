@@ -48,10 +48,15 @@ const SectorRotation: React.FC = () => {
     let isMounted = true;
     (async () => {
       try {
-        const rawData = await Promise.all(SECTORS.map(async s => ({
-          ...s,
-          data: await fetchMonthlySectorPerformance(s.symbol)
-        })));
+        // Fetch sequentially to prevent hitting Yahoo Finance concurrent rate limits (Error 429)
+        const rawData = [];
+        for (const s of SECTORS) {
+          if (!isMounted) break;
+          const monthlyData = await fetchMonthlySectorPerformance(s.symbol);
+          rawData.push({ ...s, data: monthlyData });
+          // Add a tiny artificial delay to ensure stable connections
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
 
         if (!isMounted) return;
 
