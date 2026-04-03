@@ -10,6 +10,7 @@ import SectorRotation from './components/tools/SectorRotation'
 import GlobalMarket from './components/tools/GlobalMarket'
 import SectoralFlow from './components/tools/SectoralFlow'
 import ReturnsCalculator from './components/tools/ReturnsCalculator'
+import PositionCalculator from './components/PositionCalculator'
 import './App.css'
 
 function AppRoutes() {
@@ -50,6 +51,10 @@ function AppRoutes() {
       <Route
         path="/app/tools/sectoral-flow"
         element={<ProtectedRoute><SectoralFlow /></ProtectedRoute>}
+      />
+      <Route
+        path="/app/tools/position-calculator"
+        element={<ProtectedRoute><PositionCalculator /></ProtectedRoute>}
       />
       <Route
         path="/app/tools/returns-calculator"

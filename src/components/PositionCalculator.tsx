@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import ProfessionalSidebar from './ProfessionalSidebar';
+import ProfessionalHeader from './ProfessionalHeader';
 import {
   Calculator,
   TrendingUp,
@@ -15,6 +18,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Info,
+  ArrowLeft,
 } from 'lucide-react';
 
 interface Results {
@@ -35,6 +39,7 @@ interface Results {
 }
 
 const PositionCalculator: React.FC = () => {
+  const navigate = useNavigate();
   const [capital, setCapital] = useState('100000');
   const [entryPrice, setEntryPrice] = useState('2500');
   const [stopLossPct, setStopLossPct] = useState('2');
@@ -97,24 +102,31 @@ const PositionCalculator: React.FC = () => {
   const tgtPos = results ? Math.min(98, ((results.targetPrice - results.stopLossPrice * 0.995) / (results.targetPrice * 1.005 - results.stopLossPrice * 0.995)) * 100) : 85;
 
   return (
-    <div className="min-h-screen bg-[#0a0f1e] p-6 text-white">
-      <div className="max-w-6xl mx-auto">
+    <div className="flex h-screen bg-[#0a0f1e] overflow-hidden text-white">
+      <ProfessionalSidebar activeTab="tools" onTabChange={(tabId) => navigate('/app', { state: { activeTab: tabId } })} portfolioCount={0} />
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+        <ProfessionalHeader />
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 custom-scrollbar">
+          <div className="max-w-6xl mx-auto">
+            <button onClick={() => navigate('/app')} className="flex items-center gap-2 text-slate-500 hover:text-slate-300 mb-6 font-medium transition-colors">
+              <ArrowLeft className="w-4 h-4" /> Back to Tools
+            </button>
 
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-[0_0_20px_rgba(99,102,241,0.4)]">
-              <Calculator className="w-6 h-6 text-white" />
+            {/* Header */}
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-[0_0_20px_rgba(99,102,241,0.4)]">
+                  <Calculator className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-white">Precision Sizer</h1>
+                  <p className="text-sm text-slate-400">Calculate optimal position sizes with dynamic risk parameters</p>
+                </div>
+              </div>
+              <button onClick={reset} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm transition-colors border border-slate-700">
+                <RotateCcw className="w-4 h-4" /> Reset
+              </button>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-white">Position Size Calculator</h1>
-              <p className="text-sm text-slate-400">Smart trade planning with risk management</p>
-            </div>
-          </div>
-          <button onClick={reset} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm transition-colors border border-slate-700">
-            <RotateCcw className="w-4 h-4" /> Reset
-          </button>
-        </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
           {/* === Left Input Panel === */}
@@ -404,6 +416,8 @@ const PositionCalculator: React.FC = () => {
         <p className="text-xs text-slate-600 mt-6 text-center">
           Disclaimer: For educational purposes only. Brokerage is approximate. Always verify with your broker.
         </p>
+          </div>
+        </main>
       </div>
     </div>
   );

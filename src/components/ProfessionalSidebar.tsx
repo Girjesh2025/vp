@@ -45,7 +45,6 @@ const ProfessionalSidebar: React.FC<ProfessionalSidebarProps> = ({
     { id: 'stock-recommendations', label: 'Stock Recommendations', icon: Star },
     { id: 'ai-trading', label: 'AI Trading', icon: Brain },
     { id: 'tools', label: 'Tools', icon: Calculator },
-    { id: 'position-calculator', label: 'Position Calculator', icon: Calculator },
     { id: 'analytics', label: 'Analytics', icon: TrendingUp },
     { id: 'alerts', label: 'Alerts', icon: Bell, badge: '3' },
     { id: 'settings', label: 'Settings', icon: Settings },

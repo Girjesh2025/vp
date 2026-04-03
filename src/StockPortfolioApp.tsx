@@ -15,7 +15,6 @@ import AITradingSuggestions from './components/AITradingSuggestions';
 import ToolsDashboard from './components/ToolsDashboard';
 import MarketAnalysis from './components/MarketAnalysis';
 import StockRecommendations from './components/StockRecommendations';
-import PositionCalculator from './components/PositionCalculator';
 import { fetchStockPrice } from './utils/priceApi';
 import { 
   getStockBySymbol,
@@ -1068,7 +1067,6 @@ const StockPortfolioApp: React.FC = () => {
             <MarketAnalysis />
           )}
               {activeTab === 'stock-recommendations' && <StockRecommendations />}
-          {activeTab === 'position-calculator' && <PositionCalculator />}
               {activeTab === 'alerts' && (
                 <AlertsPage 
                   stocks={portfolioStocks}
