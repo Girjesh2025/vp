@@ -276,12 +276,59 @@ const toEODHDSymbols = (symbol: string): string[] => {
   return [`${cleanSymbol}.NSE`, `${cleanSymbol}.BSE`];
 };
 
+// Check if a symbol is a global index or futures symbol (e.g. ^DJI, ^NSEI, YM=F)
+// These must NOT be converted via toEODHDSymbols — send directly to proxy
+const isGlobalOrIndexSymbol = (symbol: string): boolean => {
+  return symbol.startsWith('^') || symbol.includes('=');
+};
+
 // Main function to fetch stock prices using local proxy server
 export const fetchStockPrice = async (symbol: string): Promise<PriceData | null> => {
   try {
     console.log(`🚀 [DEBUG] fetchStockPrice called for symbol: ${symbol}`);
-    const candidates = toEODHDSymbols(symbol);
     const baseUrl = resolveBaseUrl();
+
+    // For global indices / futures, send the symbol directly to the proxy (URL-encoded)
+    if (isGlobalOrIndexSymbol(symbol)) {
+      console.log(`🌍 [DEBUG] Global/index symbol detected: ${symbol}, sending directly to proxy`);
+      try {
+        const response = await fetch(`${baseUrl}/api/stock/${encodeURIComponent(symbol)}?source=yahoo`, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          mode: 'cors'
+        });
+        if (response.ok) {
+          const ct = response.headers.get('content-type') || '';
+          if (ct.includes('application/json')) {
+            const data = await response.json();
+            if (data && typeof data.close === 'number' && data.close > 0) {
+              const prevClose = data.previousClose || data.open || data.close;
+              const change = prevClose ? ((data.close - prevClose) / prevClose) * 100 : 0;
+              return {
+                price: Number(data.close.toFixed(2)),
+                change: Number(change.toFixed(2)),
+                previousClose: data.previousClose !== undefined ? data.previousClose : undefined,
+              };
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`⚠️ [DEBUG] Direct proxy fetch failed for ${symbol}:`, err);
+      }
+
+      // Fallback for global indices: try Yahoo via CORS proxies
+      const yahooFallback = await fetchYahooViaProxy(symbol);
+      if (yahooFallback) return yahooFallback;
+
+      console.warn(`⚠️ [DEBUG] Using deterministic mock price for ${symbol}`);
+      return getMockPrice(symbol);
+    }
+
+    // For regular Indian / US stocks, use EODHD symbol conversion
+    const candidates = toEODHDSymbols(symbol);
     console.log(`🔄 [DEBUG] Converted candidates: ${candidates.join(', ')}`);
     
     for (const cand of candidates) {

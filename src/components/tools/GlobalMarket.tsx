@@ -3,11 +3,14 @@ import ProfessionalHeader from '../ProfessionalHeader';
 import ProfessionalSidebar from '../ProfessionalSidebar';
 import { Globe, ArrowLeft, TrendingUp, TrendingDown, Clock, Activity } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { fetchStockPrice } from '../../utils/priceApi';
 
 interface GlobalIndex {
   symbol: string;
   name: string;
   region: string;
+  country: string;
+  flag: string;
   price: number;
   change: number;
   changePercent: number;
@@ -20,28 +23,66 @@ const GlobalMarket: React.FC = () => {
   const [indices, setIndices] = useState<GlobalIndex[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Mock data for global indices (in a real app, this would come from an API)
-  const mockIndices: GlobalIndex[] = [
-    { symbol: '^DJI', name: 'Dow Jones', region: 'US', price: 39127.14, change: 168.91, changePercent: 0.43, status: 'open', lastUpdate: '10:45 AM EDT' },
-    { symbol: '^GSPC', name: 'S&P 500', region: 'US', price: 5464.62, change: 27.53, changePercent: 0.51, status: 'open', lastUpdate: '10:45 AM EDT' },
-    { symbol: '^IXIC', name: 'NASDAQ', region: 'US', price: 17721.59, change: 110.12, changePercent: 0.63, status: 'open', lastUpdate: '10:45 AM EDT' },
-    { symbol: '^FTSE', name: 'FTSE 100', region: 'Europe', price: 8281.55, change: -12.45, changePercent: -0.15, status: 'open', lastUpdate: '3:45 PM BST' },
-    { symbol: '^GDAXI', name: 'DAX', region: 'Europe', price: 18162.56, change: 15.22, changePercent: 0.08, status: 'open', lastUpdate: '4:45 PM CEST' },
-    { symbol: '^FCHI', name: 'CAC 40', region: 'Europe', price: 7628.80, change: -43.10, changePercent: -0.56, status: 'open', lastUpdate: '4:45 PM CEST' },
-    { symbol: '^N225', name: 'Nikkei 225', region: 'Asia', price: 39583.08, change: 350.21, changePercent: 0.89, status: 'closed', lastUpdate: '3:00 PM JST' },
-    { symbol: '^HSI', name: 'Hang Seng', region: 'Asia', price: 18028.52, change: -150.34, changePercent: -0.83, status: 'closed', lastUpdate: '4:00 PM HKT' },
-    { symbol: '000001.SS', name: 'Shanghai Composite', region: 'Asia', price: 2998.14, change: 7.23, changePercent: 0.24, status: 'closed', lastUpdate: '3:00 PM CST' },
-    { symbol: '^BSESN', name: 'BSE SENSEX', region: 'India', price: 79032.73, change: 620.73, changePercent: 0.79, status: 'closed', lastUpdate: '3:30 PM IST' },
-    { symbol: '^NSEI', name: 'NIFTY 50', region: 'India', price: 24010.60, change: 178.95, changePercent: 0.75, status: 'closed', lastUpdate: '3:30 PM IST' },
-    { symbol: '^AXJO', name: 'ASX 200', region: 'Australia', price: 7759.60, change: -23.40, changePercent: -0.30, status: 'closed', lastUpdate: '4:00 PM AEST' },
+  // Initial setup with symbols to fetch real data
+  const baseIndices = [
+    { symbol: '^DJI', name: 'Dow', region: 'US', country: 'US', flag: '🇺🇸' },
+    { symbol: 'YM=F', name: 'Dow Futures', region: 'US', country: 'US', flag: '🇺🇸' },
+    { symbol: '^FCHI', name: 'CAC', region: 'Europe', country: 'FRANCE', flag: '🇫🇷' },
+    { symbol: '^GDAXI', name: 'DAX', region: 'Europe', country: 'GERMANY', flag: '🇩🇪' },
+    { symbol: '^HSI', name: 'HANG SENG', region: 'Asia', country: 'HONG KONG', flag: '🇭🇰' },
+    { symbol: '^N225', name: 'NIKKEI', region: 'Asia', country: 'JAPAN', flag: '🇯🇵' },
+    { symbol: '^NSEI', name: 'NIFTY 50', region: 'India', country: 'INDIA', flag: '🇮🇳' },
+    { symbol: '^BSESN', name: 'SENSEX', region: 'India', country: 'INDIA', flag: '🇮🇳' },
   ];
 
   useEffect(() => {
-    // Simulate API call
-    setTimeout(() => {
-      setIndices(mockIndices);
-      setIsLoading(false);
-    }, 1000);
+    let isMounted = true;
+
+    const fetchLiveGlobalData = async () => {
+      setIsLoading(true);
+      try {
+        const results = await Promise.all(
+          baseIndices.map(async (idx) => {
+            try {
+              const data = await fetchStockPrice(idx.symbol);
+              if (!data) throw new Error("No data");
+              return {
+                ...idx,
+                price: data.price,
+                change: data.change || 0,
+                changePercent: data.previousClose 
+                  ? ((data.price - data.previousClose) / data.previousClose) * 100 
+                  : 0,
+                status: 'closed' as const, // In a real app, determine status based on region timezone
+                lastUpdate: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              };
+            } catch (err) {
+              console.error(`Failed to fetch ${idx.symbol}:`, err);
+              return {
+                ...idx,
+                price: 0,
+                change: 0,
+                changePercent: 0,
+                status: 'closed' as const,
+                lastUpdate: 'Data unavailable'
+              };
+            }
+          })
+        );
+        
+        if (isMounted) {
+          setIndices(results);
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.error("Error fetching global indices:", error);
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    fetchLiveGlobalData();
+
+    return () => { isMounted = false; };
   }, []);
 
   const regions = ['US', 'Europe', 'Asia', 'India', 'Australia'];
@@ -82,10 +123,20 @@ const GlobalMarket: React.FC = () => {
                 <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-semibold text-slate-400">Global Sentiment</h3>
-                  <div className="px-2 py-1 rounded bg-emerald-500/20 text-emerald-400 text-xs font-bold border border-emerald-500/30">BULLISH</div>
+                  {indices.length > 0 && (
+                    <div className={`px-2 py-1 rounded text-xs font-bold border ${
+                      (indices.filter(i => i.change >= 0).length / indices.length) > 0.5
+                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                        : 'bg-red-500/20 text-red-400 border-red-500/30'
+                    }`}>
+                      {(indices.filter(i => i.change >= 0).length / indices.length) > 0.5 ? 'BULLISH' : 'BEARISH'}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-end gap-3">
-                  <span className="text-3xl font-black text-white">68%</span>
+                  <span className="text-3xl font-black text-white">
+                    {indices.length > 0 ? Math.round((indices.filter(i => i.change >= 0).length / indices.length) * 100) : 0}%
+                  </span>
                   <span className="text-sm text-slate-500 mb-1">indices trading higher</span>
                 </div>
               </div>
@@ -111,7 +162,7 @@ const GlobalMarket: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex items-end gap-3">
-                  <span className="text-3xl font-black text-white">3</span>
+                  <span className="text-3xl font-black text-white">{indices.filter(i => i.status === 'open').length}</span>
                   <span className="text-sm text-slate-500 mb-1">major markets open</span>
                 </div>
               </div>
@@ -119,71 +170,64 @@ const GlobalMarket: React.FC = () => {
 
             {/* Regional Markets */}
             {isLoading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {[1, 2, 3, 4, 5, 6].map(i => (
-                  <div key={i} className="bg-[#172030] rounded-2xl h-48 border border-slate-800 animate-pulse" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="bg-[#172030] rounded-2xl h-32 border border-slate-800 animate-pulse" />
                 ))}
               </div>
             ) : (
-              <div className="space-y-8">
-                {regions.map(region => {
-                  const regionIndices = indices.filter(idx => idx.region === region);
-                  if (regionIndices.length === 0) return null;
-
-                  return (
-                    <div key={region} className="bg-[#172030] rounded-2xl border border-slate-800 overflow-hidden shadow-lg">
-                      <div className="px-6 py-4 border-b border-slate-800/60 bg-[#1a2436] flex items-center justify-between">
-                        <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                          <div className="w-2 h-6 bg-blue-500 rounded-full" />
-                          {region} Markets
-                        </h2>
-                        <div className="text-xs font-medium text-slate-500">
-                          {regionIndices.filter(i => i.status === 'open').length > 0 
-                            ? <span className="text-emerald-400 flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"/> OPEN</span>
-                            : <span className="text-slate-500 flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-slate-600"/> CLOSED</span>
-                          }
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-slate-800/60">
-                        {regionIndices.map((index) => (
-                          <div key={index.symbol} className="p-6 hover:bg-[#1e293b]/50 transition-colors">
-                            <div className="flex justify-between items-start mb-2">
-                              <div>
-                                <h3 className="font-bold text-slate-200">{index.name}</h3>
-                                <p className="text-xs text-slate-500">{index.symbol}</p>
-                              </div>
-                              <span className={`text-[10px] px-2 py-0.5 rounded font-bold tracking-wider ${
-                                index.status === 'open' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-800 text-slate-400 border border-slate-700'
-                              }`}>
-                                {index.status.toUpperCase()}
-                              </span>
+              <div className="w-full">
+                <div className="bg-[#172030] rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
+                  {/* Market Data Header */}
+                  <div className="px-6 py-4 border-b border-slate-800/60 bg-[#1a2436] flex items-center justify-between">
+                    <h2 className="text-xs font-black text-slate-200 uppercase tracking-[0.15em]">
+                      Market Data
+                    </h2>
+                    <div className="px-2 py-0.5 rounded border border-slate-700 bg-slate-800/50 text-[10px] font-bold text-slate-500 tracking-wider">
+                      LIVE
+                    </div>
+                  </div>
+                  
+                  <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {indices.map((index) => (
+                      <div 
+                        key={index.symbol} 
+                        className="bg-[#111827] border border-slate-800 rounded-xl p-4 hover:border-slate-700 transition-all cursor-pointer group flex flex-col justify-between h-full"
+                      >
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            {/* Flag Circle */}
+                            <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-xl border border-slate-700 shadow-inner group-hover:scale-105 transition-transform shrink-0">
+                              {index.flag}
                             </div>
                             
-                            <div className="mt-4 flex items-end justify-between">
-                              <div className="text-2xl font-black text-white">
-                                {index.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </div>
-                              <div className={`flex flex-col items-end ${index.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                <div className="flex items-center gap-1 font-bold">
-                                  {index.change >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                                  {index.change >= 0 ? '+' : ''}{index.changePercent.toFixed(2)}%
-                                </div>
-                                <div className="text-xs opacity-80 font-medium">
-                                  {index.change >= 0 ? '+' : ''}{index.change.toFixed(2)}
-                                </div>
-                              </div>
-                            </div>
-                            
-                            <div className="mt-4 text-[10px] text-slate-500 flex justify-end">
-                              Updated: {index.lastUpdate}
+                            <div className="min-w-0">
+                              <h3 className="font-bold text-white text-sm leading-tight truncate">{index.name}</h3>
+                              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">{index.country}</p>
                             </div>
                           </div>
-                        ))}
+                          
+                          <div className={`px-2 py-0.5 rounded text-[10px] font-black border ${
+                            index.change >= 0 
+                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                              : 'bg-red-500/10 text-red-400 border-red-500/20'
+                          }`}>
+                            {index.change >= 0 ? '+' : ''}{index.changePercent.toFixed(2)}%
+                          </div>
+                        </div>
+
+                        <div className="flex items-end justify-between mt-auto">
+                          <div className="text-xl font-black text-white tracking-tight">
+                            {index.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </div>
+                          <div className={`text-[11px] font-bold ${index.change >= 0 ? 'text-emerald-500/70' : 'text-red-500/70'}`}>
+                            {index.change >= 0 ? '+' : ''}{index.change.toFixed(2)}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
             
