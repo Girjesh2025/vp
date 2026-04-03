@@ -103,6 +103,10 @@ const SectorRotation: React.FC = () => {
   const [metricMenuOpen, setMetricMenuOpen]       = React.useState(false);
   const metricRef = React.useRef<HTMLDivElement>(null);
 
+  const [selectedPeriod, setSelectedPeriod]       = React.useState<number>(12);
+  const [periodMenuOpen, setPeriodMenuOpen]       = React.useState(false);
+  const periodRef = React.useRef<HTMLDivElement>(null);
+
   const CUR_YEAR = new Date().getFullYear();
   const AVAILABLE_YEARS = [CUR_YEAR - 1, CUR_YEAR];
   const [selectedYear, setSelectedYear]   = React.useState(CUR_YEAR - 1);
@@ -129,6 +133,40 @@ const SectorRotation: React.FC = () => {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  // Close period dropdown on outside click
+  React.useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (periodRef.current && !periodRef.current.contains(e.target as Node))
+        setPeriodMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Re-derive rankings when period changes
+  React.useEffect(() => {
+    if (rawDataRef.current.length > 0) {
+      let sr = rawDataRef.current.map(s => {
+        const periodData = s.data.slice(-selectedPeriod);
+        const totalChange = periodData.reduce((a: number, b: number) => a + b, 0);
+        const recentMomentum = s.data.slice(-3).reduce((a: number, b: number) => a + b, 0) * 3;
+        const status: SectorStatus = getStatus(recentMomentum);
+
+        return {
+          name:      s.name,
+          change:    totalChange >= 0 ? `+${totalChange.toFixed(1)}%` : `${totalChange.toFixed(1)}%`,
+          rawChange: totalChange,
+          momentum:  Math.min(100, Math.max(0, 50 + recentMomentum)),
+          status,
+          color:     s.color,
+        };
+      });
+      sr.sort((a, b) => b.rawChange - a.rawChange);
+      sr = sr.map((item, idx) => ({ ...item, rank: idx + 1 })).slice(0, 7);
+      setSectorRankings(sr);
+    }
+  }, [selectedPeriod]);
 
   // Re-derive heatmap when year changes
   React.useEffect(() => {
@@ -538,8 +576,36 @@ const SectorRotation: React.FC = () => {
                     </h2>
                     <p className="text-[10px] text-slate-500 mt-1 ml-2.5">Performance ranking by period</p>
                   </div>
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1e293b] border border-slate-700 rounded-md text-xs cursor-pointer hover:bg-slate-700 transition">
-                    12 Months <ChevronDown className="w-3 h-3" />
+                  <div className="relative" ref={periodRef}>
+                    <div 
+                      onClick={() => setPeriodMenuOpen(o => !o)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-md text-xs cursor-pointer transition select-none ${
+                        periodMenuOpen || selectedPeriod !== 12
+                          ? 'bg-blue-600 border-blue-500 text-white' 
+                          : 'bg-[#1e293b] border-slate-700 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      {selectedPeriod === 1 ? '1 Month' : `${selectedPeriod} Months`} <ChevronDown className={`w-3 h-3 transition-transform ${periodMenuOpen ? 'rotate-180' : ''}`} />
+                    </div>
+                    {periodMenuOpen && (
+                      <div className="absolute right-0 top-full mt-1 z-50 bg-[#1e293b] border border-slate-700 rounded-lg shadow-xl min-w-[120px] overflow-hidden py-1">
+                        {[1, 3, 6, 12].map(p => (
+                          <button
+                            key={p}
+                            onClick={() => { setSelectedPeriod(p); setPeriodMenuOpen(false); }}
+                            className={`w-full text-left px-3 py-2 text-xs transition-colors flex items-center gap-2 ${
+                              selectedPeriod === p
+                                ? 'bg-blue-600 text-white font-semibold'
+                                : 'text-slate-300 hover:bg-slate-700/60'
+                            }`}
+                          >
+                            {selectedPeriod === p && <span className="text-white">&#10003;</span>}
+                            {selectedPeriod !== p && <span className="w-3" />}
+                            {p === 1 ? '1 Month' : `${p} Months`}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -552,8 +618,8 @@ const SectorRotation: React.FC = () => {
                 ) : (
                   <div className="w-full">
                     {/* Table header */}
-                    <div className="flex text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2 px-2">
-                      <div className="w-8">#</div>
+                    <div className="flex text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 px-2">
+                      <div className="w-8 text-center">#</div>
                       <div className="flex-1">Sector</div>
                       <div className="w-16 text-right">Change</div>
                       <div className="w-20 text-center">Momentum</div>
@@ -565,46 +631,51 @@ const SectorRotation: React.FC = () => {
                       {sectorRankings.map((row) => (
                         <div
                           key={row.rank}
-                          className="flex items-center text-xs py-2 px-2 hover:bg-[#1e293b] rounded-lg transition-colors group"
+                          className="flex items-center text-xs py-2.5 px-2 hover:bg-[#1e293b] rounded-lg transition-colors group"
                         >
                           {/* Rank badge */}
                           <div className="w-8 flex justify-center">
-                            <div className={`w-5 h-5 rounded flex items-center justify-center font-bold text-[10px] ${
-                              row.rank === 1 ? 'bg-amber-500 text-white' :
-                              row.rank === 2 ? 'bg-slate-300 text-slate-800' :
-                              row.rank === 3 ? 'bg-amber-700 text-white' :
-                              'text-slate-500 bg-transparent'
+                            <div className={`w-6 h-6 rounded flex items-center justify-center font-bold text-[11px] ${
+                              row.rank === 1 ? 'bg-[#facc15] text-[#0f172a]' :
+                              row.rank === 2 ? 'bg-[#8b5cf6] text-white' :
+                              row.rank === 3 ? 'bg-[#f97316] text-white' :
+                              'text-slate-400 bg-transparent'
                             }`}>
                               {row.rank}
                             </div>
                           </div>
 
                           {/* Sector name */}
-                          <div className="flex-1 font-semibold text-slate-300 group-hover:text-white flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: row.color }} />
+                          <div className="flex-1 font-bold text-slate-200 group-hover:text-white flex items-center gap-2">
+                            <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: row.color }} />
                             {row.name}
                           </div>
 
                           {/* Change */}
-                          <div className={`w-16 text-right font-medium text-xs ${
-                            row.change.startsWith('+') ? 'text-emerald-400' : 'text-red-400'
-                          }`}>
-                            {row.change}
+                          <div className="w-16 flex justify-end">
+                            <div className={`px-2 py-0.5 rounded text-xs font-bold ${
+                              row.change.startsWith('+') ? 'bg-emerald-900/30 text-emerald-400' : 'bg-red-900/30 text-red-400'
+                            }`}>
+                              {row.change}
+                            </div>
                           </div>
 
                           {/* Momentum bar */}
-                          <div className="w-20 px-2">
-                            <div className="h-1 w-full bg-[#1e293b] rounded-full overflow-hidden">
-                              <div
-                                className="h-full rounded-full transition-all duration-500"
-                                style={{ width: `${row.momentum}%`, backgroundColor: row.color }}
-                              />
+                          <div className="w-20 px-3 flex items-center">
+                            <div className="flex w-full gap-1">
+                               <div className="h-1 flex-1 rounded-full transition-colors" style={{ backgroundColor: row.momentum > 20 ? row.color : '#1e293b' }} />
+                               <div className="h-1 flex-1 rounded-full transition-colors" style={{ backgroundColor: row.momentum > 50 ? row.color : '#1e293b' }} />
+                               <div className="h-1 flex-1 rounded-full transition-colors" style={{ backgroundColor: row.momentum > 80 ? row.color : '#1e293b' }} />
                             </div>
                           </div>
 
                           {/* Status badge */}
                           <div className="w-14 flex justify-end">
-                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide ${statusStyle[row.status as SectorStatus]}`}>
+                            <span className={`text-[11px] font-bold uppercase tracking-wide ${
+                               row.status === 'Prime' ? 'text-emerald-400' :
+                               row.status === 'Active' ? 'text-orange-400' :
+                               'text-red-400'
+                            }`}>
                               {row.status}
                             </span>
                           </div>
