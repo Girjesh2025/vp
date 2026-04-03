@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bell, Search, Settings, User, TrendingUp, Globe, Plus, LogOut } from 'lucide-react';
+import { Bell, Search, Settings, User, Globe, Plus, LogOut } from 'lucide-react';
 import { searchStocksOptimized } from '../stockDatabase';
 import { isMarketOpen } from '../utils/priceApi';
 import { useAuth } from '../contexts/AuthContext';
@@ -84,20 +84,8 @@ const ProfessionalHeader: React.FC<ProfessionalHeaderProps> = ({
     <header className="bg-[#131b26] border-b border-[#1e293b] shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          {/* Logo and Brand */}
+          {/* Logo and Brand Removed */}
           <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-3">
-              <div className="relative">
-                <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
-                  <TrendingUp className="w-6 h-6 text-white" />
-                </div>
-                <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-[#131b26] animate-pulse"></div>
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-white">Portfolio Pro</h1>
-                <p className="text-xs text-slate-400">Investment Management</p>
-              </div>
-            </div>
           </div>
 
           {/* Search Bar */}
