@@ -222,12 +222,12 @@ const SectoralFlow: React.FC = () => {
                   </div>
 
                   {/* CHART / HEATMAP Toggle */}
-                  <div className="flex bg-[#111827] rounded-xl p-1 border border-slate-700/40 shadow-inner">
+                  <div className="flex bg-[#131b26] rounded-xl p-1 border border-slate-700/40 shadow-inner">
                     <button 
                       onClick={() => setActiveView('chart')}
                       className={`flex items-center gap-2 px-5 py-2 text-xs font-bold rounded-lg transition-all duration-300 ${
                         activeView === 'chart' 
-                          ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-500/20' 
+                          ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' 
                           : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
@@ -238,7 +238,7 @@ const SectoralFlow: React.FC = () => {
                       onClick={() => setActiveView('heatmap')}
                       className={`flex items-center gap-2 px-5 py-2 text-xs font-bold rounded-lg transition-all duration-300 ${
                         activeView === 'heatmap' 
-                          ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/20' 
+                          ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30' 
                           : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
@@ -250,28 +250,28 @@ const SectoralFlow: React.FC = () => {
 
                 {/* ─── Summary KPI Cards ─── */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div className="bg-gradient-to-br from-[#172030] to-[#111827] rounded-xl p-4 border border-slate-800/60 relative overflow-hidden">
-                    <div className="absolute -top-4 -right-4 w-20 h-20 bg-emerald-500/5 rounded-full blur-2xl" />
+                  <div className="bg-[#131b26] rounded-xl p-4 border border-slate-800 relative overflow-hidden">
+                    <div className="absolute -top-4 -right-4 w-20 h-20 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Gaining</p>
                     <p className="text-2xl font-black text-emerald-400">{gainingSectors}</p>
                     <p className="text-[10px] text-slate-600 mt-1">sectors positive</p>
                   </div>
-                  <div className="bg-gradient-to-br from-[#172030] to-[#111827] rounded-xl p-4 border border-slate-800/60 relative overflow-hidden">
-                    <div className="absolute -top-4 -right-4 w-20 h-20 bg-red-500/5 rounded-full blur-2xl" />
+                  <div className="bg-[#131b26] rounded-xl p-4 border border-slate-800 relative overflow-hidden">
+                    <div className="absolute -top-4 -right-4 w-20 h-20 bg-red-500/10 rounded-full blur-2xl pointer-events-none" />
                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Declining</p>
                     <p className="text-2xl font-black text-red-400">{losingSectors}</p>
                     <p className="text-[10px] text-slate-600 mt-1">sectors negative</p>
                   </div>
-                  <div className="bg-gradient-to-br from-[#172030] to-[#111827] rounded-xl p-4 border border-slate-800/60 relative overflow-hidden">
-                    <div className="absolute -top-4 -right-4 w-20 h-20 bg-emerald-500/5 rounded-full blur-2xl" />
+                  <div className="bg-[#131b26] rounded-xl p-4 border border-slate-800 relative overflow-hidden">
+                    <div className="absolute -top-4 -right-4 w-20 h-20 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Top Sector</p>
                     <p className="text-lg font-black text-white">{topSector?.name || '-'}</p>
                     <p className="text-[10px] text-emerald-400 font-bold mt-1">
                       {topSector ? `+${topSector.value.toFixed(2)}%` : '-'}
                     </p>
                   </div>
-                  <div className="bg-gradient-to-br from-[#172030] to-[#111827] rounded-xl p-4 border border-slate-800/60 relative overflow-hidden">
-                    <div className="absolute -top-4 -right-4 w-20 h-20 bg-red-500/5 rounded-full blur-2xl" />
+                  <div className="bg-[#131b26] rounded-xl p-4 border border-slate-800 relative overflow-hidden">
+                    <div className="absolute -top-4 -right-4 w-20 h-20 bg-red-500/10 rounded-full blur-2xl pointer-events-none" />
                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Bottom Sector</p>
                     <p className="text-lg font-black text-white">{bottomSector?.name || '-'}</p>
                     <p className="text-[10px] text-red-400 font-bold mt-1">
@@ -283,13 +283,13 @@ const SectoralFlow: React.FC = () => {
                 {/* ─── Main View: CHART or HEATMAP ─── */}
                 {activeView === 'chart' ? (
                   /* ════════════ CHART VIEW ════════════ */
-                  <div className="bg-gradient-to-br from-[#172030] to-[#111827] border border-slate-800/60 rounded-2xl overflow-hidden shadow-2xl">
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800/40">
+                  <div className="bg-[#131b26] border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800/60 bg-[#172030]">
                       <div className="flex items-center gap-3">
                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                         <h3 className="text-xs font-black text-slate-300 uppercase tracking-[0.15em]">Sector Momentum</h3>
                       </div>
-                      <span className="text-[10px] text-slate-600 font-medium">Avg % change of constituents</span>
+                      <span className="text-[10px] text-slate-500 font-medium uppercase tracking-widest">Avg % change of constituents</span>
                     </div>
                     <div className="p-6 h-[480px]">
                       <ResponsiveContainer width="100%" height="100%">
@@ -338,8 +338,8 @@ const SectoralFlow: React.FC = () => {
                   </div>
                 ) : (
                   /* ════════════ HEATMAP VIEW ════════════ */
-                  <div className="bg-gradient-to-br from-[#172030] to-[#111827] border border-slate-800/60 rounded-2xl overflow-hidden shadow-2xl">
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800/40">
+                  <div className="bg-[#131b26] border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800/60 bg-[#172030]">
                       <div className="flex items-center gap-3">
                         <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
                         <h3 className="text-xs font-black text-slate-300 uppercase tracking-[0.15em]">Market Heatmap</h3>
@@ -366,7 +366,7 @@ const SectoralFlow: React.FC = () => {
                             onClick={() => scrollToSector(s.name)}
                             onMouseEnter={() => setHoveredHeatmapTile(s.name)}
                             onMouseLeave={() => setHoveredHeatmapTile(null)}
-                            className="relative rounded-xl p-5 flex flex-col items-center justify-center text-center transition-all duration-300 group min-h-[130px]"
+                            className="relative rounded-xl p-5 flex flex-col items-center justify-center text-center transition-all duration-300 group min-h-[130px] overflow-hidden"
                             style={{
                               background: `linear-gradient(135deg, ${getHeatmapColor(s.value)}dd, ${getHeatmapColor(s.value)}99)`,
                               boxShadow: hoveredHeatmapTile === s.name 
@@ -405,7 +405,7 @@ const SectoralFlow: React.FC = () => {
                             onClick={() => scrollToSector(s.name)}
                             onMouseEnter={() => setHoveredHeatmapTile(s.name)}
                             onMouseLeave={() => setHoveredHeatmapTile(null)}
-                            className="relative rounded-xl p-4 flex flex-col items-center justify-center text-center transition-all duration-300 group min-h-[100px]"
+                            className="relative rounded-xl p-4 flex flex-col items-center justify-center text-center transition-all duration-300 group min-h-[100px] overflow-hidden"
                             style={{
                               background: `linear-gradient(135deg, ${getHeatmapColor(s.value)}dd, ${getHeatmapColor(s.value)}99)`,
                               boxShadow: hoveredHeatmapTile === s.name 
@@ -436,7 +436,7 @@ const SectoralFlow: React.FC = () => {
                               onClick={() => scrollToSector(s.name)}
                               onMouseEnter={() => setHoveredHeatmapTile(s.name)}
                               onMouseLeave={() => setHoveredHeatmapTile(null)}
-                              className="relative rounded-xl p-3 flex flex-col items-center justify-center text-center transition-all duration-300 group min-h-[80px]"
+                              className="relative rounded-xl p-3 flex flex-col items-center justify-center text-center transition-all duration-300 group min-h-[80px] overflow-hidden"
                               style={{
                                 background: `linear-gradient(135deg, ${getHeatmapColor(s.value)}dd, ${getHeatmapColor(s.value)}99)`,
                                 boxShadow: hoveredHeatmapTile === s.name 
