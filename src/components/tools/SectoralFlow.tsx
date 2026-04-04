@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import ProfessionalHeader from '../ProfessionalHeader';
 import ProfessionalSidebar from '../ProfessionalSidebar';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, BarChart3, LayoutGrid, TrendingUp, TrendingDown, Activity, ExternalLink } from 'lucide-react';
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from 'recharts';
 import { fetchStockPrice } from '../../utils/priceApi';
 
@@ -22,12 +22,38 @@ const SECTOR_DEFINITIONS = [
   { title: 'INFRA', ext: 'NIFTY INFRA', stocks: ['LT', 'ADANIPORTS', 'ULTRACEMCO', 'GRASIM', 'AMBUJACEM', 'SHREECEM', 'BHARTIARTL', 'ACC', 'LODHA', 'PVRINOX', 'NTPC', 'POWERGRID', 'ONGC', 'IOC'] },
 ];
 
+/** 
+ * Compute a gradient color based on percentage change.
+ * Deep red → orange → neutral → light green → deep green
+ */
+const getHeatmapColor = (val: number): string => {
+  if (val <= -3) return '#dc2626';     // Deep red
+  if (val <= -2) return '#ef4444';     // Red
+  if (val <= -1) return '#f87171';     // Light red
+  if (val <= -0.3) return '#fb923c';   // Orange
+  if (val < 0.3) return '#64748b';     // Neutral slate
+  if (val < 1) return '#4ade80';       // Light green
+  if (val < 2) return '#22c55e';       // Green
+  if (val < 3) return '#16a34a';       // Medium green
+  return '#15803d';                     // Deep green
+};
+
+/** Get a background glow color for heatmap tiles */
+const getHeatmapGlow = (val: number): string => {
+  if (val <= -1) return 'rgba(239,68,68,0.15)';
+  if (val >= 1) return 'rgba(34,197,94,0.15)';
+  return 'rgba(100,116,139,0.08)';
+};
+
 const SectoralFlow: React.FC = () => {
   const navigate = useNavigate();
   
   const [liveData, setLiveData] = useState<Record<string, { price: number; change: number }>>({});
   const [loading, setLoading] = useState(true);
+  const [activeView, setActiveView] = useState<'chart' | 'heatmap'>('chart');
   const [highlightedSector, setHighlightedSector] = useState<string | null>(null);
+  const [hoveredHeatmapTile, setHoveredHeatmapTile] = useState<string | null>(null);
+  const [loadProgress, setLoadProgress] = useState(0);
   const sectorRefs = React.useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   const scrollToSector = (sectorTitle: string) => {
@@ -35,7 +61,7 @@ const SectoralFlow: React.FC = () => {
     if (target) {
       target.scrollIntoView({ behavior: 'smooth', block: 'center' });
       setHighlightedSector(sectorTitle);
-      setTimeout(() => setHighlightedSector(null), 2500); // Remove highlight after 2.5s
+      setTimeout(() => setHighlightedSector(null), 2500);
     }
   };
 
@@ -43,84 +69,110 @@ const SectoralFlow: React.FC = () => {
     let isMounted = true;
 
     const loadLiveMarketData = async () => {
-      // Show the UI immediately so it responds fast. Loading stays true for maybe 1 render tick, then clears.
-      
       const allSymbols = new Set<string>();
       SECTOR_DEFINITIONS.forEach(sec => sec.stocks.forEach(s => allSymbols.add(s)));
-      // Note: Removed indices fetch since Yahoo indices time out easily.
-      // We will generate the Sector Heatmap exclusively via valid component aggregates.
-
       const symbolArray = Array.from(allSymbols);
       
-      // Let the component start rendering skeleton data initially
       setLoading(false);
 
-      const chunkSize = 12; // Moderate chunk size
+      const chunkSize = 12;
+      let loaded = 0;
       for (let i = 0; i < symbolArray.length; i += chunkSize) {
         const chunk = symbolArray.slice(i, i + chunkSize);
-        
         const chunkResults: Record<string, { price: number; change: number }> = {};
-        
-        // Use Promise.allSettled to not fail the chunk if one timeouts
+
         await Promise.allSettled(
           chunk.map(async (sym) => {
             const querySym = sym.startsWith('^') ? sym : `${sym}.NSE`;
-            
-            // Limit each individual fetch to 4.5 seconds to forcefully free up proxy congestion
             const timeoutPromise = new Promise<{price: number, change: number} | null>((resolve) => 
                setTimeout(() => resolve(null), 4500)
             );
-            
             const data = await Promise.race([
                fetchStockPrice(querySym),
                timeoutPromise
             ]);
-
             if (data && isMounted) {
               chunkResults[sym] = { price: data.price, change: data.change || 0 };
             }
           })
         );
         
-        // Progressively incrementally update the UI with new data chunks
-        if (isMounted && Object.keys(chunkResults).length > 0) {
-           setLiveData(prev => ({ ...prev, ...chunkResults }));
+        loaded += chunk.length;
+        if (isMounted) {
+          setLoadProgress(Math.round((loaded / symbolArray.length) * 100));
+          if (Object.keys(chunkResults).length > 0) {
+            setLiveData(prev => ({ ...prev, ...chunkResults }));
+          }
         }
       }
     };
 
     loadLiveMarketData();
-
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, []);
 
-  // Compute aggregated sector performance (average % change of constituents)
-  const sectoralFlowData = SECTOR_DEFINITIONS.map(sector => {
-    let totalChg = 0;
-    let count = 0;
-    sector.stocks.forEach(sym => {
-      if (liveData[sym]) {
-        totalChg += liveData[sym].change;
-        count++;
-      }
-    });
-    const avgChange = count > 0 ? totalChg / count : 0;
-    return { name: sector.title, value: Number(avgChange.toFixed(2)) };
-  }).sort((a, b) => a.value - b.value); // Sort ascending so top bar in horizontal layout holds the highest momentum
+  // Compute aggregated sector performance
+  const sectoralFlowData = useMemo(() => {
+    return SECTOR_DEFINITIONS.map(sector => {
+      let totalChg = 0;
+      let count = 0;
+      sector.stocks.forEach(sym => {
+        if (liveData[sym]) {
+          totalChg += liveData[sym].change;
+          count++;
+        }
+      });
+      const avgChange = count > 0 ? totalChg / count : 0;
+      return { 
+        name: sector.title, 
+        value: Number(avgChange.toFixed(2)), 
+        stockCount: sector.stocks.length,
+        loadedCount: count
+      };
+    }).sort((a, b) => a.value - b.value);
+  }, [liveData]);
 
-  // Market Heatmap Data Preparation
-  // Display the sectors from the BarChart as the Grid Heatmap
-  const heatmapData = sectoralFlowData.map(s => ({
-    // For visual mapping, if the title isn't already prefixed with NIFTY
-    name: s.name.startsWith('NIFTY') ? s.name : `NIFTY ${s.name}`,
-    val: s.value,
-    originalName: s.name // used for scroll targeting
-  }));
+  // Summary stats
+  const gainingSectors = sectoralFlowData.filter(s => s.value > 0).length;
+  const losingSectors = sectoralFlowData.filter(s => s.value < 0).length;
+  const topSector = sectoralFlowData[sectoralFlowData.length - 1];
+  const bottomSector = sectoralFlowData[0];
 
   const handleTabChange = (tabId: string) => {
     navigate('/app', { state: { activeTab: tabId } });
+  };
+
+  // Custom bar chart tooltip
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (!active || !payload?.length) return null;
+    const data = payload[0].payload;
+    const isPositive = data.value >= 0;
+    return (
+      <div style={{
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+        border: `1px solid ${isPositive ? '#22c55e40' : '#ef444440'}`,
+        borderRadius: '12px',
+        padding: '14px 18px',
+        boxShadow: `0 8px 32px ${isPositive ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)'}`,
+        minWidth: '160px'
+      }}>
+        <div style={{ color: '#94a3b8', fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', marginBottom: '8px', textTransform: 'uppercase' as const }}>
+          NIFTY {data.name}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ 
+            color: isPositive ? '#4ade80' : '#f87171', 
+            fontSize: '20px', 
+            fontWeight: 900 
+          }}>
+            {isPositive ? '+' : ''}{data.value}%
+          </span>
+        </div>
+        <div style={{ color: '#475569', fontSize: '10px', marginTop: '6px' }}>
+          {data.loadedCount}/{data.stockCount} stocks loaded
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -134,8 +186,8 @@ const SectoralFlow: React.FC = () => {
           <div className="max-w-[1400px] mx-auto space-y-6">
             
             {/* Nav Back */}
-            <button onClick={() => navigate('/app')} className="flex items-center gap-2 text-slate-400 hover:text-white text-sm font-medium transition-colors">
-              <ArrowLeft className="w-4 h-4" /> Back to Tools
+            <button onClick={() => navigate('/app')} className="flex items-center gap-2 text-slate-400 hover:text-white text-sm font-medium transition-colors group">
+              <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" /> Back to Tools
             </button>
 
             {loading ? (
@@ -146,161 +198,348 @@ const SectoralFlow: React.FC = () => {
               </div>
             ) : (
               <>
-                {/* --- 1. Sectorial Flow Bar Chart --- */}
-                <div>
-                  <div className="flex justify-between items-end mb-4">
-                    <div>
-                      <h2 className="text-xl font-bold tracking-tight text-white uppercase">Sectorial Flow</h2>
-                      <p className="text-[10px] text-emerald-500 tracking-widest uppercase mt-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block mr-2 animate-pulse" />
-                        Live Data • {new Date().toLocaleTimeString()}
-                      </p>
-                    </div>
-                    <div className="flex bg-[#1e293b] rounded-lg p-1 border border-slate-700/50">
-                      <button className="px-4 py-1.5 text-xs font-semibold rounded-md bg-slate-700/50 text-white">CHART</button>
-                      <button className="px-4 py-1.5 text-xs font-semibold rounded-md text-slate-400 hover:text-white transition-colors">HEATMAP</button>
+                {/* ─── Header Section ─── */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div>
+                    <div className="flex items-center gap-3 mb-1">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-[0_0_20px_rgba(139,92,246,0.3)]">
+                        <Activity className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <h2 className="text-2xl font-bold tracking-tight text-white">Sectorial Flow</h2>
+                        <p className="text-[10px] text-emerald-500 tracking-widest uppercase flex items-center gap-2">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                          </span>
+                          Live Data • {new Date().toLocaleTimeString()}
+                          {loadProgress < 100 && (
+                            <span className="text-slate-500 ml-2">({loadProgress}% loaded)</span>
+                          )}
+                        </p>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="bg-[#172030] border border-slate-800/60 rounded-xl p-6 h-[450px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={sectoralFlowData} layout="vertical" margin={{ top: 0, right: 30, left: 40, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#1e293b" />
-                        <XAxis 
-                          type="number" 
-                          axisLine={{ stroke: '#334155' }} 
-                          tickLine={false} 
-                          tick={{ fill: '#64748b', fontSize: 10 }} 
-                          domain={['dataMin - 1', 'dataMax + 1']}
-                        />
-                        <YAxis 
-                          dataKey="name" 
-                          type="category" 
-                          axisLine={false} 
-                          tickLine={false} 
-                          tick={{ fill: '#e2e8f0', fontSize: 11, fontWeight: 600 }} 
-                          width={100}
-                        />
-                        <Tooltip 
-                          cursor={{ fill: '#1e293b', opacity: 0.4 }}
-                          contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px', color: '#fff' }}
-                          itemStyle={{ color: '#e2e8f0' }}
-                          labelStyle={{ color: '#94a3b8', fontWeight: 600, marginBottom: '4px' }}
-                          formatter={(value: number) => [`${value > 0 ? '+' : ''}${value}%`, 'Momentum']}
-                        />
-                        <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={16}>
-                          {sectoralFlowData.map((entry, index) => (
-                            <Cell 
-                              key={`cell-${index}`} 
-                              fill={entry.value > 0 ? '#10b981' : '#ef4444'} 
-                              onClick={() => scrollToSector(entry.name)}
-                              style={{ cursor: 'pointer', transition: 'filter 0.2s' }}
-                              className="hover:brightness-125"
-                            />
+                  {/* CHART / HEATMAP Toggle */}
+                  <div className="flex bg-[#111827] rounded-xl p-1 border border-slate-700/40 shadow-inner">
+                    <button 
+                      onClick={() => setActiveView('chart')}
+                      className={`flex items-center gap-2 px-5 py-2 text-xs font-bold rounded-lg transition-all duration-300 ${
+                        activeView === 'chart' 
+                          ? 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-500/20' 
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <BarChart3 className="w-3.5 h-3.5" />
+                      CHART
+                    </button>
+                    <button 
+                      onClick={() => setActiveView('heatmap')}
+                      className={`flex items-center gap-2 px-5 py-2 text-xs font-bold rounded-lg transition-all duration-300 ${
+                        activeView === 'heatmap' 
+                          ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/20' 
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                      HEATMAP
+                    </button>
+                  </div>
+                </div>
+
+                {/* ─── Summary KPI Cards ─── */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="bg-gradient-to-br from-[#172030] to-[#111827] rounded-xl p-4 border border-slate-800/60 relative overflow-hidden">
+                    <div className="absolute -top-4 -right-4 w-20 h-20 bg-emerald-500/5 rounded-full blur-2xl" />
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Gaining</p>
+                    <p className="text-2xl font-black text-emerald-400">{gainingSectors}</p>
+                    <p className="text-[10px] text-slate-600 mt-1">sectors positive</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-[#172030] to-[#111827] rounded-xl p-4 border border-slate-800/60 relative overflow-hidden">
+                    <div className="absolute -top-4 -right-4 w-20 h-20 bg-red-500/5 rounded-full blur-2xl" />
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Declining</p>
+                    <p className="text-2xl font-black text-red-400">{losingSectors}</p>
+                    <p className="text-[10px] text-slate-600 mt-1">sectors negative</p>
+                  </div>
+                  <div className="bg-gradient-to-br from-[#172030] to-[#111827] rounded-xl p-4 border border-slate-800/60 relative overflow-hidden">
+                    <div className="absolute -top-4 -right-4 w-20 h-20 bg-emerald-500/5 rounded-full blur-2xl" />
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Top Sector</p>
+                    <p className="text-lg font-black text-white">{topSector?.name || '-'}</p>
+                    <p className="text-[10px] text-emerald-400 font-bold mt-1">
+                      {topSector ? `+${topSector.value.toFixed(2)}%` : '-'}
+                    </p>
+                  </div>
+                  <div className="bg-gradient-to-br from-[#172030] to-[#111827] rounded-xl p-4 border border-slate-800/60 relative overflow-hidden">
+                    <div className="absolute -top-4 -right-4 w-20 h-20 bg-red-500/5 rounded-full blur-2xl" />
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Bottom Sector</p>
+                    <p className="text-lg font-black text-white">{bottomSector?.name || '-'}</p>
+                    <p className="text-[10px] text-red-400 font-bold mt-1">
+                      {bottomSector ? `${bottomSector.value.toFixed(2)}%` : '-'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* ─── Main View: CHART or HEATMAP ─── */}
+                {activeView === 'chart' ? (
+                  /* ════════════ CHART VIEW ════════════ */
+                  <div className="bg-gradient-to-br from-[#172030] to-[#111827] border border-slate-800/60 rounded-2xl overflow-hidden shadow-2xl">
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800/40">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <h3 className="text-xs font-black text-slate-300 uppercase tracking-[0.15em]">Sector Momentum</h3>
+                      </div>
+                      <span className="text-[10px] text-slate-600 font-medium">Avg % change of constituents</span>
+                    </div>
+                    <div className="p-6 h-[480px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={sectoralFlowData} layout="vertical" margin={{ top: 5, right: 40, left: 10, bottom: 5 }}>
+                          <defs>
+                            <linearGradient id="greenBar" x1="0" y1="0" x2="1" y2="0">
+                              <stop offset="0%" stopColor="#059669" stopOpacity={0.9} />
+                              <stop offset="100%" stopColor="#34d399" stopOpacity={1} />
+                            </linearGradient>
+                            <linearGradient id="redBar" x1="1" y1="0" x2="0" y2="0">
+                              <stop offset="0%" stopColor="#dc2626" stopOpacity={0.9} />
+                              <stop offset="100%" stopColor="#f87171" stopOpacity={1} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#1e293b50" />
+                          <XAxis 
+                            type="number" 
+                            axisLine={{ stroke: '#1e293b' }} 
+                            tickLine={false} 
+                            tick={{ fill: '#475569', fontSize: 10, fontWeight: 500 }} 
+                            domain={['dataMin - 0.5', 'dataMax + 0.5']}
+                            tickFormatter={(v: number) => `${v > 0 ? '+' : ''}${v}%`}
+                          />
+                          <YAxis 
+                            dataKey="name" 
+                            type="category" 
+                            axisLine={false} 
+                            tickLine={false} 
+                            tick={{ fill: '#cbd5e1', fontSize: 11, fontWeight: 700 }} 
+                            width={90}
+                          />
+                          <Tooltip content={<CustomTooltip />} cursor={{ fill: '#1e293b', opacity: 0.3 }} />
+                          <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={20}>
+                            {sectoralFlowData.map((entry, index) => (
+                              <Cell 
+                                key={`cell-${index}`} 
+                                fill={entry.value >= 0 ? 'url(#greenBar)' : 'url(#redBar)'}
+                                onClick={() => scrollToSector(entry.name)}
+                                style={{ cursor: 'pointer', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }}
+                              />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                ) : (
+                  /* ════════════ HEATMAP VIEW ════════════ */
+                  <div className="bg-gradient-to-br from-[#172030] to-[#111827] border border-slate-800/60 rounded-2xl overflow-hidden shadow-2xl">
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800/40">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                        <h3 className="text-xs font-black text-slate-300 uppercase tracking-[0.15em]">Market Heatmap</h3>
+                      </div>
+                      {/* Color scale legend */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] text-slate-500 font-bold">-3%</span>
+                        <div className="flex gap-0.5">
+                          {['#dc2626', '#ef4444', '#f87171', '#fb923c', '#64748b', '#4ade80', '#22c55e', '#16a34a', '#15803d'].map((c, i) => (
+                            <div key={i} className="w-5 h-2.5 rounded-sm" style={{ background: c }} />
                           ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                {/* --- 2. Market Heatmap --- */}
-                <div className="mt-8">
-                  <div className="flex justify-between items-end mb-4">
-                    <div>
-                      <h2 className="text-xl font-bold tracking-tight text-white uppercase">Market Heatmap</h2>
-                      <p className="text-[10px] text-slate-500 tracking-widest uppercase mt-1">Component Values by Volatility</p>
+                        </div>
+                        <span className="text-[9px] text-slate-500 font-bold">+3%</span>
+                      </div>
                     </div>
-                    <div className="flex bg-[#1e293b] rounded-lg p-1.5 border border-slate-700/50 gap-1.5">
-                      <div className="w-4 h-3 rounded-sm bg-red-500" />
-                      <div className="w-4 h-3 rounded-sm bg-slate-700" />
-                      <div className="w-4 h-3 rounded-sm bg-emerald-500" />
+
+                    {/* Treemap-style Heatmap */}
+                    <div className="p-4">
+                      {/* Top row - large tiles for top sectors by stock count */}
+                      <div className="grid grid-cols-3 gap-2 mb-2">
+                        {sectoralFlowData.slice(-3).reverse().map((s) => (
+                          <button
+                            key={s.name}
+                            onClick={() => scrollToSector(s.name)}
+                            onMouseEnter={() => setHoveredHeatmapTile(s.name)}
+                            onMouseLeave={() => setHoveredHeatmapTile(null)}
+                            className="relative rounded-xl p-5 flex flex-col items-center justify-center text-center transition-all duration-300 group min-h-[130px]"
+                            style={{
+                              background: `linear-gradient(135deg, ${getHeatmapColor(s.value)}dd, ${getHeatmapColor(s.value)}99)`,
+                              boxShadow: hoveredHeatmapTile === s.name 
+                                ? `0 0 30px ${getHeatmapGlow(s.value)}, inset 0 0 30px rgba(255,255,255,0.05)` 
+                                : `0 4px 20px ${getHeatmapGlow(s.value)}`,
+                              transform: hoveredHeatmapTile === s.name ? 'scale(1.02)' : 'scale(1)',
+                            }}
+                          >
+                            <div className="absolute inset-0 rounded-xl bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+                            <div className="relative z-10">
+                              <div className="text-[10px] font-bold uppercase tracking-[0.15em] mb-2 opacity-80 text-white/80">
+                                NIFTY {s.name}
+                              </div>
+                              <div className="text-3xl font-black text-white tracking-tight drop-shadow-lg">
+                                {s.value > 0 ? '+' : ''}{s.value.toFixed(2)}%
+                              </div>
+                              <div className="flex items-center justify-center gap-1 mt-2">
+                                {s.value >= 0 
+                                  ? <TrendingUp className="w-3.5 h-3.5 text-white/60" /> 
+                                  : <TrendingDown className="w-3.5 h-3.5 text-white/60" />
+                                }
+                                <span className="text-[9px] text-white/50 font-semibold">
+                                  {s.loadedCount} stocks
+                                </span>
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Middle rows - medium tiles */}
+                      <div className="grid grid-cols-4 gap-2 mb-2">
+                        {sectoralFlowData.slice(Math.max(0, sectoralFlowData.length - 7), sectoralFlowData.length - 3).reverse().map((s) => (
+                          <button
+                            key={s.name}
+                            onClick={() => scrollToSector(s.name)}
+                            onMouseEnter={() => setHoveredHeatmapTile(s.name)}
+                            onMouseLeave={() => setHoveredHeatmapTile(null)}
+                            className="relative rounded-xl p-4 flex flex-col items-center justify-center text-center transition-all duration-300 group min-h-[100px]"
+                            style={{
+                              background: `linear-gradient(135deg, ${getHeatmapColor(s.value)}dd, ${getHeatmapColor(s.value)}99)`,
+                              boxShadow: hoveredHeatmapTile === s.name 
+                                ? `0 0 25px ${getHeatmapGlow(s.value)}, inset 0 0 20px rgba(255,255,255,0.05)` 
+                                : `0 3px 15px ${getHeatmapGlow(s.value)}`,
+                              transform: hoveredHeatmapTile === s.name ? 'scale(1.03)' : 'scale(1)',
+                            }}
+                          >
+                            <div className="absolute inset-0 rounded-xl bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+                            <div className="relative z-10">
+                              <div className="text-[9px] font-bold uppercase tracking-[0.12em] mb-1.5 text-white/70">
+                                NIFTY {s.name}
+                              </div>
+                              <div className="text-xl font-black text-white tracking-tight drop-shadow-md">
+                                {s.value > 0 ? '+' : ''}{s.value.toFixed(2)}%
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Bottom row - smaller tiles for remaining sectors */}
+                      {sectoralFlowData.length > 7 && (
+                        <div className="grid grid-cols-5 gap-2">
+                          {sectoralFlowData.slice(0, Math.max(0, sectoralFlowData.length - 7)).map((s) => (
+                            <button
+                              key={s.name}
+                              onClick={() => scrollToSector(s.name)}
+                              onMouseEnter={() => setHoveredHeatmapTile(s.name)}
+                              onMouseLeave={() => setHoveredHeatmapTile(null)}
+                              className="relative rounded-xl p-3 flex flex-col items-center justify-center text-center transition-all duration-300 group min-h-[80px]"
+                              style={{
+                                background: `linear-gradient(135deg, ${getHeatmapColor(s.value)}dd, ${getHeatmapColor(s.value)}99)`,
+                                boxShadow: hoveredHeatmapTile === s.name 
+                                  ? `0 0 20px ${getHeatmapGlow(s.value)}, inset 0 0 15px rgba(255,255,255,0.05)` 
+                                  : `0 2px 10px ${getHeatmapGlow(s.value)}`,
+                                transform: hoveredHeatmapTile === s.name ? 'scale(1.04)' : 'scale(1)',
+                              }}
+                            >
+                              <div className="absolute inset-0 rounded-xl bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+                              <div className="relative z-10">
+                                <div className="text-[8px] font-bold uppercase tracking-wider mb-1 text-white/70">
+                                  {s.name}
+                                </div>
+                                <div className="text-base font-black text-white tracking-tight drop-shadow-md">
+                                  {s.value > 0 ? '+' : ''}{s.value.toFixed(2)}%
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
+                )}
 
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                    {heatmapData.map((idx, index) => {
-                      const isPositive = idx.val >= 0;
-                      return (
-                        <button 
-                          key={`${idx.name}-${index}`}
-                          onClick={() => scrollToSector(idx.originalName)}
-                          className={`rounded-xl p-4 flex flex-col items-center justify-center text-center shadow-lg transition-transform hover:scale-105 ${
-                            isPositive ? 'bg-[#3eb665] text-white' : 'bg-[#e74c3c] text-white'
-                          }`}
-                        >
-                          <div className="text-[9px] font-bold uppercase tracking-wider mb-1 opacity-90 leading-tight h-6 flex items-center justify-center">
-                            {idx.name}
-                          </div>
-                          <div className="text-lg font-black tracking-tight drop-shadow-md">
-                            {idx.val > 0 ? '+' : ''}{idx.val.toFixed(2)}%
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* --- 3. Sector Breakdown --- */}
-                <div className="mt-8 pb-10">
-                  <div className="flex justify-between items-end mb-4">
-                    <div>
-                      <h2 className="text-xl font-bold tracking-tight text-white uppercase">Sector Breakdown</h2>
-                      <p className="text-[10px] text-slate-500 tracking-widest uppercase mt-1">Live Component Values</p>
+                {/* ─── Sector Breakdown ─── */}
+                <div className="mt-4 pb-10">
+                  <div className="flex justify-between items-end mb-5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-1 h-8 bg-gradient-to-b from-violet-500 to-indigo-600 rounded-full" />
+                      <div>
+                        <h2 className="text-xl font-bold tracking-tight text-white uppercase">Sector Breakdown</h2>
+                        <p className="text-[10px] text-slate-500 tracking-widest uppercase mt-0.5">Live Component Prices • Click stock to open chart</p>
+                      </div>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
-                    {SECTOR_DEFINITIONS.map((sector) => (
-                      <div 
-                        key={sector.title} 
-                        ref={el => (sectorRefs.current[sector.title] = el)}
-                        className={`bg-[#172030] border rounded-xl overflow-hidden shadow-lg scroll-mt-24 transition-all duration-700 ${
-                          highlightedSector === sector.title 
-                            ? 'border-emerald-500 ring-4 ring-emerald-500/30' 
-                            : 'border-slate-800/60'
-                        }`}
-                      >
-                        <div className="flex justify-between items-center bg-[#1e293b] p-3.5 border-b border-slate-800/60">
-                          <h3 className="font-bold text-xs text-white tracking-widest">{sector.ext || sector.title}</h3>
-                          <span className="text-[10px] font-semibold text-slate-400 bg-slate-800 px-2.5 py-1 rounded">{Math.min(12, sector.stocks.length)} ASSETS</span>
-                        </div>
-                        
-                        <div className="p-1">
-                          {/* Table Header */}
-                          <div className="flex text-[9px] font-bold text-slate-500 uppercase tracking-widest p-2 pb-2 border-b border-slate-800/40 mx-2">
-                            <div className="flex-1">SYMBOL</div>
-                            <div className="w-16 text-right">LTP</div>
-                            <div className="w-16 text-right">%CHG</div>
+                    {SECTOR_DEFINITIONS.map((sector) => {
+                      const sectorData = sectoralFlowData.find(s => s.name === sector.title);
+                      const sectorChange = sectorData?.value ?? 0;
+                      const isPositiveSector = sectorChange >= 0;
+                      
+                      return (
+                        <div 
+                          key={sector.title} 
+                          ref={el => (sectorRefs.current[sector.title] = el)}
+                          className={`bg-gradient-to-br from-[#172030] to-[#111827] border rounded-xl overflow-hidden shadow-lg scroll-mt-24 transition-all duration-700 ${
+                            highlightedSector === sector.title 
+                              ? 'border-violet-500 ring-4 ring-violet-500/30 scale-[1.02]' 
+                              : 'border-slate-800/60 hover:border-slate-700/80'
+                          }`}
+                        >
+                          {/* Sector Header */}
+                          <div className="flex justify-between items-center p-3.5 border-b border-slate-800/40" style={{
+                            background: `linear-gradient(135deg, ${isPositiveSector ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)'}, transparent)`
+                          }}>
+                            <div>
+                              <h3 className="font-bold text-xs text-white tracking-widest">{sector.ext || sector.title}</h3>
+                              <div className={`text-[10px] font-black mt-0.5 ${isPositiveSector ? 'text-emerald-400' : 'text-red-400'}`}>
+                                {isPositiveSector ? '+' : ''}{sectorChange.toFixed(2)}%
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-semibold text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-lg">{Math.min(12, sector.stocks.length)} ASSETS</span>
                           </div>
                           
-                          {/* Rows */}
-                          <div className="px-1 py-1 h-[270px] overflow-y-auto custom-scrollbar">
-                            {sector.stocks.slice(0, 12).map((stockSym, idx) => {
-                              const stock = liveData[stockSym] || { price: 0, change: 0 };
-                              const isPositive = stock.change >= 0;
-                              return (
-                                <div 
-                                  key={idx} 
-                                  onClick={() => window.open(`https://in.tradingview.com/chart/?symbol=NSE:${stockSym}`, '_blank')}
-                                  className="flex items-center text-xs py-2 px-3 hover:bg-slate-800/70 rounded transition-colors group cursor-pointer"
-                                >
-                                  <div className="flex-1 font-bold text-slate-300 group-hover:text-white transition-colors">
-                                    {stockSym} <span className="opacity-40 font-normal text-[10px] ml-1">EQ</span>
+                          <div className="p-1">
+                            {/* Table Header */}
+                            <div className="flex text-[9px] font-bold text-slate-500 uppercase tracking-widest p-2 pb-2 border-b border-slate-800/40 mx-2">
+                              <div className="flex-1">SYMBOL</div>
+                              <div className="w-16 text-right">LTP</div>
+                              <div className="w-16 text-right">%CHG</div>
+                            </div>
+                            
+                            {/* Rows */}
+                            <div className="px-1 py-1 h-[270px] overflow-y-auto custom-scrollbar">
+                              {sector.stocks.slice(0, 12).map((stockSym, idx) => {
+                                const stock = liveData[stockSym] || { price: 0, change: 0 };
+                                const isPositive = stock.change >= 0;
+                                return (
+                                  <div 
+                                    key={idx} 
+                                    onClick={() => window.open(`https://in.tradingview.com/chart/?symbol=NSE:${stockSym}`, '_blank')}
+                                    className="flex items-center text-xs py-2 px-3 hover:bg-slate-800/70 rounded-lg transition-all group cursor-pointer"
+                                  >
+                                    <div className="flex-1 font-bold text-slate-300 group-hover:text-white transition-colors flex items-center gap-1.5">
+                                      {stockSym}
+                                      <ExternalLink className="w-2.5 h-2.5 text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    </div>
+                                    <div className="w-16 text-right font-medium text-slate-200">
+                                      {stock.price > 0 ? stock.price.toFixed(2) : <span className="inline-block w-3 h-3 rounded-full border-2 border-slate-700 border-t-slate-400 animate-spin" />}
+                                    </div>
+                                    <div className={`w-16 text-right font-bold tracking-tight ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
+                                      {stock.price > 0 ? `${isPositive ? '+' : ''}${stock.change.toFixed(2)}%` : '-'}
+                                    </div>
                                   </div>
-                                  <div className="w-16 text-right font-medium text-slate-200">
-                                    {stock.price > 0 ? stock.price.toFixed(2) : '-'}
-                                  </div>
-                                  <div className={`w-16 text-right font-bold tracking-tight ${isPositive ? 'text-[#3eb665]' : 'text-[#e74c3c]'}`}>
-                                    {stock.price > 0 ? `${isPositive ? '+' : ''}${stock.change.toFixed(2)}%` : '-'}
-                                  </div>
-                                </div>
-                              );
-                            })}
+                                );
+                              })}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </>
