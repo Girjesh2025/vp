@@ -197,8 +197,8 @@ export function usePortfolio() {
           symbol: stockData.symbol,
           name: stockData.name,
           exchange: stockData.exchange,
-          quantity: stockData.quantity,
-          average_price: stockData.avgPrice
+          quantity: 0, // Set initial quantity to 0, transaction will update it
+          average_price: 0 // Set initial avg price to 0, transaction will update it
         }])
         .select()
         .single()
@@ -271,9 +271,13 @@ export function usePortfolio() {
         .select('*')
         .eq('portfolio_id', currentPortfolio?.id)
         .eq('symbol', transactionData.stockSymbol)
-        .maybeSingle()
+        .limit(1)
+        .single()
 
-      if (stockError || !stockData) throw new Error('Stock not found')
+      if (stockError || !stockData) {
+        console.error('Stock query error:', stockError);
+        throw new Error(`Stock not found: ${stockError?.message || 'Unknown error'}`);
+      }
 
       const { data: newTransaction, error } = await supabase
         .from('transactions')
@@ -370,6 +374,7 @@ export function usePortfolio() {
         .select('id')
         .eq('portfolio_id', currentPortfolio?.id)
         .eq('symbol', symbol)
+        .limit(1)
         .maybeSingle()
 
       if (stockError || !stockData) throw new Error('Stock not found')

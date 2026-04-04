@@ -437,9 +437,9 @@ const StockPortfolioApp: React.FC = () => {
       });
       setIsTransactionModalOpen(false);
       setSelectedStock(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding transaction:', error);
-      alert('Failed to add transaction. Please try again.');
+      alert(`Failed to add transaction. Error: ${error.message || 'Please try again.'}`);
     }
   };
 
