@@ -66,6 +66,7 @@ const StockPortfolioApp: React.FC = () => {
   const [popularStockPrices, setPopularStockPrices] = useState<Record<string, PriceData>>({});
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
+  const [transactionModalType, setTransactionModalType] = useState<'buy' | 'sell'>('buy');
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
   
   const location = useLocation();
@@ -886,7 +887,8 @@ const StockPortfolioApp: React.FC = () => {
                           <th className="text-left py-3 px-4 font-semibold text-slate-400">Avg Price</th>
                           <th className="text-left py-3 px-4 font-semibold text-slate-400">Current Price</th>
                           <th className="text-left py-3 px-4 font-semibold text-slate-400">Market Value</th>
-                          <th className="text-left py-3 px-4 font-semibold text-slate-400">P&L</th>
+                          <th className="text-left py-3 px-4 font-semibold text-slate-400">Unrealized P&L</th>
+                          <th className="text-left py-3 px-4 font-semibold text-slate-400">Booked P&L</th>
                           <th className="text-left py-3 px-4 font-semibold text-slate-400">Actions</th>
                         </tr>
                       </thead>
@@ -897,12 +899,17 @@ const StockPortfolioApp: React.FC = () => {
                             t.type === 'buy' ? sum + t.quantity : sum - t.quantity, 0
                           );
                           
-                          // Show all stocks, including those with zero shares
-                          const avgPrice = totalShares > 0 ? stockTransactions.reduce((sum, t) => 
+                          // Calculate average buy price
+                          const avgPrice = stockTransactions.reduce((sum, t) => 
                             t.type === 'buy' ? sum + (t.price * t.quantity) : sum, 0
-                          ) / stockTransactions.reduce((sum, t) => 
+                          ) / (stockTransactions.reduce((sum, t) => 
                             t.type === 'buy' ? sum + t.quantity : sum, 0
-                          ) : 0;
+                          ) || 1);
+
+                          // Calculate realized P&L from sell transactions
+                          const realizedPnl = stockTransactions.reduce((sum, t) => 
+                            t.type === 'sell' ? sum + ((t.price - avgPrice) * t.quantity) : sum, 0
+                          );
 
                           const currentPrice = stockPrices[stock.symbol]?.price || 0;
                           const marketValue = currentPrice * totalShares;
@@ -929,20 +936,38 @@ const StockPortfolioApp: React.FC = () => {
                                 </div>
                               </td>
                               <td className="py-4 px-4">
+                                <div className={`${realizedPnl >= 0 ? 'text-emerald-400' : 'text-red-400'} font-semibold`}>
+                                  {realizedPnl >= 0 ? '+' : '-'}₹{Math.abs(realizedPnl).toFixed(2)}
+                                </div>
+                              </td>
+                              <td className="py-4 px-4">
                                 <div className="flex gap-2">
                                   <button
                                     onClick={() => {
                                       setSelectedStock(stock);
+                                      setTransactionModalType('buy');
                                       setIsTransactionModalOpen(true);
                                     }}
-                                    className="p-2 text-indigo-400 hover:bg-indigo-900/40 rounded-lg transition-colors"
-                                    title={totalShares === 0 ? "Add your first transaction" : "Add transaction"}
+                                    className="px-3 py-1.5 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded font-semibold text-xs transition-colors"
+                                    title="Buy more shares"
                                   >
-                                    {totalShares === 0 ? <Plus className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
+                                    Buy
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedStock(stock);
+                                      setTransactionModalType('sell');
+                                      setIsTransactionModalOpen(true);
+                                    }}
+                                    disabled={totalShares === 0}
+                                    className="px-3 py-1.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded font-semibold text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title={totalShares === 0 ? "No shares to sell" : "Sell shares & book profit"}
+                                  >
+                                    Sell
                                   </button>
                                   <button
                                     onClick={() => handleDeleteClick(stock)}
-                                    className="p-2 text-red-400 hover:bg-red-900/40 rounded-lg transition-colors group"
+                                    className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-900/40 rounded transition-colors group"
                                     title="Delete stock from portfolio"
                                   >
                                     <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
@@ -1398,6 +1423,14 @@ const StockPortfolioApp: React.FC = () => {
       }}
       onAdd={addTransaction}
       stock={selectedStock}
+      initialType={transactionModalType}
+      currentQuantity={
+        selectedStock 
+          ? transactions
+              .filter(t => t.symbol === selectedStock.symbol)
+              .reduce((sum, t) => t.type === 'buy' ? sum + t.quantity : sum - t.quantity, 0)
+          : 0
+      }
     />
 
     {/* Delete Confirmation Dialog */}

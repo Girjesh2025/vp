@@ -8,15 +8,22 @@ interface Props {
   onClose: () => void;
   onAdd: (transaction: Transaction) => void;
   stock: Stock | null;
+  initialType?: 'buy' | 'sell';
+  currentQuantity?: number;
 }
 
-const TransactionModal: React.FC<Props> = ({ isOpen, onClose, onAdd, stock }) => {
-  const [type, setType] = useState<'buy' | 'sell'>('buy');
+const TransactionModal: React.FC<Props> = ({ isOpen, onClose, onAdd, stock, initialType = 'buy', currentQuantity = 0 }) => {
+  const [type, setType] = useState<'buy' | 'sell'>(initialType);
   const [quantity, setQuantity] = useState('');
   const [price, setPrice] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [isLoadingPrice, setIsLoadingPrice] = useState(false);
   const [currentMarketPrice, setCurrentMarketPrice] = useState<number | null>(null);
+
+  // Update type when initialType changes
+  useEffect(() => {
+    setType(initialType);
+  }, [initialType, isOpen]);
 
   // Fetch current market price when modal opens
   useEffect(() => {
@@ -53,6 +60,11 @@ const TransactionModal: React.FC<Props> = ({ isOpen, onClose, onAdd, stock }) =>
     
     if (quantityNum <= 0 || priceNum <= 0) {
       alert('Please enter valid positive numbers for quantity and price.');
+      return;
+    }
+
+    if (type === 'sell' && quantityNum > currentQuantity) {
+      alert(`You cannot sell more shares than you own. Maximum available to sell: ${currentQuantity}`);
       return;
     }
 
@@ -124,9 +136,16 @@ const TransactionModal: React.FC<Props> = ({ isOpen, onClose, onAdd, stock }) =>
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Quantity
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-semibold text-gray-700">
+                Quantity
+              </label>
+              {type === 'sell' && (
+                <span className="text-xs font-semibold text-gray-500">
+                  Available: {currentQuantity}
+                </span>
+              )}
+            </div>
             <input
               type="number"
               placeholder="Number of shares"
@@ -135,6 +154,7 @@ const TransactionModal: React.FC<Props> = ({ isOpen, onClose, onAdd, stock }) =>
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               required
               min="1"
+              max={type === 'sell' ? currentQuantity : undefined}
               step="1"
             />
           </div>
