@@ -14,18 +14,15 @@ const PortfolioChart: React.FC<Props> = ({ stocks, priceData }) => {
   // Handle empty portfolio case
   if (stocks.length === 0) {
     return (
-      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-        <h3 className="text-lg font-bold text-gray-900 mb-6">Portfolio Allocation</h3>
-        <div className="flex items-center justify-center h-48">
-          <div className="text-center">
-            <div className="text-gray-400 mb-2">
-              <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-            </div>
-            <p className="text-gray-500 text-sm">No stocks in portfolio</p>
-            <p className="text-gray-400 text-xs mt-1">Add stocks to see allocation</p>
+      <div className="flex items-center justify-center h-48">
+        <div className="text-center">
+          <div className="text-slate-500 mb-2">
+            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
           </div>
+          <p className="text-slate-400 text-sm">No stocks in portfolio</p>
+          <p className="text-slate-500 text-xs mt-1">Add stocks to see allocation</p>
         </div>
       </div>
     );
@@ -88,13 +85,11 @@ const PortfolioChart: React.FC<Props> = ({ stocks, priceData }) => {
   });
 
   return (
-    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-      <h3 className="text-lg font-bold text-gray-900 mb-6">Portfolio Allocation</h3>
-      
-      <div className="flex items-center justify-between">
+    <div>
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-8">
         {/* Pie Chart */}
-        <div className="relative">
-          <svg width="200" height="200" viewBox="0 0 100 100" className="transform -rotate-90">
+        <div className="relative w-48 h-48 flex-shrink-0">
+          <svg width="100%" height="100%" viewBox="0 0 100 100" className="transform -rotate-90">
             {segments.map((segment, index) => (
               <path
                 key={segment.symbol}
@@ -108,8 +103,8 @@ const PortfolioChart: React.FC<Props> = ({ stocks, priceData }) => {
           {/* Center circle with total value */}
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center">
-              <div className="text-xs text-gray-500 font-medium">Total</div>
-              <div className="text-lg font-bold text-gray-900">
+              <div className="text-xs text-slate-400 font-medium">Total</div>
+              <div className="text-lg font-bold text-white">
                 ₹{(totalValue / 100000).toFixed(1)}L
               </div>
             </div>
@@ -117,15 +112,15 @@ const PortfolioChart: React.FC<Props> = ({ stocks, priceData }) => {
         </div>
 
         {/* Legend */}
-        <div className="flex-1 ml-8">
+        <div className="flex-1 w-full">
           {/* Header with controls */}
           <div className="flex items-center justify-between mb-4">
-            <h4 className="text-sm font-semibold text-gray-700">Holdings</h4>
+            <h4 className="text-sm font-semibold text-slate-300">Holdings</h4>
             <div className="flex items-center space-x-2">
               {allocations.length > 6 && (
                 <button
                   onClick={() => setShowAllStocks(!showAllStocks)}
-                  className="flex items-center space-x-1 px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
+                  className="flex items-center space-x-1 px-3 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-full transition-colors"
                 >
                   <span>{showAllStocks ? 'Show Less' : `Show All (${allocations.length})`}</span>
                   {showAllStocks ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
@@ -137,19 +132,19 @@ const PortfolioChart: React.FC<Props> = ({ stocks, priceData }) => {
           {/* Search bar when showing all stocks */}
           {showAllStocks && allocations.length > 10 && (
             <div className="relative mb-4">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={14} />
               <input
                 type="text"
                 placeholder="Search stocks..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full pl-9 pr-3 py-2 text-sm bg-slate-800/50 border border-slate-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent placeholder-slate-500"
               />
             </div>
           )}
 
           {/* Stock list */}
-          <div className={`space-y-3 ${showAllStocks && allocations.length > 8 ? 'max-h-80 overflow-y-auto pr-2' : ''}`}>
+          <div className={`space-y-3 ${showAllStocks && allocations.length > 8 ? 'max-h-80 overflow-y-auto pr-2 custom-scrollbar' : ''}`}>
             {(() => {
               // Filter allocations based on search term
               const filteredAllocations = showAllStocks 
@@ -163,16 +158,16 @@ const PortfolioChart: React.FC<Props> = ({ stocks, priceData }) => {
                 <>
                   {filteredAllocations.map((allocation, index) => (
                     <div key={allocation.symbol} className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
+                      <div className="flex items-center space-x-3 min-w-0">
                         <div 
                           className="w-3 h-3 rounded-full flex-shrink-0"
                           style={{ backgroundColor: colors[index % colors.length] }}
                         />
                         <div className="min-w-0 flex-1">
-                          <div className="text-sm font-semibold text-gray-900 truncate">
+                          <div className="text-sm font-semibold text-slate-200 truncate">
                             {allocation.symbol}
                           </div>
-                          <div className="text-xs text-gray-500 truncate">
+                          <div className="text-xs text-slate-500 truncate">
                             {allocation.name.length > 25 
                               ? allocation.name.substring(0, 25) + '...' 
                               : allocation.name
@@ -180,11 +175,11 @@ const PortfolioChart: React.FC<Props> = ({ stocks, priceData }) => {
                           </div>
                         </div>
                       </div>
-                      <div className="text-right flex-shrink-0">
-                        <div className="text-sm font-semibold text-gray-900">
+                      <div className="text-right flex-shrink-0 pl-4">
+                        <div className="text-sm font-semibold text-slate-200">
                           {allocation.percentage.toFixed(1)}%
                         </div>
-                        <div className="text-xs text-gray-500">
+                        <div className="text-xs text-slate-400">
                           ₹{(allocation.value / 1000).toFixed(0)}K
                         </div>
                       </div>
@@ -192,21 +187,21 @@ const PortfolioChart: React.FC<Props> = ({ stocks, priceData }) => {
                   ))}
                   
                   {!showAllStocks && allocations.length > 6 && (
-                    <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <div className="flex items-center justify-between pt-3 border-t border-slate-800">
                       <div className="flex items-center space-x-3">
-                        <div className="w-3 h-3 rounded-full bg-gray-300" />
-                        <div className="text-sm text-gray-600">
+                        <div className="w-3 h-3 rounded-full bg-slate-600" />
+                        <div className="text-sm text-slate-400">
                           Others ({allocations.length - 6})
                         </div>
                       </div>
-                      <div className="text-sm text-gray-600">
+                      <div className="text-sm text-slate-400 font-medium">
                         {allocations.slice(6).reduce((sum, a) => sum + a.percentage, 0).toFixed(1)}%
                       </div>
                     </div>
                   )}
 
                   {showAllStocks && searchTerm && filteredAllocations.length === 0 && (
-                    <div className="text-center py-4 text-gray-500 text-sm">
+                    <div className="text-center py-4 text-slate-500 text-sm">
                       No stocks found matching "{searchTerm}"
                     </div>
                   )}
