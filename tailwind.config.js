@@ -9,6 +9,7 @@ export default {
         'float': 'float 3s ease-in-out infinite',
         'glow': 'glow 2s ease-in-out infinite alternate',
         'gradient': 'gradient 15s ease infinite',
+        'spin-slow': 'spin 4s linear infinite',
       },
       keyframes: {
         slideIn: {

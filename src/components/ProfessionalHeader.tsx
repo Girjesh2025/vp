@@ -91,20 +91,35 @@ const ProfessionalHeader: React.FC<ProfessionalHeaderProps> = ({
           {/* Search Bar */}
           <div className="flex-1 max-w-lg mx-8" ref={searchRef}>
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-slate-500" />
+              {/* Aurora Search Input */}
+              <div className="relative w-full rounded-full overflow-hidden p-[3px] shadow-[0_0_20px_rgba(59,130,246,0.15)] hover:shadow-[0_0_25px_rgba(139,92,246,0.25)] transition-shadow duration-500 group">
+                
+                {/* The Rotating Conic Gradient Background */}
+                <div className="absolute top-1/2 left-1/2 w-[200%] h-[1000%] -translate-x-1/2 -translate-y-1/2 animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_0deg,transparent_0_300deg,#60a5fa_360deg)] z-0 opacity-100" />
+                <div className="absolute top-1/2 left-1/2 w-[200%] h-[1000%] -translate-x-1/2 -translate-y-1/2 animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_180deg,transparent_0_300deg,#a78bfa_360deg)] z-0 opacity-100" />
+                
+                {/* Extra blur layer for glowing effect */}
+                <div className="absolute top-1/2 left-1/2 w-[200%] h-[1000%] -translate-x-1/2 -translate-y-1/2 animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_0deg,transparent_0_300deg,#3b82f6_360deg)] z-0 opacity-100 blur-sm" />
+                <div className="absolute top-1/2 left-1/2 w-[200%] h-[1000%] -translate-x-1/2 -translate-y-1/2 animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_180deg,transparent_0_300deg,#8b5cf6_360deg)] z-0 opacity-100 blur-sm" />
+
+                {/* Inner Solid Background that masks the middle, leaving only the border visible */}
+                <div className="relative flex items-center bg-[#0f1520] rounded-full h-full w-full overflow-hidden z-10">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none z-20">
+                    <Search className="h-4 w-4 text-slate-400 group-hover:text-blue-400 transition-colors" />
+                  </div>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={handleSearchChange}
+                    className="block w-full pl-11 pr-4 py-2.5 bg-transparent border-none rounded-full leading-5 placeholder-slate-500 text-white focus:outline-none focus:ring-0 text-sm transition-all relative z-20"
+                    placeholder="Search for stocks and more..."
+                  />
+                </div>
               </div>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={handleSearchChange}
-                className="block w-full pl-10 pr-3 py-2 border border-slate-700/50 rounded-lg leading-5 bg-[#0f1520] placeholder-slate-500 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm transition-all"
-                placeholder="Search stocks to add to portfolio..."
-              />
               
               {/* Search Results Dropdown */}
               {showResults && searchResults.length > 0 && (
-                <div className="absolute z-50 w-full mt-1 bg-[#172030] border border-slate-700 rounded-lg shadow-xl shadow-black/40 max-h-96 overflow-y-auto custom-scrollbar">
+                <div className="absolute z-50 w-full mt-3 bg-[#172030] border border-slate-700 rounded-2xl shadow-2xl shadow-black/50 max-h-96 overflow-y-auto custom-scrollbar">
                   {searchResults.map((stock) => (
                     <div
                       key={stock.symbol}
@@ -130,11 +145,11 @@ const ProfessionalHeader: React.FC<ProfessionalHeaderProps> = ({
               
               {/* No Results Message */}
               {showResults && searchQuery.length >= 2 && searchResults.length === 0 && (
-                <div className="absolute z-50 w-full mt-1 bg-[#172030] border border-slate-700 rounded-lg shadow-xl p-4">
+                <div className="absolute z-50 w-full mt-3 bg-[#172030] border border-slate-700 rounded-2xl shadow-2xl p-6">
                   <div className="text-center text-slate-500">
-                    <Search className="w-8 h-8 mx-auto mb-2 text-slate-600" />
-                    <p className="text-sm">No stocks found for "{searchQuery}"</p>
-                    <p className="text-xs text-slate-600 mt-1">Try searching with stock symbol or company name</p>
+                    <Search className="w-8 h-8 mx-auto mb-3 text-slate-600" />
+                    <p className="text-sm font-medium text-slate-300">No stocks found for "{searchQuery}"</p>
+                    <p className="text-xs text-slate-500 mt-1">Try searching with stock symbol or company name</p>
                   </div>
                 </div>
               )}
