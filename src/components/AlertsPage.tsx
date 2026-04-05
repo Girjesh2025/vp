@@ -70,12 +70,27 @@ const AlertsPage: React.FC<AlertsPageProps> = ({
   const [alertHistory, setAlertHistory] = useState<Array<PriceAlert & { triggeredAt: string; currentPrice: number }>>([]);
   const [editingAlert, setEditingAlert] = useState<string | null>(null);
 
-  // Load alert history from localStorage
   useEffect(() => {
-    const savedHistory = localStorage.getItem('alertHistory');
-    if (savedHistory) {
-      setAlertHistory(JSON.parse(savedHistory));
-    }
+    const handleStorageChange = () => {
+      const savedHistory = localStorage.getItem('alertHistory');
+      if (savedHistory) {
+        setAlertHistory(JSON.parse(savedHistory));
+      }
+    };
+    
+    // Initial load
+    handleStorageChange();
+    
+    // Listen for changes from other tabs/windows
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Custom event for same-window updates
+    const interval = setInterval(handleStorageChange, 2000);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+    };
   }, []);
 
   // Save notification settings when they change
@@ -526,27 +541,38 @@ const AlertsPage: React.FC<AlertsPageProps> = ({
                         <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-emerald-500/10 transition-colors" />
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
                           <div className="flex items-start sm:items-center gap-4">
-                            <div className="p-2.5 bg-emerald-500/10 rounded-xl flex-shrink-0">
-                              <CheckCircle className="w-5 h-5 text-emerald-400" />
+                            <div className="p-3 bg-emerald-500/10 rounded-xl flex-shrink-0 relative">
+                              <div className="absolute inset-0 bg-emerald-500/20 blur-md rounded-full"></div>
+                              <CheckCircle className="w-6 h-6 text-emerald-400 relative z-10" />
                             </div>
                             <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="font-bold text-white text-lg">
+                              <div className="flex items-center gap-2 mb-1.5">
+                                <span className="font-bold text-white text-lg tracking-tight">
                                   {stockInfo?.name || alert.symbol}
                                 </span>
-                                <span className="text-xs font-bold text-slate-500 bg-slate-800 px-2 py-0.5 rounded">
+                                <span className="text-[10px] font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded uppercase tracking-wider">
                                   {alert.symbol}
                                 </span>
                               </div>
-                              <div className="text-sm text-slate-400 flex items-center gap-2">
-                                <span>Alert triggered: Price went {alert.condition} <span className="font-bold text-slate-200">₹{alert.targetPrice.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span></span>
-                                <span className="w-1 h-1 rounded-full bg-slate-600" />
-                                <span>Actual: <span className="font-bold text-blue-400">₹{alert.currentPrice.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span></span>
+                              <div className="text-sm text-slate-400 flex items-center gap-2.5">
+                                <span className="flex items-center gap-1.5">
+                                  <span className="text-slate-500">Alert triggered:</span>
+                                  <span>Price went</span>
+                                  <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider ${alert.condition === 'above' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>{alert.condition}</span>
+                                  <span className="font-bold text-slate-200">₹{alert.targetPrice.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
+                                </span>
+                                <span className="w-1 h-1 rounded-full bg-slate-700" />
+                                <span className="flex items-center gap-1.5">
+                                  <span className="text-slate-500">Actual:</span>
+                                  <span className="font-bold text-blue-400">₹{alert.currentPrice.toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
+                                </span>
                               </div>
                             </div>
                           </div>
-                          <div className="text-xs font-bold text-slate-500 sm:self-center self-end bg-slate-800/50 px-3 py-1.5 rounded-lg border border-slate-700">
-                            {new Date(alert.triggeredAt).toLocaleString()}
+                          <div className="text-xs font-bold text-slate-400 sm:self-center self-end bg-[#0f1520] px-3 py-2 rounded-lg border border-slate-800/60 shadow-inner">
+                            {new Date(alert.triggeredAt).toLocaleString(undefined, {
+                              month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                            })}
                           </div>
                         </div>
                       </div>
