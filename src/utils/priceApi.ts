@@ -323,8 +323,8 @@ export const fetchStockPrice = async (symbol: string): Promise<PriceData | null>
       const yahooFallback = await fetchYahooViaProxy(symbol);
       if (yahooFallback) return yahooFallback;
 
-      console.warn(`⚠️ [DEBUG] Using deterministic mock price for ${symbol}`);
-      return getMockPrice(symbol);
+      console.warn(`❌ [DEBUG] Unable to fetch authentic price for global symbol ${symbol}`);
+      return null;
     }
 
     // For regular Indian / US stocks, use EODHD symbol conversion
@@ -357,18 +357,18 @@ export const fetchStockPrice = async (symbol: string): Promise<PriceData | null>
       } catch (_) {}
     }
 
-    // Local proxy loop exhausted without returning — try Yahoo proxy then deterministic mock
+    // Local proxy loop exhausted without returning — try Yahoo proxy directly
     console.warn(`⚠️ [DEBUG] All proxy candidates failed for ${symbol}, trying Yahoo fallback`);
     const yahooFallback = await fetchYahooViaProxy(symbol);
     if (yahooFallback) return yahooFallback;
 
-    // Last resort: deterministic mock (seeded by symbol — consistent across renders)
-    console.warn(`⚠️ [DEBUG] Using deterministic mock price for ${symbol}`);
-    return getMockPrice(symbol);
+    // Fail gracefully instead of showing fake numbers
+    console.warn(`❌ [DEBUG] Could not fetch authentic data for ${symbol}`);
+    return null;
   } catch (error) {
-    console.warn(`❌ [DEBUG] Failed to fetch real price for ${symbol}, using mock data:`, error);
+    console.warn(`❌ [DEBUG] Failed to fetch real price for ${symbol}:`, error);
     const yahooFallback = await fetchYahooViaProxy(symbol);
     if (yahooFallback) return yahooFallback;
-    return getMockPrice(symbol);
+    return null;
   }
 };

@@ -184,10 +184,9 @@ app.get('/api/stock/:symbol', async (req, res) => {
     }
   }
   
-  // If all APIs fail, use mock data
-  console.log(`⚠️ All APIs failed for ${symbol}, using mock data`);
-  const mockData = generateMockData(symbol);
-  res.json(mockData);
+  // If all APIs fail, DO NOT use mock data. Return error to ensure authenticity.
+  console.log(`⚠️ All APIs failed for ${symbol}, returning 500 to ensure authenticity`);
+  return res.status(500).json({ error: 'Failed to fetch authentic market data from all sources' });
 });
 
 // Seeded mock monthly data for sector indices (used when Yahoo is unavailable)

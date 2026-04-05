@@ -1116,115 +1116,83 @@ const StockPortfolioApp: React.FC = () => {
                 />
               )}
               {activeTab === 'settings' && (
-                <div className="space-y-6">
+                <div className="space-y-6 max-w-4xl mx-auto">
                   <div className="flex justify-between items-center">
-                    <h2 className="text-2xl font-bold text-slate-200">Settings</h2>
+                    <h2 className="text-2xl font-bold text-white">Platform Settings</h2>
                   </div>
 
                   {/* Profile Settings */}
-                  <div className="bg-[#172030] rounded-2xl p-6 shadow-lg">
-                    <h3 className="text-xl font-bold text-slate-200 mb-6">Profile Settings</h3>
+                  <div className="bg-[#131b26] border border-slate-800 rounded-2xl p-6 shadow-lg">
+                    <h3 className="text-lg font-bold text-white mb-6">Profile Settings</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
-                        <label className="block text-sm font-semibold text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-400 mb-2">
                           Full Name
                         </label>
                         <input
                           type="text"
-                          defaultValue="John Doe"
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          defaultValue="Trader Pro"
+                          className="w-full px-4 py-3 bg-[#172030] border border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all outline-none"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-400 mb-2">
                           Email
                         </label>
                         <input
                           type="email"
-                          defaultValue="john.doe@example.com"
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          defaultValue="trader@paperprofit.app"
+                          className="w-full px-4 py-3 bg-[#172030] border border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all outline-none"
                         />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-semibold text-slate-300 mb-2">
-                          Phone
-                        </label>
-                        <input
-                          type="tel"
-                          defaultValue="+91 98765 43210"
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-semibold text-slate-300 mb-2">
-                          Investment Experience
-                        </label>
-                        <select className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                          <option>Beginner (0-2 years)</option>
-                          <option>Intermediate (2-5 years)</option>
-                          <option selected>Advanced (5+ years)</option>
-                        </select>
                       </div>
                     </div>
                   </div>
 
                   {/* Portfolio Preferences */}
-                  <div className="bg-[#172030] rounded-2xl p-6 shadow-lg">
-                    <h3 className="text-xl font-bold text-slate-200 mb-6">Portfolio Preferences</h3>
+                  <div className="bg-[#131b26] border border-slate-800 rounded-2xl p-6 shadow-lg">
+                    <h3 className="text-lg font-bold text-white mb-6">Trading Preferences</h3>
                     <div className="space-y-6">
                       <div>
-                        <label className="block text-sm font-semibold text-slate-300 mb-2">
+                        <label className="block text-sm font-semibold text-slate-400 mb-2">
                           Default Currency
                         </label>
-                        <select className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                          <option selected>INR (₹)</option>
-                          <option>USD ($)</option>
-                          <option>EUR (€)</option>
+                        <select className="w-full px-4 py-3 bg-[#172030] border border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all outline-none appearance-none">
+                          <option selected>INR (₹) - Indian Rupee</option>
+                          <option>USD ($) - US Dollar</option>
+                          <option>EUR (€) - Euro</option>
                         </select>
                       </div>
                       
                       <div>
-                        <label className="block text-sm font-semibold text-slate-300 mb-2">
-                          Risk Tolerance
+                        <label className="block text-sm font-semibold text-slate-400 mb-3">
+                          Risk Tolerance Profile
                         </label>
-                        <div className="flex gap-2">
-                          <button className="flex-1 py-3 px-4 rounded-lg font-semibold bg-gray-100 text-slate-300 hover:bg-gray-200 transition-colors">
+                        <div className="flex gap-3">
+                          <button className="flex-1 py-3 px-4 rounded-xl font-semibold bg-[#172030] border border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-300 transition-colors">
                             Conservative
                           </button>
-                          <button className="flex-1 py-3 px-4 rounded-lg font-semibold bg-indigo-600 text-white transition-colors">
+                          <button className="flex-1 py-3 px-4 rounded-xl font-semibold bg-blue-600/20 border border-blue-500/30 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.15)] transition-colors">
                             Moderate
                           </button>
-                          <button className="flex-1 py-3 px-4 rounded-lg font-semibold bg-gray-100 text-slate-300 hover:bg-gray-200 transition-colors">
+                          <button className="flex-1 py-3 px-4 rounded-xl font-semibold bg-[#172030] border border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-300 transition-colors">
                             Aggressive
                           </button>
                         </div>
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm font-semibold text-slate-300 mb-2">
-                          Investment Goal
-                        </label>
-                        <select className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                          <option>Wealth Preservation</option>
-                          <option selected>Long-term Growth</option>
-                          <option>Income Generation</option>
-                          <option>Retirement Planning</option>
-                        </select>
                       </div>
                     </div>
                   </div>
 
                   {/* API & Data Settings */}
-                  <div className="bg-[#172030] rounded-2xl p-6 shadow-lg">
-                    <h3 className="text-xl font-bold text-slate-200 mb-6">API & Data Settings</h3>
+                  <div className="bg-[#131b26] border border-slate-800 rounded-2xl p-6 shadow-lg">
+                    <h3 className="text-lg font-bold text-white mb-6">Data & API Settings</h3>
                     <div className="space-y-6">
                       <div className="flex items-center justify-between">
                         <div>
                           <label className="block text-sm font-semibold text-slate-300 mb-1">
-                            Auto-refresh Stock Prices
+                            Auto-refresh Market Data
                           </label>
                           <p className="text-sm text-slate-500">
-                            Automatically update stock prices every 5 minutes to conserve API usage
+                            Automatically update stock prices in the background to keep portfolio live
                           </p>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
@@ -1234,179 +1202,39 @@ const StockPortfolioApp: React.FC = () => {
                             onChange={(e) => setAutoRefreshEnabled(e.target.checked)}
                             className="sr-only peer"
                           />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#172030] after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                          <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
                         </label>
                       </div>
                       
-                      <div className="flex items-center justify-between p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                        <div className="flex items-center">
-                          <div className="w-2 h-2 bg-yellow-500 rounded-full mr-3"></div>
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-amber-500/10 rounded-xl border border-amber-500/20 gap-4">
+                        <div className="flex items-start sm:items-center">
+                          <div className="w-2 h-2 bg-amber-500 rounded-full mr-3 mt-1.5 sm:mt-0 shadow-[0_0_8px_rgba(245,158,11,0.6)]"></div>
                           <div>
-                            <p className="text-sm font-semibold text-yellow-800">API Usage Conservation</p>
-                            <p className="text-xs text-yellow-700">
-                              Auto-refresh is set to 5 minutes to prevent API quota exhaustion
+                            <p className="text-sm font-bold text-amber-400">API Quota Protection Active</p>
+                            <p className="text-xs text-amber-500/70 mt-0.5">
+                              Auto-refresh is throttled to 5-minute intervals to prevent Yahoo Finance rate limits.
                             </p>
                           </div>
                         </div>
                         <button
                           onClick={updatePrices}
                           disabled={isLoading}
-                          className="px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          className="px-5 py-2.5 bg-[#172030] border border-slate-700 text-white text-sm font-bold rounded-xl hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
                         >
-                          {isLoading ? 'Updating...' : 'Refresh Now'}
+                          {isLoading ? 'Fetching...' : 'Force Refresh'}
                         </button>
                       </div>
-                      
-                      {/* API Usage Tracker */}
-                      <div className="p-4 bg-indigo-900/20 rounded-lg border border-indigo-800/30">
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="text-sm font-semibold text-blue-800">Daily API Usage</h4>
-                          <span className="text-sm font-bold text-blue-900">
-                            {apiCallCount} / {dailyApiLimit}
-                          </span>
-                        </div>
-                        <div className="w-full bg-blue-200 rounded-full h-2">
-                          <div 
-                            className={`h-2 rounded-full transition-all duration-300 ${
-                              apiCallCount / dailyApiLimit > 0.8 
-                                ? 'bg-red-900/200' 
-                                : apiCallCount / dailyApiLimit > 0.6 
-                                ? 'bg-yellow-500' 
-                                : 'bg-indigo-900/200'
-                            }`}
-                            style={{ width: `${Math.min((apiCallCount / dailyApiLimit) * 100, 100)}%` }}
-                          ></div>
-                        </div>
-                        <p className="text-xs text-indigo-400 mt-2">
-                          {apiCallCount >= dailyApiLimit * 0.8 
-                            ? '⚠️ Approaching daily limit' 
-                            : apiCallCount >= dailyApiLimit * 0.6 
-                            ? '⚡ Moderate usage' 
-                            : '✅ Usage within limits'
-                          }
-                        </p>
-                      </div>
                     </div>
                   </div>
-
-                  {/* Notifications */}
-                  <div className="bg-[#172030] rounded-2xl p-6 shadow-lg">
-                    <h3 className="text-xl font-bold text-slate-200 mb-6">Notifications</h3>
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-semibold text-slate-200">Price Alerts</div>
-                          <div className="text-sm text-slate-400">Get notified when stock prices change significantly</div>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input 
-                            type="checkbox" 
-                            checked={priceAlertsEnabled}
-                            onChange={(e) => setPriceAlertsEnabled(e.target.checked)}
-                            className="sr-only peer" 
-                          />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#172030] after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                        </label>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-semibold text-slate-200">Portfolio Updates</div>
-                          <div className="text-sm text-slate-400">Daily portfolio performance summaries</div>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input 
-                            type="checkbox" 
-                            checked={portfolioUpdatesEnabled}
-                            onChange={(e) => setPortfolioUpdatesEnabled(e.target.checked)}
-                            className="sr-only peer" 
-                          />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#172030] after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                        </label>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <div className="font-semibold text-slate-200">Market News</div>
-                          <div className="text-sm text-slate-400">Breaking news and market updates</div>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input 
-                            type="checkbox" 
-                            checked={marketNewsEnabled}
-                            onChange={(e) => setMarketNewsEnabled(e.target.checked)}
-                            className="sr-only peer" 
-                          />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#172030] after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Market News Panel */}
-                  <MarketNewsPanel 
-                    isEnabled={marketNewsEnabled}
-                    onToggle={setMarketNewsEnabled}
-                  />
-
-                  {/* Security */}
-                  <div className="bg-[#172030] rounded-2xl p-6 shadow-lg">
-                    <h3 className="text-xl font-bold text-slate-200 mb-6">Security</h3>
-                    <div className="space-y-4">
-                      <button className="w-full text-left p-4 border border-gray-300 rounded-lg hover:bg-[#0f1520] transition-colors">
-                      <div className="font-semibold text-slate-200">Change Password</div>
-                      <div className="text-sm text-slate-400">Update your account password</div>
-                    </button>
-                    
-                    <button className="w-full text-left p-4 border border-gray-300 rounded-lg hover:bg-[#0f1520] transition-colors">
-                      <div className="font-semibold text-slate-200">Two-Factor Authentication</div>
-                      <div className="text-sm text-slate-400">Add an extra layer of security</div>
-                    </button>
-                    
-                    <button className="w-full text-left p-4 border border-gray-300 rounded-lg hover:bg-[#0f1520] transition-colors">
-                      <div className="font-semibold text-slate-200">Login History</div>
-                      <div className="text-sm text-slate-400">View recent account activity</div>
+                  
+                  {/* Save Button */}
+                  <div className="flex justify-end pt-4">
+                    <button className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold shadow-[0_0_20px_rgba(37,99,235,0.3)] transition-all">
+                      Save Changes
                     </button>
                   </div>
                 </div>
-
-                {/* Performance Testing */}
-                <div className="bg-[#172030] rounded-2xl p-6 shadow-lg">
-                  <h3 className="text-xl font-bold text-slate-200 mb-6">Search Performance</h3>
-                  <div className="space-y-4">
-                    <div className="p-4 bg-indigo-900/20 rounded-lg">
-                      <div className="font-semibold text-blue-800 mb-2">Database Statistics</div>
-                      <div className="text-sm text-indigo-400">
-                        Total stocks: {getSearchPerformanceStats().totalStocks} | 
-                        Cache size: {getSearchPerformanceStats().cacheStats.size}/{getSearchPerformanceStats().cacheStats.maxSize}
-                      </div>
-                    </div>
-                    
-                    <button 
-                      onClick={() => {
-                        console.log('🚀 Running search performance test...');
-                        runFullPerformanceTest();
-                      }}
-                      className="w-full p-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors"
-                    >
-                      <div className="font-semibold">Run Performance Test</div>
-                      <div className="text-sm opacity-90">Test optimized search functions (check console)</div>
-                    </button>
-                    
-                    <div className="text-xs text-slate-500 mt-2">
-                      Performance test results will be displayed in the browser console (F12 → Console)
-                    </div>
-                  </div>
-                </div>
-
-                {/* Save Button */}
-                <div className="flex justify-end">
-                  <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors">
-                    Save Changes
-                  </button>
-                </div>
-              </div>
-            )}
+              )}
           </div>
         </div>
       </div>
