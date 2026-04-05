@@ -139,11 +139,11 @@ const AlertsPage: React.FC<AlertsPageProps> = ({
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'triggered':
-        return <CheckCircle className="w-5 h-5 text-green-500" />;
+        return <CheckCircle className="w-5 h-5 text-emerald-400" />;
       case 'waiting':
-        return <Clock className="w-5 h-5 text-yellow-500" />;
+        return <Clock className="w-5 h-5 text-amber-400" />;
       default:
-        return <XCircle className="w-5 h-5 text-gray-400" />;
+        return <XCircle className="w-5 h-5 text-slate-500" />;
     }
   };
 
@@ -230,18 +230,44 @@ const AlertsPage: React.FC<AlertsPageProps> = ({
                     const currentPrice = priceData[alert.symbol]?.price;
                     const status = getAlertStatus(alert);
                     
+                    // Calculate progress to target
+                    let progress = 0;
+                    if (currentPrice) {
+                      // We need a baseline to calculate progress. Let's use 20% below/above target as 0% progress, just for visualization
+                      const baseline = alert.condition === 'above' ? alert.targetPrice * 0.8 : alert.targetPrice * 1.2;
+                      const range = Math.abs(alert.targetPrice - baseline);
+                      const currentDistance = Math.abs(currentPrice - baseline);
+                      progress = Math.min(100, Math.max(0, (currentDistance / range) * 100));
+                      
+                      // If it's already triggered, progress is 100%
+                      if ((alert.condition === 'above' && currentPrice >= alert.targetPrice) || 
+                          (alert.condition === 'below' && currentPrice <= alert.targetPrice)) {
+                        progress = 100;
+                      }
+                    }
+                    
                     return (
                       <div
                         key={alert.id}
-                        className={`p-5 border rounded-xl transition-all ${
+                        className={`p-5 border rounded-xl transition-all relative overflow-hidden group ${
                           alert.isActive
                             ? status === 'triggered'
                               ? 'border-emerald-500/30 bg-emerald-500/5'
-                              : 'border-slate-700 bg-[#131b26] hover:border-slate-600'
+                              : 'border-slate-700 bg-[#131b26] hover:border-slate-600 hover:shadow-lg hover:shadow-blue-500/5'
                             : 'border-slate-800 bg-[#0f1520] opacity-60'
                         }`}
                       >
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        {/* Progress Bar Background */}
+                        {alert.isActive && status !== 'triggered' && currentPrice && (
+                          <div className="absolute bottom-0 left-0 h-1 bg-slate-800 w-full">
+                            <div 
+                              className={`h-full transition-all duration-1000 ${alert.condition === 'above' ? 'bg-emerald-500/50' : 'bg-red-500/50'}`}
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                        )}
+
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
                           <div className="flex items-start sm:items-center gap-4">
                             <div className={`p-2.5 rounded-xl flex-shrink-0 ${
                                 status === 'triggered' ? 'bg-emerald-500/20' : 'bg-slate-800'
@@ -495,9 +521,10 @@ const AlertsPage: React.FC<AlertsPageProps> = ({
                     return (
                       <div
                         key={`${alert.id}-${index}`}
-                        className="p-5 border border-slate-800 bg-[#131b26] rounded-xl"
+                        className="p-5 border border-slate-800 bg-[#131b26] rounded-xl relative overflow-hidden group hover:border-slate-700 transition-colors"
                       >
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-emerald-500/10 transition-colors" />
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
                           <div className="flex items-start sm:items-center gap-4">
                             <div className="p-2.5 bg-emerald-500/10 rounded-xl flex-shrink-0">
                               <CheckCircle className="w-5 h-5 text-emerald-400" />
