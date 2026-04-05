@@ -16,6 +16,7 @@ import ToolsDashboard from './components/ToolsDashboard';
 import MarketAnalysis from './components/MarketAnalysis';
 import MarketAnalysisTools from './components/MarketAnalysisTools';
 import StockRecommendations from './components/StockRecommendations';
+import HelpAndSupport from './components/HelpAndSupport';
 import { fetchStockPrice } from './utils/priceApi';
 import { 
   getStockBySymbol,
@@ -1234,6 +1235,9 @@ const StockPortfolioApp: React.FC = () => {
                     </button>
                   </div>
                 </div>
+              )}
+              {activeTab === 'help' && (
+                <HelpAndSupport />
               )}
           </div>
         </div>

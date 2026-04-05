@@ -60,11 +60,6 @@ const ProfessionalSidebar: React.FC<ProfessionalSidebarProps> = ({
       console.log('Logout clicked');
       return;
     }
-    if (itemId === 'help') {
-      // Handle help logic here
-      console.log('Help clicked');
-      return;
-    }
     onTabChange(itemId);
   };
 
