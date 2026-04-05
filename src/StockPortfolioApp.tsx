@@ -100,9 +100,10 @@ const StockPortfolioApp: React.FC = () => {
   const [priceAlertsEnabled, setPriceAlertsEnabled] = useState(true);
   const [portfolioUpdatesEnabled, setPortfolioUpdatesEnabled] = useState(true);
   const [marketNewsEnabled, setMarketNewsEnabled] = useState(false);
-  const [priceAlerts, setPriceAlerts] = useState<PriceAlert[]>([]);
+  const [priceAlerts, setPriceAlerts] = useState<PriceAlert[]>(() => { const saved = localStorage.getItem("priceAlerts"); return saved ? JSON.parse(saved) : []; });
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(getNotificationSettings());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  useEffect(() => { localStorage.setItem("priceAlerts", JSON.stringify(priceAlerts)); }, [priceAlerts]);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{isOpen: boolean, stock: Stock | null}>({isOpen: false, stock: null});
 
   const memoPortfolioSymbols = useMemo(() => [...new Set(portfolioStocks.map(stock => stock.symbol))], [portfolioStocks]);
@@ -328,9 +329,9 @@ const StockPortfolioApp: React.FC = () => {
       Object.entries(stockPrices).forEach(([symbol, priceData]) => {
         currentPrices[symbol] = priceData.price;
       });
-      checkPriceAlerts(priceAlerts, currentPrices);
+      let changed=false;const updated=priceAlerts.map(a=>{if(!a.isActive)return a;const cp=stockPrices[a.symbol]?.price;if(!cp)return a;const sa=(a.condition==="above"&&cp>=a.targetPrice)||(a.condition==="below"&&cp<=a.targetPrice);if(sa){changed=true;checkPriceAlerts([a],{[a.symbol]:cp});const sh=localStorage.getItem("alertHistory");const h=sh?JSON.parse(sh):[];h.unshift({...a,triggeredAt:new Date().toISOString(),currentPrice:cp});localStorage.setItem("alertHistory",JSON.stringify(h.slice(0,50)));return{...a,isActive:false};}return a;});if(changed)setPriceAlerts(updated);
     }
-  }, [stockPrices, priceAlertsEnabled, priceAlerts]);
+  }, [stockPrices, priceAlertsEnabled]);
 
   // Send portfolio update notifications
   useEffect(() => {
