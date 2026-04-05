@@ -10,35 +10,6 @@ const ToolsDashboard: React.FC = () => {
 
   const tools = [
     {
-      id: 'sector-rotation',
-      title: 'Sector Rotation Intelligence',
-      description: '12-month historical analysis with AI signals, sector rankings, monthly heatmaps, and rotation opportunities.',
-      icon: <PieChart className="w-5 h-5 text-indigo-400" />,
-      iconBg: 'bg-indigo-500/10',
-      badge: { text: 'Featured', color: 'bg-rose-500/20 text-rose-400' },
-      tag: { text: 'AI POWERED', color: 'bg-indigo-500/20 text-indigo-400' },
-      link: '/app/tools/sector-rotation'
-    },
-    {
-      id: 'global-market',
-      title: 'Global Market',
-      description: 'Monitor major international indices, global trends, and cross-market sentiment with live world market insights.',
-      icon: <Globe className="w-5 h-5 text-blue-400" />,
-      iconBg: 'bg-blue-500/10',
-      badge: { text: 'New', color: 'bg-rose-500/20 text-rose-400' },
-      tag: { text: 'LIVE', color: 'bg-blue-500/20 text-blue-400' },
-      link: '/app/tools/global-market'
-    },
-    {
-      id: 'sectoral-flow',
-      title: 'Sectoral Flow',
-      description: 'Track relative strength and institutional money flow across market sectors with real-time heatmaps.',
-      icon: <BarChart2 className="w-5 h-5 text-amber-500" />,
-      iconBg: 'bg-amber-500/10',
-      tag: { text: 'LIVE', color: 'bg-indigo-500/20 text-indigo-400' },
-      link: '/app/tools/sectoral-flow'
-    },
-    {
       id: 'precision-sizer',
       title: 'Precision Sizer',
       description: 'Calculate optimal position sizes with dynamic risk parameters and real-time volatility adjustments.',
@@ -94,9 +65,9 @@ const ToolsDashboard: React.FC = () => {
               <div className={`w-10 h-10 rounded-xl ${tool.iconBg} flex items-center justify-center`}>
                 {tool.icon}
               </div>
-              {tool.badge && (
-                <div className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${tool.badge.color}`}>
-                  {tool.badge.text}
+              {'badge' in tool && (tool as any).badge && (
+                <div className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${(tool as any).badge.color}`}>
+                  {String((tool as any).badge.text)}
                 </div>
               )}
             </div>

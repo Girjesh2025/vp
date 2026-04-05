@@ -14,6 +14,7 @@ import AlertsPage from './components/AlertsPage';
 import AITradingSuggestions from './components/AITradingSuggestions';
 import ToolsDashboard from './components/ToolsDashboard';
 import MarketAnalysis from './components/MarketAnalysis';
+import MarketAnalysisTools from './components/MarketAnalysisTools';
 import StockRecommendations from './components/StockRecommendations';
 import { fetchStockPrice } from './utils/priceApi';
 import { 
@@ -1088,9 +1089,11 @@ const StockPortfolioApp: React.FC = () => {
               portfolioSymbols={allPortfolioSymbols.length > 0 ? allPortfolioSymbols : memoPortfolioSymbols}
             />
           )}
-          {activeTab === 'tools' && <ToolsDashboard />}
-          {activeTab === 'market-analysis' && (
-            <MarketAnalysis />
+          {activeTab === 'tools' && (
+            <MarketAnalysisTools />
+          )}
+          {activeTab === 'trading-tools' && (
+            <ToolsDashboard />
           )}
               {activeTab === 'stock-recommendations' && <StockRecommendations />}
               {activeTab === 'alerts' && (

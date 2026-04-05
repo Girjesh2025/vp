@@ -61,8 +61,8 @@ const Login: React.FC = () => {
             background:'linear-gradient(135deg, #10b981, #059669)',
             borderRadius:'18px',
             boxShadow:'0 0 30px rgba(16,185,129,0.5)',
-            marginBottom:'1rem', display:'block', margin:'0 auto 1rem' }}>
-            <TrendingUp size={30} color="white" style={{ margin:'15px auto', display:'block' }} />
+            margin:'0 auto 1rem' }}>
+            <TrendingUp size={30} color="white" />
           </div>
 
           <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:'4px', marginBottom:'0.75rem' }}>

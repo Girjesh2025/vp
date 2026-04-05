@@ -390,7 +390,7 @@ const AlertsPage: React.FC<AlertsPageProps> = ({
                         }}
                         className="sr-only peer"
                       />
-                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-900 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+                      <div className="w-11 h-6 bg-slate-800 border border-slate-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-900 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
                     </label>
                   </div>
 
@@ -423,7 +423,7 @@ const AlertsPage: React.FC<AlertsPageProps> = ({
                         }}
                         className="sr-only peer"
                       />
-                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-900 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                      <div className="w-11 h-6 bg-slate-800 border border-slate-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-900 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
                     </label>
                   </div>
 
@@ -456,7 +456,7 @@ const AlertsPage: React.FC<AlertsPageProps> = ({
                         }}
                         className="sr-only peer"
                       />
-                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-900 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-500"></div>
+                      <div className="w-11 h-6 bg-slate-800 border border-slate-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-900 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-500"></div>
                     </label>
                   </div>
 
@@ -484,7 +484,7 @@ const AlertsPage: React.FC<AlertsPageProps> = ({
                         })}
                         className="sr-only peer"
                       />
-                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-amber-900 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                      <div className="w-11 h-6 bg-slate-800 border border-slate-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-amber-900 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
                     </label>
                   </div>
                 </div>
@@ -492,26 +492,29 @@ const AlertsPage: React.FC<AlertsPageProps> = ({
 
               <div>
                 <h3 className="text-lg font-bold text-white mb-4">Update Frequency</h3>
-                <div className="p-5 border border-slate-800 bg-[#131b26] rounded-xl">
-                  <label className="block text-sm font-bold text-slate-300 mb-4">
+                <div className="p-6 border border-slate-800 bg-[#131b26] rounded-xl relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+                  <label className="block text-sm font-bold text-slate-300 mb-6 relative z-10">
                     Check for updates every <span className="text-blue-400">{notificationSettings.updateFrequency} minutes</span>
                   </label>
-                  <input
-                    type="range"
-                    min="5"
-                    max="120"
-                    step="5"
-                    value={notificationSettings.updateFrequency}
-                    onChange={(e) => setNotificationSettings({
-                      ...notificationSettings,
-                      updateFrequency: parseInt(e.target.value)
-                    })}
-                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer slider accent-blue-500"
-                  />
-                  <div className="flex justify-between text-xs font-bold text-slate-500 mt-2">
-                    <span>5 min</span>
-                    <span>60 min</span>
-                    <span>120 min</span>
+                  <div className="relative z-10">
+                    <input
+                      type="range"
+                      min="5"
+                      max="120"
+                      step="5"
+                      value={notificationSettings.updateFrequency}
+                      onChange={(e) => setNotificationSettings({
+                        ...notificationSettings,
+                        updateFrequency: parseInt(e.target.value)
+                      })}
+                      className="w-full h-2 bg-slate-800 border border-slate-700 rounded-lg appearance-none cursor-pointer slider accent-blue-500"
+                    />
+                    <div className="flex justify-between text-xs font-bold text-slate-500 mt-3">
+                      <span className="hover:text-slate-300 cursor-pointer transition-colors" onClick={() => setNotificationSettings({...notificationSettings, updateFrequency: 5})}>5 min</span>
+                      <span className="hover:text-slate-300 cursor-pointer transition-colors" onClick={() => setNotificationSettings({...notificationSettings, updateFrequency: 60})}>60 min</span>
+                      <span className="hover:text-slate-300 cursor-pointer transition-colors" onClick={() => setNotificationSettings({...notificationSettings, updateFrequency: 120})}>120 min</span>
+                    </div>
                   </div>
                 </div>
               </div>
