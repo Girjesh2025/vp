@@ -6,6 +6,7 @@ import { ArrowLeft, Loader2, BarChart3, LayoutGrid, TrendingUp, TrendingDown, Ac
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from 'recharts';
 // Import at the top
 import { fetchStockPrice } from '../../utils/priceApi';
+import { LOGO_MAP } from '../../utils/logoMap';
 
 const PROXY_URLS = [
   'https://api.allorigins.win/get?url=',
@@ -660,20 +661,25 @@ const SectoralFlow: React.FC = () => {
                                       <div className="flex-1 min-w-0 font-bold text-slate-300 group-hover/row:text-white transition-colors flex items-center gap-3">
                                         {/* Stock Logo Avatar */}
                                         <div className={`w-8 h-8 shrink-0 rounded-full bg-[#ffffff] flex items-center justify-center shadow-md ring-1 ring-white/10 group-hover/row:ring-white/30 transition-all overflow-hidden`}>
-                                          <img 
-                                            src={`https://financialmodelingprep.com/image-stock/${stockSym}.NS.png`} 
-                                            alt={stockSym}
-                                            className="w-full h-full object-cover p-1.5"
-                                            onError={(e) => {
-                                              // Fallback to gradient initials if logo fails to load
-                                              e.currentTarget.style.display = 'none';
-                                              const parent = e.currentTarget.parentElement;
-                                              if (parent) {
-                                                parent.className = `w-8 h-8 shrink-0 rounded-full bg-gradient-to-br ${getLogoGradient(stockSym)} flex items-center justify-center text-[11px] text-white font-black shadow-md ring-1 ring-white/10 group-hover/row:ring-white/30 transition-all`;
-                                                parent.innerText = stockSym.substring(0, 2);
-                                              }
-                                            }}
-                                          />
+                                          {LOGO_MAP[stockSym] ? (
+                                            <img 
+                                              src={`https://assets-netstorage.groww.in/stock-assets/logos/GSTK${LOGO_MAP[stockSym]}.png`} 
+                                              alt={stockSym}
+                                              className="w-full h-full object-cover p-1.5"
+                                              onError={(e) => {
+                                                e.currentTarget.style.display = 'none';
+                                                const parent = e.currentTarget.parentElement;
+                                                if (parent) {
+                                                  parent.className = `w-8 h-8 shrink-0 rounded-full bg-gradient-to-br ${getLogoGradient(stockSym)} flex items-center justify-center text-[11px] text-white font-black shadow-md ring-1 ring-white/10 group-hover/row:ring-white/30 transition-all`;
+                                                  parent.innerText = stockSym.substring(0, 2);
+                                                }
+                                              }}
+                                            />
+                                          ) : (
+                                            <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br ${getLogoGradient(stockSym)} text-[11px] text-white font-black`}>
+                                              {stockSym.substring(0, 2)}
+                                            </div>
+                                          )}
                                         </div>
                                         <div className="flex flex-col min-w-0">
                                           <div className="flex items-center gap-1.5">
