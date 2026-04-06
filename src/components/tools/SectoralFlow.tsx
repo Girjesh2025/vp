@@ -4,7 +4,65 @@ import ProfessionalSidebar from '../ProfessionalSidebar';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, BarChart3, LayoutGrid, TrendingUp, TrendingDown, Activity, ExternalLink } from 'lucide-react';
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from 'recharts';
+// Import at the top
 import { fetchStockPrice } from '../../utils/priceApi';
+
+const PROXY_URLS = [
+  'https://api.allorigins.win/get?url=',
+  'https://api.codetabs.com/v1/proxy?quest='
+];
+
+/** Fetch Real 20-Day Average % Change via Yahoo Spark API */
+const fetchRealSparkData = async (symbols: string[]): Promise<Record<string, number>> => {
+  if (symbols.length === 0) return {};
+  
+  const chunkedSymbols = [];
+  for (let i = 0; i < symbols.length; i += 40) {
+    chunkedSymbols.push(symbols.slice(i, i + 40));
+  }
+
+  const results: Record<string, number> = {};
+
+  for (const chunk of chunkedSymbols) {
+    const query = chunk.map(s => `${s}.NS`).join(',');
+    const targetUrl = `https://query1.finance.yahoo.com/v7/finance/spark?symbols=${query}&range=1mo&interval=1d`;
+    
+    let success = false;
+    for (const proxy of PROXY_URLS) {
+      if (success) break;
+      try {
+        const res = await fetch(`${proxy}${encodeURIComponent(targetUrl)}`);
+        if (!res.ok) continue;
+        
+        const data = await res.json();
+        const parsedData = proxy.includes('allorigins') ? JSON.parse(data.contents) : data;
+        
+        if (parsedData?.spark?.result) {
+          parsedData.spark.result.forEach((item: any) => {
+            const sym = item.symbol.replace('.NS', '');
+            const closes = item.response?.[0]?.indicators?.quote?.[0]?.close;
+            if (closes && Array.isArray(closes) && closes.length >= 2) {
+              const validCloses = closes.filter(c => typeof c === 'number' && c > 0);
+              let totalPercentChange = 0;
+              let count = 0;
+              for (let i = 1; i < validCloses.length; i++) {
+                const pctChange = Math.abs((validCloses[i] - validCloses[i-1]) / validCloses[i-1]) * 100;
+                totalPercentChange += pctChange;
+                count++;
+              }
+              results[sym] = count > 0 ? (totalPercentChange / count) : 0.8;
+            }
+          });
+          success = true;
+        }
+      } catch (e) {
+        // Continue to next proxy
+      }
+    }
+  }
+
+  return results;
+};
 
 // Define the core constituents we want to track for our sectoral flow proxy
 const SECTOR_DEFINITIONS = [
@@ -45,10 +103,40 @@ const getHeatmapGlow = (val: number): string => {
   return 'rgba(100,116,139,0.08)';
 };
 
+/** Deterministic mock Average % Change (last 20 days) for R.Fac calculation */
+const getMockAvgPercentChange20D = (symbol: string): number => {
+  let hash = 0;
+  for (let i = 0; i < symbol.length; i++) {
+    hash = symbol.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  // Generates an average daily percent change roughly between 0.8% and 2.5%
+  return 0.8 + (Math.abs(hash) % 100) / 60; 
+};
+
+/** Deterministic gradient generator for stock logos */
+const getLogoGradient = (symbol: string): string => {
+  const gradients = [
+    'from-blue-500 to-indigo-600',
+    'from-emerald-400 to-teal-600',
+    'from-orange-400 to-red-500',
+    'from-pink-500 to-rose-600',
+    'from-violet-500 to-purple-600',
+    'from-cyan-500 to-blue-600',
+    'from-amber-500 to-orange-600',
+    'from-fuchsia-500 to-pink-600',
+    'from-sky-400 to-indigo-500'
+  ];
+  let hash = 0;
+  for (let i = 0; i < symbol.length; i++) {
+    hash = symbol.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return gradients[Math.abs(hash) % gradients.length];
+};
+
 const SectoralFlow: React.FC = () => {
   const navigate = useNavigate();
   
-  const [liveData, setLiveData] = useState<Record<string, { price: number; change: number }>>({});
+  const [liveData, setLiveData] = useState<Record<string, { price: number; change: number; avgChange20D: number }>>({});
   const [loading, setLoading] = useState(true);
   const [activeView, setActiveView] = useState<'chart' | 'heatmap'>('chart');
   const [highlightedSector, setHighlightedSector] = useState<string | null>(null);
@@ -75,11 +163,14 @@ const SectoralFlow: React.FC = () => {
       
       setLoading(false);
 
+      // Start fetching the 20-day average percentage change in the background
+      const sparkDataPromise = fetchRealSparkData(symbolArray);
+
       const chunkSize = 12;
       let loaded = 0;
       for (let i = 0; i < symbolArray.length; i += chunkSize) {
         const chunk = symbolArray.slice(i, i + chunkSize);
-        const chunkResults: Record<string, { price: number; change: number }> = {};
+        const chunkResults: Record<string, { price: number; change: number; avgChange20D: number }> = {};
 
         await Promise.allSettled(
           chunk.map(async (sym) => {
@@ -92,7 +183,8 @@ const SectoralFlow: React.FC = () => {
                timeoutPromise
             ]);
             if (data && isMounted) {
-              chunkResults[sym] = { price: data.price, change: data.change || 0 };
+              // Temporary avgChange until sparkData resolves
+              chunkResults[sym] = { price: data.price, change: data.change || 0, avgChange20D: getMockAvgPercentChange20D(sym) };
             }
           })
         );
@@ -103,6 +195,24 @@ const SectoralFlow: React.FC = () => {
           if (Object.keys(chunkResults).length > 0) {
             setLiveData(prev => ({ ...prev, ...chunkResults }));
           }
+        }
+      }
+
+      // Once all live data is loaded, wait for spark data and update state with real averages
+      if (isMounted) {
+        try {
+          const realAverages = await sparkDataPromise;
+          setLiveData(prev => {
+            const updated = { ...prev };
+            Object.keys(updated).forEach(sym => {
+              if (realAverages[sym]) {
+                updated[sym].avgChange20D = realAverages[sym];
+              }
+            });
+            return updated;
+          });
+        } catch (err) {
+          console.warn("Failed to load real spark averages", err);
         }
       }
     };
@@ -463,18 +573,18 @@ const SectoralFlow: React.FC = () => {
                 )}
 
                 {/* ─── Sector Breakdown ─── */}
-                <div className="mt-4 pb-10">
-                  <div className="flex justify-between items-end mb-5">
+                <div className="mt-8 pb-10">
+                  <div className="flex justify-between items-end mb-6">
                     <div className="flex items-center gap-3">
-                      <div className="w-1 h-8 bg-gradient-to-b from-violet-500 to-indigo-600 rounded-full" />
+                      <div className="w-1.5 h-10 bg-gradient-to-b from-violet-500 to-indigo-600 rounded-full shadow-[0_0_10px_rgba(139,92,246,0.5)]" />
                       <div>
-                        <h2 className="text-xl font-bold tracking-tight text-white uppercase">Sector Breakdown</h2>
-                        <p className="text-[10px] text-slate-500 tracking-widest uppercase mt-0.5">Live Component Prices • Click stock to open chart</p>
+                        <h2 className="text-2xl font-black tracking-tight text-white uppercase drop-shadow-md">Sector Breakdown</h2>
+                        <p className="text-[11px] text-slate-400 font-bold tracking-[0.2em] uppercase mt-1">Live Component Prices • Click stock to open chart</p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
                     {SECTOR_DEFINITIONS.map((sector) => {
                       const sectorData = sectoralFlowData.find(s => s.name === sector.title);
                       const sectorChange = sectorData?.value ?? 0;
@@ -484,57 +594,119 @@ const SectoralFlow: React.FC = () => {
                         <div 
                           key={sector.title} 
                           ref={el => (sectorRefs.current[sector.title] = el)}
-                          className={`bg-gradient-to-br from-[#172030] to-[#111827] border rounded-xl overflow-hidden shadow-lg scroll-mt-24 transition-all duration-700 ${
+                          className={`relative group bg-gradient-to-br from-[#172030] to-[#0f1520] border rounded-2xl overflow-hidden shadow-xl scroll-mt-24 transition-all duration-500 hover:shadow-[0_8px_30px_rgba(0,0,0,0.4)] ${
                             highlightedSector === sector.title 
                               ? 'border-violet-500 ring-4 ring-violet-500/30 scale-[1.02]' 
-                              : 'border-slate-800/60 hover:border-slate-700/80'
+                              : 'border-slate-700/50 hover:border-slate-500/50 hover:-translate-y-1'
                           }`}
                         >
+                          {/* Subtle glow behind the card header */}
+                          <div className="absolute top-0 left-0 w-full h-32 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" style={{
+                            background: `linear-gradient(to bottom, ${isPositiveSector ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'}, transparent)`
+                          }} />
+
                           {/* Sector Header */}
-                          <div className="flex justify-between items-center p-3.5 border-b border-slate-800/40" style={{
-                            background: `linear-gradient(135deg, ${isPositiveSector ? 'rgba(16,185,129,0.08)' : 'rgba(239,68,68,0.08)'}, transparent)`
+                          <div className="relative flex justify-between items-center p-5 border-b border-slate-700/50" style={{
+                            background: `linear-gradient(135deg, ${isPositiveSector ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'}, transparent)`
                           }}>
                             <div>
-                              <h3 className="font-bold text-xs text-white tracking-widest">{sector.ext || sector.title}</h3>
-                              <div className={`text-[10px] font-black mt-0.5 ${isPositiveSector ? 'text-emerald-400' : 'text-red-400'}`}>
+                              <h3 className="font-extrabold text-base text-white tracking-widest drop-shadow-md">{sector.ext || sector.title}</h3>
+                              <div className={`text-sm font-black mt-1 flex items-center gap-1.5 ${isPositiveSector ? 'text-emerald-400' : 'text-red-400'}`}>
+                                {isPositiveSector ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
                                 {isPositiveSector ? '+' : ''}{sectorChange.toFixed(2)}%
                               </div>
                             </div>
-                            <span className="text-[10px] font-semibold text-slate-400 bg-slate-800/80 px-2.5 py-1 rounded-lg">{Math.min(12, sector.stocks.length)} ASSETS</span>
+                            <span className="text-xs font-bold text-slate-300 bg-[#0f1520] shadow-inner border border-slate-700/50 px-3 py-1.5 rounded-xl">
+                              {Math.min(12, sector.stocks.length)} ASSETS
+                            </span>
                           </div>
                           
-                          <div className="p-1">
+                          <div className="p-2 relative z-10">
                             {/* Table Header */}
-                            <div className="flex text-[9px] font-bold text-slate-500 uppercase tracking-widest p-2 pb-2 border-b border-slate-800/40 mx-2">
+                            <div className="flex text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-3 pr-4 pb-2 border-b border-slate-700/50">
                               <div className="flex-1">SYMBOL</div>
                               <div className="w-16 text-right">LTP</div>
-                              <div className="w-16 text-right">%CHG</div>
+                              <div className="w-[72px] text-center">%</div>
+                              <div className="w-10 text-right">R.FAC</div>
                             </div>
                             
                             {/* Rows */}
-                            <div className="px-1 py-1 h-[270px] overflow-y-auto custom-scrollbar">
-                              {sector.stocks.slice(0, 12).map((stockSym, idx) => {
-                                const stock = liveData[stockSym] || { price: 0, change: 0 };
-                                const isPositive = stock.change >= 0;
-                                return (
-                                  <div 
-                                    key={idx} 
-                                    onClick={() => window.open(`https://in.tradingview.com/chart/?symbol=NSE:${stockSym}`, '_blank')}
-                                    className="flex items-center text-xs py-2 px-3 hover:bg-slate-800/70 rounded-lg transition-all group cursor-pointer"
-                                  >
-                                    <div className="flex-1 font-bold text-slate-300 group-hover:text-white transition-colors flex items-center gap-1.5">
-                                      {stockSym}
-                                      <ExternalLink className="w-2.5 h-2.5 text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            <div className="py-2 h-[340px] overflow-y-auto custom-scrollbar space-y-1">
+                              {(() => {
+                                const sortedStocks = [...sector.stocks]
+                                  .map(stockSym => {
+                                    const stock = liveData[stockSym] || { price: 0, change: 0, avgChange20D: getMockAvgPercentChange20D(stockSym) };
+                                    const isPositive = stock.change >= 0;
+                                    const avgChange20D = stock.avgChange20D || getMockAvgPercentChange20D(stockSym);
+                                    const rFacNum = stock.price > 0 ? (Math.abs(stock.change) / avgChange20D) : 0;
+                                    const rFac = stock.price > 0 ? rFacNum.toFixed(2) : '-';
+                                    return { stockSym, stock, isPositive, rFacNum, rFac };
+                                  })
+                                  // Sort by descending R.Fac score (highest first)
+                                  .sort((a, b) => b.rFacNum - a.rFacNum)
+                                  .slice(0, 12);
+
+                                return sortedStocks.map(({ stockSym, stock, isPositive, rFac }) => {
+                                  // Re-extract valid string/number values to ensure no React render errors
+                                  const renderPrice = stock.price > 0 ? stock.price.toFixed(2) : null;
+                                  const renderChange = stock.price > 0 ? `${isPositive ? '+' : ''}${stock.change.toFixed(2)}%` : null;
+
+                                  return (
+                                    <div 
+                                      key={stockSym} 
+                                      onClick={() => window.open(`https://in.tradingview.com/chart/?symbol=NSE:${stockSym}`, '_blank')}
+                                      className="flex items-center text-sm py-2.5 px-3 hover:bg-slate-800/80 rounded-xl transition-all group/row cursor-pointer border border-transparent hover:border-slate-700/50"
+                                    >
+                                      <div className="flex-1 min-w-0 font-bold text-slate-300 group-hover/row:text-white transition-colors flex items-center gap-3">
+                                        {/* Stock Logo Avatar */}
+                                        <div className={`w-8 h-8 shrink-0 rounded-full bg-[#ffffff] flex items-center justify-center shadow-md ring-1 ring-white/10 group-hover/row:ring-white/30 transition-all overflow-hidden`}>
+                                          <img 
+                                            src={`https://financialmodelingprep.com/image-stock/${stockSym}.NS.png`} 
+                                            alt={stockSym}
+                                            className="w-full h-full object-cover p-1.5"
+                                            onError={(e) => {
+                                              // Fallback to gradient initials if logo fails to load
+                                              e.currentTarget.style.display = 'none';
+                                              const parent = e.currentTarget.parentElement;
+                                              if (parent) {
+                                                parent.className = `w-8 h-8 shrink-0 rounded-full bg-gradient-to-br ${getLogoGradient(stockSym)} flex items-center justify-center text-[11px] text-white font-black shadow-md ring-1 ring-white/10 group-hover/row:ring-white/30 transition-all`;
+                                                parent.innerText = stockSym.substring(0, 2);
+                                              }
+                                            }}
+                                          />
+                                        </div>
+                                        <div className="flex flex-col min-w-0">
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="truncate inline-block max-w-[70px] sm:max-w-[120px] lg:max-w-[90px] xl:max-w-[100px] 2xl:max-w-[130px]" title={stockSym}>{stockSym}</span>
+                                            <ExternalLink className="w-3 h-3 shrink-0 text-slate-500 opacity-0 group-hover/row:opacity-100 transition-opacity" />
+                                          </div>
+                                          <div className="text-[9px] text-slate-500 font-medium tracking-wider flex items-center gap-1">
+                                            <div className={`w-1 h-1 shrink-0 rounded-full ${isPositive ? 'bg-emerald-500' : 'bg-red-500'} opacity-70`} />
+                                            NSE
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="w-16 shrink-0 text-right font-semibold text-slate-200">
+                                        {renderPrice ? renderPrice : <span className="inline-block w-4 h-4 rounded-full border-2 border-slate-700 border-t-slate-400 animate-spin" />}
+                                      </div>
+                                      <div className="w-[72px] shrink-0 flex justify-center">
+                                        {renderChange ? (
+                                          <span className={`min-w-[52px] text-center px-1.5 py-1 rounded-md text-xs font-bold tracking-tight shadow-md ${
+                                            isPositive 
+                                              ? 'bg-[#c6f6d5] text-[#14532d] shadow-emerald-500/10' 
+                                              : 'bg-[#fed7d7] text-[#7f1d1d] shadow-red-500/10'
+                                          }`}>
+                                            {renderChange}
+                                          </span>
+                                        ) : '-'}
+                                      </div>
+                                      <div className="w-10 shrink-0 text-right font-semibold text-slate-300 tracking-wide text-xs pr-1">
+                                        {rFac}
+                                      </div>
                                     </div>
-                                    <div className="w-16 text-right font-medium text-slate-200">
-                                      {stock.price > 0 ? stock.price.toFixed(2) : <span className="inline-block w-3 h-3 rounded-full border-2 border-slate-700 border-t-slate-400 animate-spin" />}
-                                    </div>
-                                    <div className={`w-16 text-right font-bold tracking-tight ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
-                                      {stock.price > 0 ? `${isPositive ? '+' : ''}${stock.change.toFixed(2)}%` : '-'}
-                                    </div>
-                                  </div>
-                                );
-                              })}
+                                  );
+                                });
+                              })()}
                             </div>
                           </div>
                         </div>
