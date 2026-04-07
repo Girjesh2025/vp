@@ -4,7 +4,10 @@ import { searchStocksOptimized } from '../stockDatabase';
 import { isMarketOpen } from '../utils/priceApi';
 import { useAuth } from '../contexts/AuthContext';
 import type { Stock } from '../types';
+import StockLogo from './StockLogo';
 
+
+import type { StockInfo } from '../stockDatabase';
 
 interface ProfessionalHeaderProps {
   currentPortfolio?: any;
@@ -14,6 +17,7 @@ interface ProfessionalHeaderProps {
     totalGainLossPercent: number;
   };
   isLoading?: boolean;
+  lastUpdated?: Date | null;
   onStockSelect?: (stock: Stock) => void;
   onNotificationClick?: () => void;
   onSettingsClick?: () => void;
@@ -32,7 +36,7 @@ const ProfessionalHeader: React.FC<ProfessionalHeaderProps> = ({
 }) => {
   const { user, signOut } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<Stock[]>([]);
+  const [searchResults, setSearchResults] = useState<StockInfo[]>([]);
   const [showResults, setShowResults] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
@@ -57,12 +61,19 @@ const ProfessionalHeader: React.FC<ProfessionalHeaderProps> = ({
   };
 
   // Handle stock selection
-  const handleStockSelect = (stock: Stock) => {
+  const handleStockSelect = (stockInfo: StockInfo) => {
     setSearchQuery('');
     setSearchResults([]);
     setShowResults(false);
     if (onStockSelect) {
-      onStockSelect(stock);
+      const newStock: Stock = {
+        symbol: stockInfo.symbol,
+        name: stockInfo.name,
+        displaySymbol: `${stockInfo.symbol}-${stockInfo.exchange}`,
+        quantity: 0,
+        avgPrice: 0
+      };
+      onStockSelect(newStock);
     }
   };
 
@@ -122,21 +133,33 @@ const ProfessionalHeader: React.FC<ProfessionalHeaderProps> = ({
                 <div className="absolute z-50 w-full mt-3 bg-[#172030] border border-slate-700 rounded-2xl shadow-2xl shadow-black/50 max-h-96 overflow-y-auto custom-scrollbar">
                   {searchResults.map((stock) => (
                     <div
-                      key={stock.symbol}
+                      key={`${stock.symbol}-${stock.exchange}`}
                       onClick={() => handleStockSelect(stock)}
-                      className="px-4 py-3 hover:bg-[#1e293b] cursor-pointer border-b border-slate-800/60 last:border-b-0 transition-colors"
+                      className="px-4 py-3 hover:bg-[#1e293b] cursor-pointer border-b border-slate-800/60 last:border-b-0 transition-colors group"
                     >
                       <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-3">
-                            <div className="font-semibold text-slate-200">{stock.symbol}</div>
-                            <div className="text-sm text-slate-400 truncate">{stock.name}</div>
-                          </div>
-                          <div className="text-xs text-slate-500 mt-1">
-                            {stock.sector} • {stock.industry}
+                        <div className="flex items-center space-x-4 flex-1 min-w-0">
+                          <StockLogo symbol={stock.symbol} className="w-10 h-10 ring-2 ring-slate-800/50 group-hover:ring-slate-700 transition-all" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center space-x-2">
+                              <span className="font-bold text-slate-200 text-sm">{stock.symbol}</span>
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-sm ${
+                                stock.exchange === 'NSE' ? 'bg-blue-500/20 text-blue-400' : 'bg-amber-500/20 text-amber-400'
+                              }`}>
+                                {stock.exchange}
+                              </span>
+                            </div>
+                            <div className="text-xs text-slate-400 truncate mt-0.5">{stock.name}</div>
+                            {stock.sector && (
+                              <div className="text-[10px] font-medium text-slate-500 mt-1 uppercase tracking-wider">
+                                {stock.sector}
+                              </div>
+                            )}
                           </div>
                         </div>
-                        <Plus className="w-4 h-4 text-emerald-500" />
+                        <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors ml-4 shrink-0">
+                          <Plus className="w-4 h-4 text-emerald-500" />
+                        </div>
                       </div>
                     </div>
                   ))}

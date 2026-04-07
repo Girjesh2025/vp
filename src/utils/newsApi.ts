@@ -64,29 +64,73 @@ const mockNewsData: NewsItem[] = [
   }
 ];
 
+const determineSentiment = (text: string): 'positive' | 'negative' | 'neutral' => {
+  const lower = text.toLowerCase();
+  const positiveWords = ['surge', 'jump', 'gain', 'high', 'record', 'up', 'bull', 'rally', 'profit', 'soar', 'buy', 'growth', 'positive', 'boost'];
+  const negativeWords = ['fall', 'drop', 'crash', 'down', 'bear', 'loss', 'plunge', 'sell', 'weak', 'slip', 'slump', 'negative', 'threat', 'warning'];
+  
+  let score = 0;
+  positiveWords.forEach(w => { if (lower.includes(w)) score++; });
+  negativeWords.forEach(w => { if (lower.includes(w)) score--; });
+  
+  if (score > 0) return 'positive';
+  if (score < 0) return 'negative';
+  return 'neutral';
+};
+
 export const fetchMarketNews = async (category?: string): Promise<NewsItem[]> => {
   try {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // In production, replace with real API call:
-    // const response = await fetch(`https://newsapi.org/v2/everything?q=indian+stock+market&apiKey=${API_KEY}`);
-    // const data = await response.json();
-    
-    let filteredNews = mockNewsData;
-    
-    if (category) {
-      filteredNews = mockNewsData.filter(news => news.category === category);
+    const rssFeeds = [
+      { url: 'https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms', source: 'Economic Times' },
+      { url: 'https://www.livemint.com/rss/markets', source: 'Live Mint' },
+      { url: 'https://www.moneycontrol.com/rss/business.xml', source: 'Moneycontrol' },
+      { url: 'https://www.cnbctv18.com/commonfeeds/v1/cne/rss/market.xml', source: 'CNBC TV18' }
+    ];
+
+    const fetchPromises = rssFeeds.map(async (feed) => {
+      try {
+        const res = await fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feed.url)}`);
+        const data = await res.json();
+        
+        if (data.status === 'ok' && data.items) {
+          return data.items.map((item: any, index: number): NewsItem => ({
+            id: `${feed.source}-${index}-${Date.now()}`,
+            title: item.title,
+            description: item.description?.replace(/<[^>]*>?/gm, '').substring(0, 150) + '...' || '', // strip HTML
+            url: item.link,
+            publishedAt: item.pubDate,
+            source: feed.source,
+            category: 'market',
+            sentiment: determineSentiment(item.title)
+          }));
+        }
+        return [];
+      } catch (e) {
+        console.warn(`Failed to fetch RSS for ${feed.source}`);
+        return [];
+      }
+    });
+
+    const results = await Promise.all(fetchPromises);
+    let allNews = results.flat();
+
+    // Sort by date descending (newest first)
+    allNews.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+
+    // Fallback to mock data if the API calls completely failed (e.g. rate limits)
+    if (allNews.length === 0) {
+      allNews = mockNewsData;
+    }
+
+    if (category && category !== 'all') {
+      allNews = allNews.filter(news => news.category === category);
     }
     
-    // Sort by published date (newest first)
-    return filteredNews.sort((a, b) => 
-      new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
-    );
+    return allNews;
     
   } catch (error) {
     console.error('Error fetching market news:', error);
-    return [];
+    return mockNewsData;
   }
 };
 

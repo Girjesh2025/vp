@@ -685,30 +685,31 @@ const StockPortfolioApp: React.FC = () => {
           isLoading={isLoading}
           lastUpdated={priceUpdateTime}
           onStockSelect={(stock) => {
-            setSelectedStock(stock);
-            setIsAddModalOpen(true);
+            addStock(stock);
           }}
         />
 
         {/* Main Content Area */}
         <div className="flex-1 p-6 bg-[#0f1520] min-h-[calc(100vh-64px)]">
           <div className="max-w-7xl mx-auto">
-            {/* Portfolio Selector */}
-            <div className="mb-8">
-              <PortfolioSelector
-                portfolios={portfolios}
-                currentPortfolio={currentPortfolio}
-                onPortfolioChange={switchPortfolio}
-                onCreatePortfolio={createPortfolio}
-                onEditPortfolio={(portfolio, newName) => editPortfolio(portfolio.id, newName)}
-                onDeletePortfolio={(portfolio) => deletePortfolio(portfolio.id)}
-                portfolioStats={{
-                  totalValue: stats.totalCurrent,
-                  totalGainLoss: stats.totalPnL,
-                  totalGainLossPercent: stats.totalPnLPercent
-                }}
-              />
-            </div>
+            {/* Portfolio Selector - ONLY SHOW ON DASHBOARD, PORTFOLIO, AND ANALYTICS TABS */}
+            {(activeTab === 'dashboard' || activeTab === 'portfolio' || activeTab === 'analytics') && (
+              <div className="mb-8">
+                <PortfolioSelector
+                  portfolios={portfolios}
+                  currentPortfolio={currentPortfolio}
+                  onPortfolioChange={switchPortfolio}
+                  onCreatePortfolio={createPortfolio}
+                  onEditPortfolio={(portfolio, newName) => editPortfolio(portfolio.id, newName)}
+                  onDeletePortfolio={(portfolio) => deletePortfolio(portfolio.id)}
+                  portfolioStats={{
+                    totalValue: stats.totalCurrent,
+                    totalGainLoss: stats.totalPnL,
+                    totalGainLossPercent: stats.totalPnLPercent
+                  }}
+                />
+              </div>
+            )}
           
           {activeTab === 'dashboard' && renderDashboard()}
           {activeTab === 'portfolio' && (

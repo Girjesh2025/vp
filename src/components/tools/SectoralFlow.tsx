@@ -4,9 +4,8 @@ import ProfessionalSidebar from '../ProfessionalSidebar';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, BarChart3, LayoutGrid, TrendingUp, TrendingDown, Activity, ExternalLink } from 'lucide-react';
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from 'recharts';
-// Import at the top
 import { fetchStockPrice } from '../../utils/priceApi';
-import { LOGO_MAP } from '../../utils/logoMap';
+import StockLogo from '../StockLogo';
 
 const PROXY_URLS = [
   'https://api.allorigins.win/get?url=',
@@ -110,26 +109,6 @@ const getMockAvgPercentChange20D = (symbol: string): number => {
   }
   // Generates an average daily percent change roughly between 0.8% and 2.5%
   return 0.8 + (Math.abs(hash) % 100) / 60; 
-};
-
-/** Deterministic gradient generator for stock logos */
-const getLogoGradient = (symbol: string): string => {
-  const gradients = [
-    'from-blue-500 to-indigo-600',
-    'from-emerald-400 to-teal-600',
-    'from-orange-400 to-red-500',
-    'from-pink-500 to-rose-600',
-    'from-violet-500 to-purple-600',
-    'from-cyan-500 to-blue-600',
-    'from-amber-500 to-orange-600',
-    'from-fuchsia-500 to-pink-600',
-    'from-sky-400 to-indigo-500'
-  ];
-  let hash = 0;
-  for (let i = 0; i < symbol.length; i++) {
-    hash = symbol.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return gradients[Math.abs(hash) % gradients.length];
 };
 
 const SectoralFlow: React.FC = () => {
@@ -608,27 +587,7 @@ const SectoralFlow: React.FC = () => {
                                     >
                                       <div className="flex-1 min-w-0 font-bold text-slate-300 group-hover/row:text-white transition-colors flex items-center gap-3">
                                         {/* Stock Logo Avatar */}
-                                        <div className={`w-8 h-8 shrink-0 rounded-full bg-[#ffffff] flex items-center justify-center shadow-md ring-1 ring-white/10 group-hover/row:ring-white/30 transition-all overflow-hidden`}>
-                                          {LOGO_MAP[stockSym] ? (
-                                            <img 
-                                              src={`https://assets-netstorage.groww.in/stock-assets/logos/GSTK${LOGO_MAP[stockSym]}.png`} 
-                                              alt={stockSym}
-                                              className="w-full h-full object-cover p-1.5"
-                                              onError={(e) => {
-                                                e.currentTarget.style.display = 'none';
-                                                const parent = e.currentTarget.parentElement;
-                                                if (parent) {
-                                                  parent.className = `w-8 h-8 shrink-0 rounded-full bg-gradient-to-br ${getLogoGradient(stockSym)} flex items-center justify-center text-[11px] text-white font-black shadow-md ring-1 ring-white/10 group-hover/row:ring-white/30 transition-all`;
-                                                  parent.innerText = stockSym.substring(0, 2);
-                                                }
-                                              }}
-                                            />
-                                          ) : (
-                                            <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br ${getLogoGradient(stockSym)} text-[11px] text-white font-black`}>
-                                              {stockSym.substring(0, 2)}
-                                            </div>
-                                          )}
-                                        </div>
+                                        <StockLogo symbol={stockSym} className="w-8 h-8 group-hover/row:ring-white/30 transition-all" />
                                         <div className="flex flex-col min-w-0">
                                           <div className="flex items-center gap-1.5">
                                             <span className="truncate inline-block max-w-[70px] sm:max-w-[120px] lg:max-w-[90px] xl:max-w-[100px] 2xl:max-w-[130px]" title={stockSym}>{stockSym}</span>

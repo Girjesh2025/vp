@@ -140,6 +140,70 @@ export const fetchHistoricalPrices = async (symbol: string, days: number = 60): 
 };
 
 /**
+ * Fetch real intraday prices for sparklines (1-day range, 5-minute interval).
+ * Returns an array of numbers (oldest first, newest last).
+ */
+export const fetchIntradayPrices = async (symbol: string): Promise<number[]> => {
+  const yahooSymbol = toYahooSymbol(symbol);
+  
+  // Use our backend proxy if available to avoid CORS/Cloudflare issues
+  try {
+    const baseUrl = resolveBaseUrl();
+    const apiUrl = `${baseUrl}/api/historical/${encodeURIComponent(yahooSymbol)}?range=1d&interval=5m`;
+    
+    const r = await fetch(apiUrl);
+    if (r.ok) {
+      const data = await r.json();
+      const result = data?.chart?.result?.[0];
+      if (result) {
+        const closes: number[] = result.indicators?.quote?.[0]?.close ?? [];
+        const validCloses = closes.filter((c: number | null) => typeof c === 'number' && c > 0) as number[];
+        
+        if (validCloses.length > 0) {
+          console.log(`✅ [Intraday] Got ${validCloses.length} data points for ${symbol} via backend proxy`);
+          return validCloses;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn(`[Intraday] Backend proxy failed for ${symbol}:`, e);
+  }
+
+  // Fallback to PROXY_SERVICES
+  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?range=1d&interval=5m`;
+  for (const p of PROXY_SERVICES) {
+    try {
+      const r = await fetch(`${p.url}${encodeURIComponent(yahooUrl)}`, { method: 'GET' });
+      if (!r.ok) continue;
+      
+      let raw;
+      // Handle different proxy response formats
+      if (p.name === 'allorigins') {
+         const json = await r.json();
+         raw = JSON.parse(json.contents);
+      } else {
+         raw = await r.json();
+      }
+      
+      const result = raw?.chart?.result?.[0];
+      if (!result) continue;
+
+      const closes: number[] = result.indicators?.quote?.[0]?.close ?? [];
+      const validCloses = closes.filter((c: number | null) => typeof c === 'number' && c > 0) as number[];
+
+      if (validCloses.length > 0) {
+        console.log(`✅ [Intraday] Got ${validCloses.length} data points for ${symbol} via ${p.name}`);
+        return validCloses;
+      }
+    } catch (e) {
+      console.warn(`[Intraday] ${p.name} failed for ${symbol}:`, e);
+    }
+  }
+
+  throw new Error(`fetchIntradayPrices: Unable to obtain intraday data for ${symbol}. All proxies failed.`);
+};
+
+/**
  * Fetch precisely 12-month historical performance for an index or stock using Yahoo's 1mo interval.
  * Outputs an array of 12 numbers representing MoM percentage changes.
  */
