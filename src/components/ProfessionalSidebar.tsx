@@ -12,7 +12,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Globe,
-  Calculator
+  Calculator,
+  Eye
 } from 'lucide-react';
 
 interface MenuItem {
@@ -42,6 +43,7 @@ const ProfessionalSidebar: React.FC<ProfessionalSidebarProps> = ({
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'portfolio', label: 'Portfolio', icon: Briefcase, badge: portfolioCount > 0 ? portfolioCount : undefined },
     { id: 'tools', label: 'Market Analysis', icon: Globe },
+    { id: 'market-eye', label: 'Market Eye', icon: Eye },
     { id: 'trading-tools', label: 'Trading Tools', icon: Calculator },
     { id: 'analytics', label: 'Analytics', icon: TrendingUp },
     { id: 'alerts', label: 'Alerts', icon: Bell, badge: '3' },

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import ProfessionalHeader from '../ProfessionalHeader';
 import ProfessionalSidebar from '../ProfessionalSidebar';
 import { useNavigate } from 'react-router-dom';
@@ -86,16 +86,14 @@ const SECTOR_DEFINITIONS = [
  * Deep red → orange → neutral → light green → deep green
  */
 const getHeatmapColor = (val: number): string => {
-  if (val <= -3) return '#dc2626';     // Deep red
-  if (val <= -2) return '#ef4444';     // Red
-  if (val <= -1) return '#f87171';     // Light red
-  if (val <= -0.3) return '#fb923c';   // Orange
-  if (val < 0.3) return '#64748b';     // Neutral slate
-  if (val < 1) return '#4ade80';       // Light green
-  if (val < 2) return '#22c55e';       // Green
-  if (val < 3) return '#16a34a';       // Medium green
-  return '#15803d';                     // Deep green
-};
+    if (val <= -2.0) return '#b91c1c'; // Deep Red
+    if (val <= -1.0) return '#dc2626'; // Medium Red
+    if (val < 0) return '#ef4444'; // Light Red
+    if (val === 0) return '#475569'; // Neutral Gray
+    if (val < 1.0) return '#4ade80'; // Light Green
+    if (val < 2.0) return '#22c55e'; // Medium Green
+    return '#16a34a'; // Deep Green
+  };
 
 /** Get a background glow color for heatmap tiles */
 const getHeatmapGlow = (val: number): string => {
@@ -448,9 +446,9 @@ const SectoralFlow: React.FC = () => {
                     </div>
                   </div>
                 ) : (
-                  /* ════════════ HEATMAP VIEW ════════════ */
-                  <div className="bg-[#131b26] border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800/60 bg-[#172030]">
+                  /* ════════════ HEATMAP VIEW (CSS GRID) ════════════ */
+                  <div className="bg-[#131b26] border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800/60 bg-[#172030] shrink-0">
                       <div className="flex items-center gap-3">
                         <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
                         <h3 className="text-xs font-black text-slate-300 uppercase tracking-[0.15em]">Market Heatmap</h3>
@@ -459,7 +457,7 @@ const SectoralFlow: React.FC = () => {
                       <div className="flex items-center gap-2">
                         <span className="text-[9px] text-slate-500 font-bold">-3%</span>
                         <div className="flex gap-0.5">
-                          {['#dc2626', '#ef4444', '#f87171', '#fb923c', '#64748b', '#4ade80', '#22c55e', '#16a34a', '#15803d'].map((c, i) => (
+                          {['#b91c1c', '#dc2626', '#ef4444', '#475569', '#4ade80', '#22c55e', '#16a34a'].map((c, i) => (
                             <div key={i} className="w-5 h-2.5 rounded-sm" style={{ background: c }} />
                           ))}
                         </div>
@@ -467,9 +465,8 @@ const SectoralFlow: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Treemap-style Heatmap */}
-                    <div className="p-4">
-                      {/* Top row - large tiles for top sectors by stock count */}
+                    <div className="p-4 bg-[#0a0f18]">
+                      {/* Top row - large tiles for top sectors by weight/stock count */}
                       <div className="grid grid-cols-3 gap-2 mb-2">
                         {sectoralFlowData.slice(-3).reverse().map((s) => (
                           <button
@@ -477,98 +474,49 @@ const SectoralFlow: React.FC = () => {
                             onClick={() => scrollToSector(s.name)}
                             onMouseEnter={() => setHoveredHeatmapTile(s.name)}
                             onMouseLeave={() => setHoveredHeatmapTile(null)}
-                            className="relative rounded-xl p-5 flex flex-col items-center justify-center text-center transition-all duration-300 group min-h-[130px] overflow-hidden"
-                            style={{
+                            className={`relative rounded-xl p-5 flex flex-col items-center justify-center text-center transition-all duration-300 group min-h-[130px] overflow-hidden ${
+                              hoveredHeatmapTile === s.name ? 'ring-2 ring-white/50 z-10 scale-[1.02] shadow-2xl' : 'hover:ring-1 hover:ring-white/20'
+                            }`}
+                            style={{ 
                               background: `linear-gradient(135deg, ${getHeatmapColor(s.value)}dd, ${getHeatmapColor(s.value)}99)`,
-                              boxShadow: hoveredHeatmapTile === s.name 
-                                ? `0 0 30px ${getHeatmapGlow(s.value)}, inset 0 0 30px rgba(255,255,255,0.05)` 
-                                : `0 4px 20px ${getHeatmapGlow(s.value)}`,
-                              transform: hoveredHeatmapTile === s.name ? 'scale(1.02)' : 'scale(1)',
+                              boxShadow: hoveredHeatmapTile === s.name ? `0 0 30px ${getHeatmapGlow(s.value)}` : 'none'
                             }}
                           >
-                            <div className="absolute inset-0 rounded-xl bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
-                            <div className="relative z-10">
-                              <div className="text-[10px] font-bold uppercase tracking-[0.15em] mb-2 opacity-80 text-white/80">
-                                NIFTY {s.name}
-                              </div>
-                              <div className="text-3xl font-black text-white tracking-tight drop-shadow-lg">
-                                {s.value > 0 ? '+' : ''}{s.value.toFixed(2)}%
-                              </div>
-                              <div className="flex items-center justify-center gap-1 mt-2">
-                                {s.value >= 0 
-                                  ? <TrendingUp className="w-3.5 h-3.5 text-white/60" /> 
-                                  : <TrendingDown className="w-3.5 h-3.5 text-white/60" />
-                                }
-                                <span className="text-[9px] text-white/50 font-semibold">
-                                  {s.loadedCount} stocks
-                                </span>
-                              </div>
+                            <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors" />
+                            <span className="relative text-white font-black text-xl tracking-wider drop-shadow-md z-10">{s.name}</span>
+                            <div className="relative mt-2 flex items-center gap-1 z-10">
+                              <span className="text-white/90 text-sm font-bold bg-black/20 px-2 py-0.5 rounded-md backdrop-blur-sm">
+                                {s.value >= 0 ? '+' : ''}{s.value.toFixed(2)}%
+                              </span>
                             </div>
                           </button>
                         ))}
                       </div>
 
-                      {/* Middle rows - medium tiles */}
-                      <div className="grid grid-cols-4 gap-2 mb-2">
-                        {sectoralFlowData.slice(Math.max(0, sectoralFlowData.length - 7), sectoralFlowData.length - 3).reverse().map((s) => (
+                      {/* Bottom rows - smaller tiles */}
+                      <div className="grid grid-cols-4 gap-2">
+                        {sectoralFlowData.slice(0, -3).reverse().map((s) => (
                           <button
                             key={s.name}
                             onClick={() => scrollToSector(s.name)}
                             onMouseEnter={() => setHoveredHeatmapTile(s.name)}
                             onMouseLeave={() => setHoveredHeatmapTile(null)}
-                            className="relative rounded-xl p-4 flex flex-col items-center justify-center text-center transition-all duration-300 group min-h-[100px] overflow-hidden"
-                            style={{
+                            className={`relative rounded-lg p-3 flex flex-col items-center justify-center text-center transition-all duration-300 group min-h-[90px] overflow-hidden ${
+                              hoveredHeatmapTile === s.name ? 'ring-2 ring-white/50 z-10 scale-105 shadow-xl' : 'hover:ring-1 hover:ring-white/20'
+                            }`}
+                            style={{ 
                               background: `linear-gradient(135deg, ${getHeatmapColor(s.value)}dd, ${getHeatmapColor(s.value)}99)`,
-                              boxShadow: hoveredHeatmapTile === s.name 
-                                ? `0 0 25px ${getHeatmapGlow(s.value)}, inset 0 0 20px rgba(255,255,255,0.05)` 
-                                : `0 3px 15px ${getHeatmapGlow(s.value)}`,
-                              transform: hoveredHeatmapTile === s.name ? 'scale(1.03)' : 'scale(1)',
+                              boxShadow: hoveredHeatmapTile === s.name ? `0 0 20px ${getHeatmapGlow(s.value)}` : 'none'
                             }}
                           >
-                            <div className="absolute inset-0 rounded-xl bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
-                            <div className="relative z-10">
-                              <div className="text-[9px] font-bold uppercase tracking-[0.12em] mb-1.5 text-white/70">
-                                NIFTY {s.name}
-                              </div>
-                              <div className="text-xl font-black text-white tracking-tight drop-shadow-md">
-                                {s.value > 0 ? '+' : ''}{s.value.toFixed(2)}%
-                              </div>
-                            </div>
+                            <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors" />
+                            <span className="relative text-white/90 font-bold text-xs tracking-wider drop-shadow-md z-10">{s.name}</span>
+                            <span className="relative mt-1 text-white/80 text-[10px] font-bold bg-black/20 px-1.5 py-0.5 rounded backdrop-blur-sm z-10">
+                              {s.value >= 0 ? '+' : ''}{s.value.toFixed(2)}%
+                            </span>
                           </button>
                         ))}
                       </div>
-
-                      {/* Bottom row - smaller tiles for remaining sectors */}
-                      {sectoralFlowData.length > 7 && (
-                        <div className="grid grid-cols-5 gap-2">
-                          {sectoralFlowData.slice(0, Math.max(0, sectoralFlowData.length - 7)).map((s) => (
-                            <button
-                              key={s.name}
-                              onClick={() => scrollToSector(s.name)}
-                              onMouseEnter={() => setHoveredHeatmapTile(s.name)}
-                              onMouseLeave={() => setHoveredHeatmapTile(null)}
-                              className="relative rounded-xl p-3 flex flex-col items-center justify-center text-center transition-all duration-300 group min-h-[80px] overflow-hidden"
-                              style={{
-                                background: `linear-gradient(135deg, ${getHeatmapColor(s.value)}dd, ${getHeatmapColor(s.value)}99)`,
-                                boxShadow: hoveredHeatmapTile === s.name 
-                                  ? `0 0 20px ${getHeatmapGlow(s.value)}, inset 0 0 15px rgba(255,255,255,0.05)` 
-                                  : `0 2px 10px ${getHeatmapGlow(s.value)}`,
-                                transform: hoveredHeatmapTile === s.name ? 'scale(1.04)' : 'scale(1)',
-                              }}
-                            >
-                              <div className="absolute inset-0 rounded-xl bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
-                              <div className="relative z-10">
-                                <div className="text-[8px] font-bold uppercase tracking-wider mb-1 text-white/70">
-                                  {s.name}
-                                </div>
-                                <div className="text-base font-black text-white tracking-tight drop-shadow-md">
-                                  {s.value > 0 ? '+' : ''}{s.value.toFixed(2)}%
-                                </div>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   </div>
                 )}

@@ -15,6 +15,7 @@ import AITradingSuggestions from './components/AITradingSuggestions';
 import ToolsDashboard from './components/ToolsDashboard';
 import MarketAnalysis from './components/MarketAnalysis';
 import MarketAnalysisTools from './components/MarketAnalysisTools';
+import MarketEye from './components/MarketEye';
 import StockRecommendations from './components/StockRecommendations';
 import HelpAndSupport from './components/HelpAndSupport';
 import { fetchStockPrice } from './utils/priceApi';
@@ -1092,6 +1093,9 @@ const StockPortfolioApp: React.FC = () => {
           )}
           {activeTab === 'tools' && (
             <MarketAnalysisTools />
+          )}
+          {activeTab === 'market-eye' && (
+            <MarketEye />
           )}
           {activeTab === 'trading-tools' && (
             <ToolsDashboard />
