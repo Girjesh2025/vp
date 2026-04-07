@@ -18,6 +18,7 @@ import MarketAnalysisTools from './components/MarketAnalysisTools';
 import MarketEye from './components/MarketEye';
 import StockRecommendations from './components/StockRecommendations';
 import HelpAndSupport from './components/HelpAndSupport';
+import { MarketTicker } from './components/MarketTicker';
 import { fetchStockPrice } from './utils/priceApi';
 import { 
   getStockBySymbol,
@@ -692,6 +693,10 @@ const StockPortfolioApp: React.FC = () => {
         {/* Main Content Area */}
         <div className="flex-1 p-6 bg-[#0f1520] min-h-[calc(100vh-64px)]">
           <div className="max-w-7xl mx-auto">
+            
+            {/* Global Market Ticker */}
+            <MarketTicker />
+
             {/* Portfolio Selector - ONLY SHOW ON DASHBOARD, PORTFOLIO, AND ANALYTICS TABS */}
             {(activeTab === 'dashboard' || activeTab === 'portfolio' || activeTab === 'analytics') && (
               <div className="mb-8">
