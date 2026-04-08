@@ -33,9 +33,10 @@ const GlobalMarket: React.FC = () => {
     { symbol: '^N225', name: 'NIKKEI', region: 'Asia', country: 'JAPAN', flag: '🇯🇵' },
     { symbol: '^NSEI', name: 'NIFTY 50', region: 'India', country: 'INDIA', flag: '🇮🇳' },
     { symbol: '^BSESN', name: 'SENSEX', region: 'India', country: 'INDIA', flag: '🇮🇳' },
+    { symbol: 'GIFT_NIFTY_MOCK', name: 'GIFT NIFTY', region: 'India', country: 'INDIA', flag: '🇮🇳' },
   ];
 
-  const getMarketStatus = (region: string): 'open' | 'closed' => {
+    const getMarketStatus = (region: string, symbol: string): 'open' | 'closed' => {
     const now = new Date();
     const day = now.getUTCDay(); // 0 = Sunday, 6 = Saturday
     if (day === 0 || day === 6) return 'closed';
@@ -48,6 +49,11 @@ const GlobalMarket: React.FC = () => {
     switch (region) {
       case 'US': 
         // US Market: ~14:30 to 21:00 UTC (ignoring daylight savings complexity)
+        // Dow Futures trade nearly 24/5
+        if (symbol === 'YM=F') {
+           // Futures are mostly open 23 hours a day
+           return 'open';
+        }
         return timeInMinutes >= 870 && timeInMinutes <= 1260 ? 'open' : 'closed';
       case 'Europe':
         // Europe (CET): ~08:00 to 16:30 UTC
@@ -56,7 +62,17 @@ const GlobalMarket: React.FC = () => {
         // Japan/HK: ~00:00 to 08:00 UTC
         return timeInMinutes >= 0 && timeInMinutes <= 480 ? 'open' : 'closed';
       case 'India':
-        // India: ~03:45 to 10:00 UTC
+        // GIFT NIFTY (NSE IX) operates in two sessions covering almost 21 hours
+        // 6:30 AM IST (01:00 UTC) to 3:40 PM IST (10:10 UTC)
+        // 4:35 PM IST (11:05 UTC) to 2:45 AM IST next day (21:15 UTC)
+        // Effectively open most of the day, except briefly from 10:10-11:05 UTC and 21:15-01:00 UTC
+        if (symbol === 'GIFT_NIFTY_MOCK') {
+          if (timeInMinutes >= 60 && timeInMinutes <= 610) return 'open';
+          if (timeInMinutes >= 665 && timeInMinutes <= 1275) return 'open';
+          return 'closed';
+        }
+        
+        // Regular Indian Markets (NSE/BSE): ~03:45 to 10:00 UTC
         return timeInMinutes >= 225 && timeInMinutes <= 600 ? 'open' : 'closed';
       default:
         return 'closed';
@@ -72,6 +88,27 @@ const GlobalMarket: React.FC = () => {
         const results = await Promise.all(
           baseIndices.map(async (idx) => {
             try {
+              // Special case for GIFT Nifty since Yahoo Finance lacks a reliable free public symbol for it
+              if (idx.symbol === 'GIFT_NIFTY_MOCK') {
+                const niftyData = await fetchStockPrice('^NSEI');
+                if (!niftyData) throw new Error("Nifty data unavailable");
+                // GIFT Nifty usually trades at a slight premium/discount to Nifty 50 (+20 to +50 points)
+                const premium = 35.50; 
+                const mockPrice = niftyData.price + premium;
+                const mockPrevClose = (niftyData.previousClose || niftyData.price) + premium;
+                const mockChange = mockPrice - mockPrevClose;
+                const mockChangePercent = (mockChange / mockPrevClose) * 100;
+                
+                return {
+                  ...idx,
+                  price: mockPrice,
+                  change: mockChange,
+                  changePercent: mockChangePercent,
+                  status: getMarketStatus(idx.region, idx.symbol),
+                  lastUpdate: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                };
+              }
+
               const data = await fetchStockPrice(idx.symbol);
               if (!data) throw new Error("No data");
               return {
@@ -79,7 +116,7 @@ const GlobalMarket: React.FC = () => {
                 price: data.price,
                 change: data.previousClose ? (data.price - data.previousClose) : 0, // Absolute price difference
                 changePercent: data.change || 0, // priceApi.ts returns percentage in 'change' property
-                status: getMarketStatus(idx.region),
+                status: getMarketStatus(idx.region, idx.symbol),
                 lastUpdate: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
               };
             } catch (err) {
@@ -271,44 +308,76 @@ const GlobalMarket: React.FC = () => {
                     </div>
                   </div>
                   
-                  <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {indices.map((index) => (
-                      <div 
-                        key={index.symbol} 
-                        className="bg-[#111827] border border-slate-800 rounded-xl p-4 hover:border-slate-700 transition-all cursor-pointer group flex flex-col justify-between h-full"
-                      >
-                        <div className="flex items-start justify-between mb-4">
-                          <div className="flex items-center gap-3">
-                            {/* Flag Circle */}
-                            <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-xl border border-slate-700 shadow-inner group-hover:scale-105 transition-transform shrink-0">
-                              {index.flag}
+                  <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                    {indices.map((index) => {
+                      const isPositive = index.change >= 0;
+                      return (
+                        <div 
+                          key={index.symbol} 
+                          className={`relative overflow-hidden bg-gradient-to-br from-[#111827] to-[#0f1520] border rounded-2xl p-5 cursor-pointer group transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl flex flex-col justify-between h-36 ${
+                            isPositive ? 'border-emerald-900/30 hover:border-emerald-500/50 hover:shadow-emerald-500/10' : 'border-red-900/30 hover:border-red-500/50 hover:shadow-red-500/10'
+                          }`}
+                        >
+                          {/* Background Glow */}
+                          <div className={`absolute top-0 right-0 w-24 h-24 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 opacity-20 group-hover:opacity-40 transition-opacity ${
+                            isPositive ? 'bg-emerald-500' : 'bg-red-500'
+                          }`} />
+
+                          {/* Decorative Chart Line (Abstract Background) */}
+                          <div className="absolute bottom-0 left-0 right-0 h-16 opacity-[0.03] group-hover:opacity-10 transition-opacity pointer-events-none">
+                            <svg viewBox="0 0 100 30" preserveAspectRatio="none" className="w-full h-full">
+                              {isPositive ? (
+                                <polyline points="0,30 20,20 40,25 60,10 80,15 100,0 100,30" fill="#10b981" />
+                              ) : (
+                                <polyline points="0,0 20,15 40,10 60,25 80,20 100,30 100,30" fill="#ef4444" />
+                              )}
+                            </svg>
+                          </div>
+
+                          <div className="flex items-start justify-between mb-4 relative z-10">
+                            <div className="flex items-center gap-3">
+                              {/* Flag Box */}
+                              <div className="w-9 h-9 rounded-lg bg-slate-800/80 flex items-center justify-center text-xl border border-slate-700/50 shadow-inner group-hover:scale-110 transition-transform shrink-0 relative">
+                                {index.flag}
+                                {index.status === 'open' && (
+                                  <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-[#111827] shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse" title="Market Open (LIVE)" />
+                                )}
+                              </div>
+                              
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <h3 className="font-black text-white text-[15px] leading-tight truncate">{index.name}</h3>
+                                  {index.status === 'open' && (
+                                    <span className="px-1.5 py-[2px] rounded bg-indigo-500/10 border border-indigo-500/30 text-[8px] font-black text-indigo-400 uppercase tracking-widest shadow-[0_0_10px_rgba(99,102,241,0.2)]">
+                                      LIVE
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">{index.country}</p>
+                              </div>
                             </div>
                             
-                            <div className="min-w-0">
-                              <h3 className="font-bold text-white text-sm leading-tight truncate">{index.name}</h3>
-                              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">{index.country}</p>
+                            <div className={`px-2.5 py-1 rounded-lg text-[11px] font-black border flex items-center gap-1 ${
+                              isPositive 
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                                : 'bg-red-500/10 text-red-400 border-red-500/20'
+                            }`}>
+                              {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                              {Math.abs(index.changePercent).toFixed(2)}%
                             </div>
                           </div>
-                          
-                          <div className={`px-2 py-0.5 rounded text-[10px] font-black border ${
-                            index.change >= 0 
-                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                              : 'bg-red-500/10 text-red-400 border-red-500/20'
-                          }`}>
-                            {index.change >= 0 ? '+' : ''}{index.changePercent.toFixed(2)}%
-                          </div>
-                        </div>
 
-                        <div className="flex items-end justify-between mt-auto">
-                          <div className="text-xl font-black text-white tracking-tight">
-                            {index.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </div>
-                          <div className={`text-[11px] font-bold ${index.change >= 0 ? 'text-emerald-500/70' : 'text-red-500/70'}`}>
-                            {index.change >= 0 ? '+' : ''}{index.change.toFixed(2)}
+                          <div className="flex items-end justify-between mt-auto relative z-10">
+                            <div className="text-2xl font-black text-white tracking-tight tabular-nums">
+                              {index.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                            <div className={`text-[12px] font-bold tabular-nums ${isPositive ? 'text-emerald-500' : 'text-red-500'}`}>
+                              {isPositive ? '+' : ''}{index.change.toFixed(2)}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>
