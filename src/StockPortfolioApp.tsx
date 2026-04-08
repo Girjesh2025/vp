@@ -16,6 +16,7 @@ import ToolsDashboard from './components/ToolsDashboard';
 import MarketAnalysis from './components/MarketAnalysis';
 import MarketAnalysisTools from './components/MarketAnalysisTools';
 import MarketEye from './components/MarketEye';
+import SwingPlayer from './components/SwingPlayer';
 import StockRecommendations from './components/StockRecommendations';
 import HelpAndSupport from './components/HelpAndSupport';
 import { MarketTicker } from './components/MarketTicker';
@@ -674,7 +675,7 @@ const StockPortfolioApp: React.FC = () => {
       />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         {/* Professional Header */}
         <ProfessionalHeader
           currentPortfolio={currentPortfolio}
@@ -691,7 +692,7 @@ const StockPortfolioApp: React.FC = () => {
         />
 
         {/* Main Content Area */}
-        <div className="flex-1 p-6 bg-[#0f1520] min-h-[calc(100vh-64px)]">
+        <main className="flex-1 p-4 md:p-6 bg-[#0f1520] min-h-0 overflow-y-auto custom-scrollbar">
           <div className="max-w-7xl mx-auto">
             
             {/* Global Market Ticker */}
@@ -1089,7 +1090,7 @@ const StockPortfolioApp: React.FC = () => {
                   stocks={portfolioStocks}
                   transactions={portfolioTransactions}
                   priceData={stockPrices}
-                  getStockInfo={getStockBySymbol}
+                  getStockInfo={(symbol) => getStockBySymbol(symbol) || null}
                 />
               )}
           {activeTab === 'ai-trading' && (
@@ -1102,6 +1103,9 @@ const StockPortfolioApp: React.FC = () => {
           )}
           {activeTab === 'market-eye' && (
             <MarketEye />
+          )}
+          {activeTab === 'swing-player' && (
+            <SwingPlayer />
           )}
           {activeTab === 'trading-tools' && (
             <ToolsDashboard />
@@ -1228,7 +1232,7 @@ const StockPortfolioApp: React.FC = () => {
                           </div>
                         </div>
                         <button
-                          onClick={updatePrices}
+                          onClick={() => updatePrices()}
                           disabled={isLoading}
                           className="px-5 py-2.5 bg-[#172030] border border-slate-700 text-white text-sm font-bold rounded-xl hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
                         >
@@ -1250,7 +1254,7 @@ const StockPortfolioApp: React.FC = () => {
                 <HelpAndSupport />
               )}
           </div>
-        </div>
+        </main>
       </div>
     </div>
 

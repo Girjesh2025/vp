@@ -18,6 +18,7 @@ import {
 import { fetchStockPrice, fetchIntradayPrices } from '../utils/priceApi';
 import { stockDatabase } from '../stockDatabase';
 import { fetchMarketNews, type NewsItem } from '../utils/newsApi';
+import { TICKER_INDICES } from './MarketTicker';
 import StockLogo from './StockLogo';
 import { AreaChart, Area, LineChart, Line, ResponsiveContainer, YAxis } from 'recharts';
 
@@ -291,7 +292,7 @@ const MarketEye = () => {
     
   // Intraday Boost prefers high R.Fac
   const boosters = [...marketData]
-    .filter(d => d.change > 0.5 || d.change < -0.5)
+    .filter(d => d.rFac > 1.5)
     .filter(d => d.symbol.toLowerCase().includes(boostSearch.toLowerCase()))
     .filter(d => {
       if (boostFilter === 'Bullish') return d.isBull;
@@ -428,10 +429,6 @@ const MarketEye = () => {
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
-                  
-                  <div className="w-full text-center">
-                    <a href="#" className="text-[10px] font-medium text-slate-400 hover:text-slate-200 transition-colors">Option Chain {'>'}</a>
-                  </div>
                 </div>
 
                 {/* BANKNIFTY Card */}
@@ -465,10 +462,6 @@ const MarketEye = () => {
                         <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorBankNifty)" />
                       </AreaChart>
                     </ResponsiveContainer>
-                  </div>
-                  
-                  <div className="w-full text-center">
-                    <a href="#" className="text-[10px] font-medium text-slate-400 hover:text-slate-200 transition-colors">Option Chain {'>'}</a>
                   </div>
                 </div>
 
@@ -658,20 +651,20 @@ const MarketEye = () => {
                   View All
                 </button>
               </div>
-              <div className="space-y-4">
+              <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
                 {topGainers.map(s => {
                   // Max width is 100%, we normalize based on the top gainer's change
                   const maxChange = topGainers[0]?.change || 1;
                   const widthPct = Math.max(10, Math.min(100, (s.change / maxChange) * 100));
                   return (
-                    <div key={s.symbol} className="flex items-center gap-3">
+                    <div key={s.symbol} onClick={() => handleRowClick(s.symbol)} className="flex items-center gap-3 cursor-pointer group">
                       <div className="w-28 flex items-center gap-2.5 shrink-0">
                          <StockLogo symbol={s.symbol} />
-                         <span className="text-[11px] font-bold text-slate-300 truncate" title={s.symbol}>{s.symbol}</span>
+                         <span className="text-[11px] font-bold text-slate-300 truncate group-hover:text-white transition-colors" title={s.symbol}>{s.symbol}</span>
                       </div>
                       <div className="flex-1 flex items-center h-6">
                         <div 
-                          className="h-full bg-emerald-500 flex items-center justify-end px-2 text-[10px] font-bold text-white rounded-r-sm transition-all duration-1000 shadow-[0_0_10px_rgba(16,185,129,0.3)]"
+                          className="h-full bg-emerald-500 flex items-center justify-end px-2 text-[10px] font-bold text-white rounded-r-sm transition-all duration-1000 shadow-[0_0_10px_rgba(16,185,129,0.3)] group-hover:brightness-110"
                           style={{ width: `${widthPct}%` }}
                         >
                           {s.change.toFixed(2)}%
@@ -694,19 +687,19 @@ const MarketEye = () => {
                   View All
                 </button>
               </div>
-              <div className="space-y-4">
+              <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
                 {topLosers.map(s => {
                   const maxChange = Math.abs(topLosers[0]?.change || 1);
                   const widthPct = Math.max(10, Math.min(100, (Math.abs(s.change) / maxChange) * 100));
                   return (
-                    <div key={s.symbol} className="flex items-center gap-3">
+                    <div key={s.symbol} onClick={() => handleRowClick(s.symbol)} className="flex items-center gap-3 cursor-pointer group">
                       <div className="w-28 flex items-center gap-2.5 shrink-0">
                          <StockLogo symbol={s.symbol} />
-                         <span className="text-[11px] font-bold text-slate-300 truncate" title={s.symbol}>{s.symbol}</span>
+                         <span className="text-[11px] font-bold text-slate-300 truncate group-hover:text-white transition-colors" title={s.symbol}>{s.symbol}</span>
                       </div>
                       <div className="flex-1 flex items-center h-6">
                         <div 
-                          className="h-full bg-red-500 flex items-center justify-end px-2 text-[10px] font-bold text-white rounded-r-sm transition-all duration-1000 shadow-[0_0_10px_rgba(239,68,68,0.3)]"
+                          className="h-full bg-red-500 flex items-center justify-end px-2 text-[10px] font-bold text-white rounded-r-sm transition-all duration-1000 shadow-[0_0_10px_rgba(239,68,68,0.3)] group-hover:brightness-110"
                           style={{ width: `${widthPct}%` }}
                         >
                           {s.change.toFixed(2)}%
@@ -720,31 +713,41 @@ const MarketEye = () => {
           </div>
 
           {/* Breakout Beacon & Intraday Boost grids */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 w-full min-w-0">
             
             {/* BREAKOUT BEACON */}
-            <div className="bg-[#131b26] border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-              <div className="p-5 border-b border-slate-800/60 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-slate-800 to-slate-900 border border-slate-700 flex items-center justify-center">
-                    <Activity className="w-5 h-5 text-emerald-400" />
+            <div className="relative bg-gradient-to-br from-[#172030] to-[#131b26] border border-slate-700/50 hover:border-slate-500/80 rounded-2xl overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.5)] flex flex-col transition-all duration-300 group">
+              {/* Top glowing line for a premium feel */}
+              <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent opacity-50 group-hover:opacity-100 transition-opacity" />
+
+              <div className="p-4 sm:p-5 border-b border-slate-700/50 flex items-center justify-between bg-[#172030]/50 relative overflow-hidden shrink-0">
+                <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none bg-gradient-to-r from-emerald-500 to-transparent blur-2xl" />
+
+                <div className="flex items-center gap-4 sm:gap-5 relative z-10">
+                  <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-b from-[#1e293b] to-[#0f1520] border border-slate-600 shadow-[inset_0_2px_10px_rgba(255,255,255,0.1)] flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-300">
+                    <div className="scale-125 sm:scale-150">
+                      <div className="relative w-full h-full flex flex-col items-center justify-center pt-2">
+                        <div className="flex items-end gap-0.5">
+                          <div className="w-1.5 h-3 bg-red-500 rounded-sm shadow-[0_0_5px_currentColor]"/>
+                          <div className="w-1.5 h-4 bg-emerald-500 rounded-sm shadow-[0_0_5px_currentColor]"/>
+                          <div className="w-1.5 h-6 bg-emerald-500 rounded-sm shadow-[0_0_5px_currentColor]"/>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-lg font-black text-white tracking-wide">BREAKOUT BEACON</h2>
-                      <Flame className="w-4 h-4 text-orange-500 fill-orange-500" />
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-lg sm:text-2xl font-black text-white tracking-widest uppercase drop-shadow-[0_2px_10px_rgba(255,255,255,0.2)]">BREAKOUT BEACON</h2>
+                      <Flame className="w-5 h-5 text-orange-500 fill-orange-500 drop-shadow-[0_0_12px_rgba(249,115,22,0.8)] animate-pulse" />
                     </div>
-                    <div className="flex items-center gap-2 mt-1 text-xs font-medium text-slate-400">
-                      <a href="#" className="flex items-center gap-1 hover:text-white transition-colors underline underline-offset-2">
-                        How to use <PlayCircle className="w-3 h-3" />
-                      </a>
-                      <span className="flex items-center gap-1.5 bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full text-[10px] font-bold border border-red-500/30">
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> LIVE
+                    <div className="flex items-center gap-3 mt-2 text-xs sm:text-sm font-bold text-slate-400">
+                      <span className="flex items-center gap-1.5 bg-red-500/10 border border-red-500/30 text-red-400 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black shadow-[0_0_10px_rgba(239,68,68,0.2)] uppercase tracking-wider">
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_5px_currentColor]" /> LIVE
                       </span>
                     </div>
                   </div>
                 </div>
-                <div className="relative">
+                <div className="relative hidden sm:block z-10">
                   <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input 
                     type="text" 
@@ -757,11 +760,11 @@ const MarketEye = () => {
               </div>
 
               {/* Filters */}
-              <div className="flex gap-2 px-5 py-3 border-b border-slate-800/60 bg-[#172030]/50 relative z-10">
+              <div className="flex gap-2 px-5 py-3 border-b border-slate-800/60 bg-[#172030]/50 relative z-20">
                 <div className="relative">
                   <button 
                     onClick={() => setIsBreakoutFilterOpen(!isBreakoutFilterOpen)}
-                    onBlur={() => setTimeout(() => setIsBreakoutFilterOpen(false), 200)}
+                    onBlur={() => setTimeout(() => setIsBreakoutFilterOpen(false), 150)}
                     className="flex items-center gap-1.5 bg-[#1e293b] hover:bg-slate-700 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-700 transition-colors"
                   >
                     {breakoutFilter === 'Bullish' ? <TrendingUp className="w-3 h-3 text-emerald-400" /> : 
@@ -770,103 +773,104 @@ const MarketEye = () => {
                     {breakoutFilter} <ChevronDown className="w-3 h-3" />
                   </button>
                   {isBreakoutFilterOpen && (
-                    <div className="absolute top-full left-0 mt-1 w-32 bg-[#1e293b] border border-slate-700 rounded-lg shadow-xl overflow-hidden py-1">
-                      <button onClick={() => setBreakoutFilter('All Signals')} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
+                    <div className="absolute top-full left-0 mt-1 w-32 bg-[#1e293b] border border-slate-700 rounded-lg shadow-xl overflow-hidden py-1 z-50">
+                      <button onMouseDown={(e) => { e.preventDefault(); setBreakoutFilter('All Signals'); setIsBreakoutFilterOpen(false); }} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
                         <Activity className="w-3 h-3 text-slate-400"/> All Signals
                       </button>
-                      <button onClick={() => setBreakoutFilter('Bullish')} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
+                      <button onMouseDown={(e) => { e.preventDefault(); setBreakoutFilter('Bullish'); setIsBreakoutFilterOpen(false); }} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
                         <TrendingUp className="w-3 h-3 text-emerald-400"/> Bullish
                       </button>
-                      <button onClick={() => setBreakoutFilter('Bearish')} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
+                      <button onMouseDown={(e) => { e.preventDefault(); setBreakoutFilter('Bearish'); setIsBreakoutFilterOpen(false); }} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
                         <TrendingDown className="w-3 h-3 text-red-400"/> Bearish
                       </button>
                     </div>
                   )}
                 </div>
-                <button className="flex items-center gap-1.5 bg-[#1e293b] hover:bg-slate-700 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-700 transition-colors">
-                  <div className="w-3 h-3 rounded-full bg-gradient-to-tr from-blue-500 to-emerald-500" /> All <ChevronDown className="w-3 h-3" />
-                </button>
               </div>
 
               {/* Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="text-[10px] uppercase tracking-wider text-slate-500 font-bold border-b border-slate-800 bg-[#0f1520]">
-                      <th className="px-5 py-3 w-24">Signal</th>
-                      <th className="px-5 py-3">Symbol</th>
-                      <th className="px-5 py-3 text-right">%</th>
-                      <th className="px-5 py-3 text-right">Signal % <ChevronDown className="w-3 h-3 inline" /></th>
-                      <th className="px-5 py-3 text-right">Time</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/50">
+              <div className="bg-[#0f1520]/50 relative overflow-x-auto custom-scrollbar">
+                <div className="w-full flex flex-col min-w-[500px]">
+                  <div className="sticky top-0 bg-[#172030]/95 backdrop-blur-md z-10 shadow-sm border-b border-slate-700/50 flex items-center px-4 py-3 text-[10px] uppercase tracking-wider text-slate-500 font-bold shrink-0">
+                    <div className="w-[65px] sm:w-[80px] shrink-0">Signal</div>
+                    <div className="flex-1 min-w-0 pr-2">Symbol</div>
+                    <div className="w-[80px] sm:w-[110px] text-center shrink-0">%</div>
+                    <div className="w-[60px] sm:w-[80px] text-center shrink-0">Signal % <ChevronDown className="w-3 h-3 inline" /></div>
+                    <div className="w-[60px] sm:w-[80px] text-right shrink-0">Time</div>
+                  </div>
+                  <div className="flex flex-col divide-y divide-slate-800/50 pb-2">
                     {breakouts.map((b) => (
-                      <tr 
+                      <div 
                         key={`breakout-${b.symbol}`} 
                         onClick={() => handleRowClick(b.symbol)}
-                        className="hover:bg-slate-800/30 transition-colors group cursor-pointer"
+                        className="flex items-center px-4 py-3 hover:bg-slate-800/30 transition-all duration-200 group/row cursor-pointer relative"
                       >
-                        <td className="px-5 py-3">
-                          <span className={`px-3 py-1 rounded-full text-[11px] font-black tracking-widest ${
-                            b.isBull ? 'bg-[#c6f6d5] text-[#14532d]' : 'bg-[#fed7d7] text-[#7f1d1d]'
+                        <div className={`absolute left-0 top-0 bottom-0 w-1 opacity-0 group-hover/row:opacity-100 transition-opacity ${b.isBull ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                        
+                        <div className="w-[65px] sm:w-[80px] shrink-0">
+                          <span className={`inline-flex items-center justify-center w-full max-w-[65px] py-1.5 rounded-full text-[10px] sm:text-[11px] font-black tracking-widest shadow-sm border ${
+                            b.isBull ? 'bg-[#c6f6d5] text-[#14532d] border-[#86efac]' : 'bg-[#fed7d7] text-[#7f1d1d] border-[#fca5a5]'
                           }`}>
                             {b.isBull ? 'BULL' : 'BEAR'}
                           </span>
-                        </td>
-                        <td className="px-5 py-3">
-                          <div className="flex items-center gap-3">
-                            <StockLogo symbol={b.symbol} />
-                            <span className="font-bold text-slate-200 group-hover:text-white transition-colors">{b.symbol}</span>
-                            <div className="flex gap-1 ml-1 opacity-60">
-                              <div className={`w-1 h-3 rounded-sm ${b.isBull ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                              <div className="w-1 h-3 rounded-sm bg-blue-500" />
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-5 py-3 text-right">
-                          <span className={`px-2.5 py-1 rounded-md text-xs font-black shadow-sm ${
-                            b.change >= 0 ? 'bg-[#c6f6d5] text-[#14532d]' : 'bg-[#fed7d7] text-[#7f1d1d]'
+                        </div>
+
+                        <div className="flex-1 min-w-0 flex items-center gap-3 sm:gap-4 pr-2">
+                          <StockLogo symbol={b.symbol} className="w-8 h-8 sm:w-10 sm:h-10 shrink-0" />
+                          <span className="text-sm sm:text-base font-bold text-slate-200 group-hover/row:text-white transition-colors group-hover/row:translate-x-1 duration-200 truncate">{b.symbol}</span>
+                        </div>
+
+                        <div className="w-[80px] sm:w-[110px] flex justify-center items-center shrink-0">
+                          <span className={`inline-flex items-center justify-center w-full max-w-[75px] py-1.5 rounded-md text-xs sm:text-sm font-black border ${
+                            b.change >= 0 
+                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_8px_rgba(16,185,129,0.15)]' 
+                              : 'bg-red-500/10 text-red-400 border-red-500/20 shadow-[0_0_8px_rgba(239,68,68,0.15)]'
                           }`}>
-                            {b.change.toFixed(2)}
+                            {b.change >= 0 ? '+' : ''}{b.change.toFixed(2)}%
                           </span>
-                        </td>
-                        <td className="px-5 py-3 text-right font-bold text-slate-300">
-                          {b.signalPct.toFixed(2)}
-                        </td>
-                        <td className="px-5 py-3 text-right text-xs font-semibold text-slate-400">
+                        </div>
+
+                        <div className="w-[60px] sm:w-[80px] text-center text-xs sm:text-sm font-bold text-slate-300 shrink-0">
+                          {b.signalPct.toFixed(2)}%
+                        </div>
+
+                        <div className="w-[60px] sm:w-[80px] text-right text-[10px] sm:text-[11px] font-semibold text-slate-400 shrink-0">
                           {b.time}
-                        </td>
-                      </tr>
+                        </div>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                </div>
               </div>
             </div>
 
             {/* INTRADAY BOOST */}
-            <div className="bg-[#131b26] border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-              <div className="p-5 border-b border-slate-800/60 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-slate-800 to-slate-900 border border-slate-700 flex items-center justify-center">
-                    <span className="text-[10px] font-black text-blue-400 italic">BOOST</span>
+            <div className="relative bg-gradient-to-br from-[#172030] to-[#131b26] border border-slate-700/50 hover:border-slate-500/80 rounded-2xl overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.5)] flex flex-col transition-all duration-300 group">
+              {/* Top glowing line for a premium feel */}
+              <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-blue-500/50 to-transparent opacity-50 group-hover:opacity-100 transition-opacity" />
+
+              <div className="p-4 sm:p-5 border-b border-slate-700/50 flex items-center justify-between bg-[#172030]/50 relative overflow-hidden shrink-0">
+                <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none bg-gradient-to-r from-blue-500 to-transparent blur-2xl" />
+
+                <div className="flex items-center gap-4 sm:gap-5 relative z-10">
+                  <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-b from-[#1e293b] to-[#0f1520] border border-slate-600 shadow-[inset_0_2px_10px_rgba(255,255,255,0.1)] flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-300">
+                    <div className="scale-125 sm:scale-150">
+                      <span className="text-[10px] font-black text-blue-400 italic tracking-tighter">BOOST</span>
+                    </div>
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-lg font-black text-white tracking-wide">INTRADAY BOOST</h2>
-                      <Droplets className="w-4 h-4 text-blue-400 fill-blue-400" />
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-lg sm:text-2xl font-black text-white tracking-widest uppercase drop-shadow-[0_2px_10px_rgba(255,255,255,0.2)]">INTRADAY BOOST</h2>
+                      <Droplets className="w-5 h-5 text-blue-400 fill-blue-400 drop-shadow-[0_0_12px_rgba(96,165,250,0.8)] animate-pulse" />
                     </div>
-                    <div className="flex items-center gap-2 mt-1 text-xs font-medium text-slate-400">
-                      <a href="#" className="flex items-center gap-1 hover:text-white transition-colors underline underline-offset-2">
-                        How to use <PlayCircle className="w-3 h-3" />
-                      </a>
-                      <span className="flex items-center gap-1.5 bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full text-[10px] font-bold border border-red-500/30">
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> LIVE
+                    <div className="flex items-center gap-3 mt-2 text-xs sm:text-sm font-bold text-slate-400">
+                      <span className="flex items-center gap-1.5 bg-red-500/10 border border-red-500/30 text-red-400 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black shadow-[0_0_10px_rgba(239,68,68,0.2)] uppercase tracking-wider">
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_5px_currentColor]" /> LIVE
                       </span>
                     </div>
                   </div>
                 </div>
-                <div className="relative">
+                <div className="relative hidden sm:block z-10">
                   <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input 
                     type="text" 
@@ -879,11 +883,11 @@ const MarketEye = () => {
               </div>
 
               {/* Filters */}
-              <div className="flex gap-2 px-5 py-3 border-b border-slate-800/60 bg-[#172030]/50 relative z-10">
+              <div className="flex gap-2 px-5 py-3 border-b border-slate-800/60 bg-[#172030]/50 relative z-20">
                 <div className="relative">
                   <button 
                     onClick={() => setIsBoostFilterOpen(!isBoostFilterOpen)}
-                    onBlur={() => setTimeout(() => setIsBoostFilterOpen(false), 200)}
+                    onBlur={() => setTimeout(() => setIsBoostFilterOpen(false), 150)}
                     className="flex items-center gap-1.5 bg-[#1e293b] hover:bg-slate-700 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-700 transition-colors"
                   >
                     {boostFilter === 'Bullish' ? <TrendingUp className="w-3 h-3 text-emerald-400" /> : 
@@ -892,73 +896,69 @@ const MarketEye = () => {
                     {boostFilter} <ChevronDown className="w-3 h-3" />
                   </button>
                   {isBoostFilterOpen && (
-                    <div className="absolute top-full left-0 mt-1 w-32 bg-[#1e293b] border border-slate-700 rounded-lg shadow-xl overflow-hidden py-1">
-                      <button onClick={() => setBoostFilter('All Signals')} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
+                    <div className="absolute top-full left-0 mt-1 w-32 bg-[#1e293b] border border-slate-700 rounded-lg shadow-xl overflow-hidden py-1 z-50">
+                      <button onMouseDown={(e) => { e.preventDefault(); setBoostFilter('All Signals'); setIsBoostFilterOpen(false); }} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
                         <Activity className="w-3 h-3 text-slate-400"/> All Signals
                       </button>
-                      <button onClick={() => setBoostFilter('Bullish')} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
+                      <button onMouseDown={(e) => { e.preventDefault(); setBoostFilter('Bullish'); setIsBoostFilterOpen(false); }} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
                         <TrendingUp className="w-3 h-3 text-emerald-400"/> Bullish
                       </button>
-                      <button onClick={() => setBoostFilter('Bearish')} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
+                      <button onMouseDown={(e) => { e.preventDefault(); setBoostFilter('Bearish'); setIsBoostFilterOpen(false); }} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
                         <TrendingDown className="w-3 h-3 text-red-400"/> Bearish
                       </button>
                     </div>
                   )}
                 </div>
-                <button className="flex items-center gap-1.5 bg-[#1e293b] hover:bg-slate-700 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-700 transition-colors">
-                  <span className="text-[10px] w-4 text-center text-amber-500 bg-amber-500/20 rounded">₹</span> All <ChevronDown className="w-3 h-3" />
-                </button>
               </div>
 
               {/* Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="text-[10px] uppercase tracking-wider text-slate-500 font-bold border-b border-slate-800 bg-[#0f1520]">
-                      <th className="px-5 py-3">Symbol</th>
-                      <th className="px-5 py-3 text-right">%</th>
-                      <th className="px-5 py-3 text-right">R.Fac <ChevronDown className="w-3 h-3 inline" /></th>
-                      <th className="px-5 py-3 text-right w-24">Signal</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/50">
+              <div className="bg-[#0f1520]/50 relative overflow-x-auto custom-scrollbar">
+                <div className="w-full flex flex-col min-w-[500px]">
+                  <div className="sticky top-0 bg-[#172030]/95 backdrop-blur-md z-10 shadow-sm border-b border-slate-700/50 flex items-center px-4 py-3 text-[10px] uppercase tracking-wider text-slate-500 font-bold shrink-0">
+                    <div className="flex-1 min-w-0 pr-2">Symbol</div>
+                    <div className="w-[80px] sm:w-[110px] text-center shrink-0">%</div>
+                    <div className="w-[60px] sm:w-[80px] text-center shrink-0">R.Fac <ChevronDown className="w-3 h-3 inline" /></div>
+                    <div className="w-[65px] sm:w-[80px] text-right shrink-0">Signal</div>
+                  </div>
+                  <div className="flex flex-col divide-y divide-slate-800/50 pb-2">
                     {boosters.map((b) => (
-                      <tr 
+                      <div 
                         key={`boost-${b.symbol}`} 
                         onClick={() => handleRowClick(b.symbol)}
-                        className="hover:bg-slate-800/30 transition-colors group cursor-pointer"
+                        className="flex items-center px-4 py-3 hover:bg-slate-800/30 transition-all duration-200 group/row cursor-pointer relative"
                       >
-                        <td className="px-5 py-3">
-                          <div className="flex items-center gap-3">
-                            <StockLogo symbol={b.symbol} />
-                            <span className="font-bold text-slate-200 group-hover:text-white transition-colors">{b.symbol}</span>
-                            <div className="flex gap-1 ml-1 opacity-60">
-                              <div className={`w-1 h-3 rounded-sm ${b.isBull ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                              <div className="w-1 h-3 rounded-sm bg-blue-500" />
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-5 py-3 text-right">
-                          <span className={`px-2.5 py-1 rounded-md text-xs font-black shadow-sm ${
-                            b.change >= 0 ? 'bg-[#c6f6d5] text-[#14532d]' : 'bg-[#fed7d7] text-[#7f1d1d]'
+                        <div className={`absolute left-0 top-0 bottom-0 w-1 opacity-0 group-hover/row:opacity-100 transition-opacity ${b.isBull ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                        
+                        <div className="flex-1 min-w-0 flex items-center gap-3 sm:gap-4 pr-2">
+                          <StockLogo symbol={b.symbol} className="w-8 h-8 sm:w-10 sm:h-10 shrink-0" />
+                          <span className="text-sm sm:text-base font-bold text-slate-200 group-hover/row:text-white transition-colors group-hover/row:translate-x-1 duration-200 truncate">{b.symbol}</span>
+                        </div>
+
+                        <div className="w-[80px] sm:w-[110px] flex justify-center items-center shrink-0">
+                          <span className={`inline-flex items-center justify-center w-full max-w-[75px] py-1.5 rounded-md text-xs sm:text-sm font-black border ${
+                            b.change >= 0 
+                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_8px_rgba(16,185,129,0.15)]' 
+                              : 'bg-red-500/10 text-red-400 border-red-500/20 shadow-[0_0_8px_rgba(239,68,68,0.15)]'
                           }`}>
-                            {b.change.toFixed(2)}
+                            {b.change >= 0 ? '+' : ''}{b.change.toFixed(2)}%
                           </span>
-                        </td>
-                        <td className="px-5 py-3 text-right font-bold text-slate-300">
+                        </div>
+
+                        <div className="w-[60px] sm:w-[80px] text-center text-xs sm:text-sm font-bold text-slate-300 shrink-0">
                           {b.rFac.toFixed(2)}
-                        </td>
-                        <td className="px-5 py-3 text-right">
-                          <span className={`px-3 py-1 rounded-full text-[11px] font-black tracking-widest ${
-                            b.isBull ? 'bg-[#c6f6d5] text-[#14532d]' : 'bg-[#fed7d7] text-[#7f1d1d]'
+                        </div>
+
+                        <div className="w-[65px] sm:w-[80px] shrink-0 flex justify-end">
+                          <span className={`inline-flex items-center justify-center w-full max-w-[65px] py-1.5 rounded-full text-[10px] sm:text-[11px] font-black tracking-widest shadow-sm border ${
+                            b.isBull ? 'bg-[#c6f6d5] text-[#14532d] border-[#86efac]' : 'bg-[#fed7d7] text-[#7f1d1d] border-[#fca5a5]'
                           }`}>
                             {b.isBull ? 'BULL' : 'BEAR'}
                           </span>
-                        </td>
-                      </tr>
+                        </div>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -982,13 +982,13 @@ const MarketEye = () => {
               </button>
             </div>
             <div className="p-6 overflow-y-auto custom-scrollbar">
-              <div className="space-y-4">
+              <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
                 {(() => {
                   const sortedData = viewAllType === 'gainers' 
                     ? [...marketData].sort((a, b) => b.change - a.change)
                     : [...marketData].sort((a, b) => a.change - b.change);
                   
-                  const filteredData = sortedData.filter(s => viewAllType === 'gainers' ? s.change > 0 : s.change < 0);
+                  const filteredData = sortedData.filter(s => viewAllType === 'gainers' ? s.change > 0 : s.change < 0).slice(0, 20);
                   
                   if (filteredData.length === 0) {
                     return <div className="text-center text-slate-500 py-8">No {viewAllType} found.</div>;
@@ -999,14 +999,14 @@ const MarketEye = () => {
                   return filteredData.map(s => {
                     const widthPct = Math.max(10, Math.min(100, (Math.abs(s.change) / maxChange) * 100));
                     return (
-                      <div key={s.symbol} className="flex items-center gap-4">
+                      <div key={s.symbol} onClick={() => handleRowClick(s.symbol)} className="flex items-center gap-4 cursor-pointer group">
                         <div className="w-32 flex items-center gap-3 shrink-0">
                            <StockLogo symbol={s.symbol} />
-                           <span className="text-xs font-bold text-slate-300 truncate" title={s.symbol}>{s.symbol}</span>
+                           <span className="text-xs font-bold text-slate-300 truncate group-hover:text-white transition-colors" title={s.symbol}>{s.symbol}</span>
                         </div>
                         <div className="flex-1 flex items-center h-8 bg-[#0f1520] rounded-r-md">
                           <div 
-                            className={`h-full flex items-center justify-end px-3 text-xs font-bold text-white rounded-r-md transition-all duration-1000 shadow-lg ${
+                            className={`h-full flex items-center justify-end px-3 text-xs font-bold text-white rounded-r-md transition-all duration-1000 shadow-lg group-hover:brightness-110 ${
                               viewAllType === 'gainers' ? 'bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]'
                             }`}
                             style={{ width: `${widthPct}%` }}

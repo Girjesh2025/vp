@@ -14,6 +14,8 @@ const TICKER_INDICES = [
   { symbol: '^BSESN', name: 'SENSEX' }
 ];
 
+export { TICKER_INDICES };
+
 export const MarketTicker: React.FC = () => {
   const [tickerData, setTickerData] = useState<{ name: string; price: number; change: number }[]>([]);
 
