@@ -141,11 +141,11 @@ const MarketEye = () => {
 
   // Search and Filters
   const [breakoutSearch, setBreakoutSearch] = useState('');
-  const [breakoutFilter, setBreakoutFilter] = useState<'Neutral' | 'Bullish' | 'Bearish'>('Neutral');
+  const [breakoutFilter, setBreakoutFilter] = useState<'All Signals' | 'Bullish' | 'Bearish'>('All Signals');
   const [isBreakoutFilterOpen, setIsBreakoutFilterOpen] = useState(false);
 
   const [boostSearch, setBoostSearch] = useState('');
-  const [boostFilter, setBoostFilter] = useState<'Neutral' | 'Bullish' | 'Bearish'>('Neutral');
+  const [boostFilter, setBoostFilter] = useState<'All Signals' | 'Bullish' | 'Bearish'>('All Signals');
   const [isBoostFilterOpen, setIsBoostFilterOpen] = useState(false);
 
   const [newsData, setNewsData] = useState<NewsItem[]>([]);
@@ -221,11 +221,23 @@ const MarketEye = () => {
               if (data && isMounted) {
                 let hash = 0;
                 for (let j = 0; j < symbol.length; j++) hash = symbol.charCodeAt(j) + ((hash << 5) - hash);
-                const rFac = 1.0 + (Math.abs(hash) % 300) / 100;
-                const signalPct = Math.abs(data.change) * (1 + (Math.abs(hash) % 50) / 100);
                 
-                const hour = 9 + (Math.abs(hash) % 6);
-                const min = Math.abs(hash) % 60;
+                const absChange = Math.abs(data.change || 0);
+                // Make Signal % look like an algorithmic momentum score (typically slightly higher than actual change)
+                const signalPct = absChange * (1 + ((Math.abs(hash) % 30) / 100));
+                
+                // R.Fac (Relative Factor) scales up with volatility, usually 1.0 to 5.0
+                const rFac = Math.min(5.0, 1.0 + (absChange / 2) + ((Math.abs(hash) % 100) / 100));
+                
+                // Generate a realistic recent breakout time today (between 9:15 AM and now)
+                const now = new Date();
+                const totalMinsNow = now.getHours() * 60 + now.getMinutes();
+                const startMins = 9 * 60 + 15;
+                const maxOffset = Math.max(1, totalMinsNow - startMins);
+                const randomOffset = Math.abs(hash) % maxOffset;
+                const eventMins = startMins + randomOffset;
+                const hour = Math.floor(eventMins / 60);
+                const min = eventMins % 60;
                 const time = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
 
                 results.push({
@@ -272,7 +284,7 @@ const MarketEye = () => {
     .filter(d => {
       if (breakoutFilter === 'Bullish') return d.isBull;
       if (breakoutFilter === 'Bearish') return !d.isBull;
-      return true; // Neutral shows all
+      return true; // 'All Signals'
     })
     .sort((a, b) => b.signalPct - a.signalPct)
     .slice(0, 8);
@@ -284,7 +296,7 @@ const MarketEye = () => {
     .filter(d => {
       if (boostFilter === 'Bullish') return d.isBull;
       if (boostFilter === 'Bearish') return !d.isBull;
-      return true; // Neutral shows all
+      return true; // 'All Signals'
     })
     .sort((a, b) => b.rFac - a.rFac)
     .slice(0, 8);
@@ -332,20 +344,19 @@ const MarketEye = () => {
   // Map an outflow of -1000 Cr to a fear score of ~35. A neutral 0 flow is 50.
   const flowScore = Math.max(0, Math.min(100, 50 + (netInstitutionalFlow / 100)));
   
-  // To strictly match the Tickertape screenshot for this prototype session,
-  // we'll override the computed score to exact 36.93
+  // Calculate the final dynamic mood score (Weighted Average: 40% Momentum, 30% Breadth, 30% Institutional Flow)
   const computedScore = Math.round((momentumScore * 0.4) + (breadthScore * 0.3) + (flowScore * 0.3));
-  const moodScore = 36.93; // Hardcoded to match user's screenshot exactly
+  const moodScore = computedScore; // Use dynamic live score
 
   let moodText = 'Neutral';
   let moodColor = 'text-slate-400';
 
-  // Tickertape MMI Zones
-  if (moodScore > 70) { 
+  // Tickertape MMI Zones (0-25: Extreme Fear, 25-50: Fear, 50-75: Greed, 75-100: Extreme Greed)
+  if (moodScore >= 75) { 
     moodText = 'Extreme Greed'; moodColor = 'text-red-600'; 
-  } else if (moodScore > 50) { 
+  } else if (moodScore >= 50) { 
     moodText = 'Greed'; moodColor = 'text-red-400';
-  } else if (moodScore > 30) { 
+  } else if (moodScore >= 25) { 
     moodText = 'Fear'; moodColor = 'text-amber-500';
   } else { 
     moodText = 'Extreme Fear'; moodColor = 'text-emerald-500';
@@ -760,8 +771,8 @@ const MarketEye = () => {
                   </button>
                   {isBreakoutFilterOpen && (
                     <div className="absolute top-full left-0 mt-1 w-32 bg-[#1e293b] border border-slate-700 rounded-lg shadow-xl overflow-hidden py-1">
-                      <button onClick={() => setBreakoutFilter('Neutral')} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
-                        <Activity className="w-3 h-3 text-slate-400"/> Neutral
+                      <button onClick={() => setBreakoutFilter('All Signals')} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
+                        <Activity className="w-3 h-3 text-slate-400"/> All Signals
                       </button>
                       <button onClick={() => setBreakoutFilter('Bullish')} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
                         <TrendingUp className="w-3 h-3 text-emerald-400"/> Bullish
@@ -882,8 +893,8 @@ const MarketEye = () => {
                   </button>
                   {isBoostFilterOpen && (
                     <div className="absolute top-full left-0 mt-1 w-32 bg-[#1e293b] border border-slate-700 rounded-lg shadow-xl overflow-hidden py-1">
-                      <button onClick={() => setBoostFilter('Neutral')} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
-                        <Activity className="w-3 h-3 text-slate-400"/> Neutral
+                      <button onClick={() => setBoostFilter('All Signals')} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
+                        <Activity className="w-3 h-3 text-slate-400"/> All Signals
                       </button>
                       <button onClick={() => setBoostFilter('Bullish')} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
                         <TrendingUp className="w-3 h-3 text-emerald-400"/> Bullish
