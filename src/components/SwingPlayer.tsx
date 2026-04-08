@@ -255,13 +255,14 @@ const SwingPlayer = () => {
                   // Calculate 10 Day High and Low
                   const high10 = Math.max(...last10);
                   const low10 = Math.min(...last10);
+                  const high50 = Math.max(...last50);
                   
                   // Determine Breakouts
-                  // 50 Day BO: Price is currently above 50 EMA, AND it crossed it recently (within 10 days)
-                  candidate.bo50 = currentPrice > ema50 && low10 <= ema50; 
+                  // 50 Day BO: Price is currently above 50 EMA, AND it crossed it recently (within 10 days) OR breaking 50 day high
+                  candidate.bo50 = (currentPrice > ema50 && low10 <= ema50) || (currentPrice >= (high50 * 0.99)); 
                   
-                  // 10 Day BO: Price is breaking the 10 day high
-                  candidate.bo10 = currentPrice >= (high10 * 0.99);
+                  // 10 Day BO: Price is breaking the 10 day high, BUT we explicitly exclude 50-day breakouts so the lists don't look identical
+                  candidate.bo10 = currentPrice >= (high10 * 0.99) && !candidate.bo50;
 
                   // Reversal: Price was dropping but is bouncing back (price > ema10 but < ema50)
                   const ema10 = last10.reduce((a, b) => a + b, 0) / 10;
@@ -294,9 +295,9 @@ const SwingPlayer = () => {
     return () => { isMounted = false; };
   }, []);
 
-  // Categorize based on actual historical data if available, otherwise fallback
-  const bo10 = [...marketData].filter(d => d.bo10 !== undefined ? d.bo10 : (d.isBull && d.change > 1)).sort((a,b) => b.change - a.change).slice(0, 8);
-  const bo50 = [...marketData].filter(d => d.bo50 !== undefined ? d.bo50 : (d.isBull && d.change > 2)).sort((a,b) => b.change - a.change).slice(0, 8); 
+  // Categorize based on actual historical data if available, otherwise fallback with distinct logic
+  const bo10 = [...marketData].filter(d => d.bo10 !== undefined ? d.bo10 : (d.isBull && d.change > 1 && d.change <= 3)).sort((a,b) => b.change - a.change).slice(0, 8);
+  const bo50 = [...marketData].filter(d => d.bo50 !== undefined ? d.bo50 : (d.isBull && d.change > 3)).sort((a,b) => b.change - a.change).slice(0, 8); 
   const reversal = [...marketData].filter(d => d.reversal !== undefined ? d.reversal : (!d.isBull && d.change > -2)).sort((a,b) => a.change - b.change).slice(0, 8); 
   const channel = [...marketData].filter(d => d.channel !== undefined ? d.channel : d.isBull).sort((a,b) => b.change - a.change).slice(5, 13);
 
