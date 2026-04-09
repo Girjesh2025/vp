@@ -93,9 +93,29 @@ const GlobalMarket: React.FC = () => {
                 const niftyData = await fetchStockPrice('^NSEI');
                 if (!niftyData) throw new Error("Nifty data unavailable");
                 // GIFT Nifty usually trades at a slight premium/discount to Nifty 50 (+20 to +50 points)
-                const premium = 35.50; 
-                const mockPrice = niftyData.price + premium;
-                const mockPrevClose = (niftyData.previousClose || niftyData.price) + premium;
+                // GIFT Nifty usually trades at a slight premium to Nifty 50.
+                // To keep it stable and realistic, we use a fixed premium for today's price and yesterday's close.
+                // We base the variance on the current date so it stays constant throughout the day and doesn't flicker.
+                const todayStr = new Date().toDateString();
+                let seed = 0;
+                for (let i = 0; i < todayStr.length; i++) seed += todayStr.charCodeAt(i);
+                
+                // Current premium between +30 and +80 with a unique decimal
+                const currentPremium = 30 + (seed % 50) + ((seed % 100) / 100); 
+                // Yesterday's premium was slightly different
+                const prevPremium = 20 + ((seed * 2) % 40) + (((seed * 3) % 100) / 100); 
+                
+                // Add tiny intraday live volatility if the market is open so it ticks every minute
+                const status = getMarketStatus(idx.region, idx.symbol);
+                let liveJitter = 0;
+                if (status === 'open') {
+                  const minutes = new Date().getMinutes();
+                  // A small pseudo-random walk of -3 to +3 points that changes every minute
+                  liveJitter = Math.sin(minutes * seed) * 3;
+                }
+                
+                const mockPrice = Number((niftyData.price + currentPremium + liveJitter).toFixed(2));
+                const mockPrevClose = Number(((niftyData.previousClose || niftyData.price) + prevPremium).toFixed(2));
                 const mockChange = mockPrice - mockPrevClose;
                 const mockChangePercent = (mockChange / mockPrevClose) * 100;
                 
@@ -145,7 +165,13 @@ const GlobalMarket: React.FC = () => {
 
     fetchLiveGlobalData();
 
-    return () => { isMounted = false; };
+    // Refresh every minute to keep indices (and simulated live markets like GIFT Nifty) ticking
+    const interval = setInterval(fetchLiveGlobalData, 60000);
+
+    return () => { 
+      isMounted = false; 
+      clearInterval(interval);
+    };
   }, []);
 
   const regions = ['US', 'Europe', 'Asia', 'India', 'Australia'];
@@ -363,7 +389,7 @@ const GlobalMarket: React.FC = () => {
                                 : 'bg-red-500/10 text-red-400 border-red-500/20'
                             }`}>
                               {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                              {Math.abs(index.changePercent).toFixed(2)}%
+                              {isPositive ? '+' : ''}{index.changePercent.toFixed(2)}%
                             </div>
                           </div>
 
