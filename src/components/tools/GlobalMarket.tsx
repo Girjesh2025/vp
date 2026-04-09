@@ -90,6 +90,61 @@ const GlobalMarket: React.FC = () => {
             try {
               // Special case for GIFT Nifty since Yahoo Finance lacks a reliable free public symbol for it
               if (idx.symbol === 'GIFT_NIFTY_MOCK') {
+                // Check if we can fetch real data from Investing.com via our proxy, otherwise fallback to mock
+                let realPrice = 0;
+                let realChange = 0;
+                let realChangePercent = 0;
+                let useRealData = false;
+                
+                try {
+                  // Attempting to scrape the real-time value from investing.com using a CORS proxy
+                  const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent('https://in.investing.com/indices/gift-nifty-50-c1-futures')}`);
+                  const htmlData = await response.json();
+                  
+                  if (htmlData && htmlData.contents) {
+                    // Try to match standard investing.com data-test attributes
+                    let priceMatch = htmlData.contents.match(/data-test="instrument-price-last"[^>]*>([\d,.]+)<\/div>/);
+                    let changeMatch = htmlData.contents.match(/data-test="instrument-price-change"[^>]*>([+-]?[\d,.]+)<\/div>/);
+                    let changePctMatch = htmlData.contents.match(/data-test="instrument-price-change-percent"[^>]*>\(([+-]?[\d,.]+)%\)<\/div>/);
+                    
+                    // Fallback regex for different investing.com layouts
+                    if (!priceMatch) priceMatch = htmlData.contents.match(/class="text-5xl[^>]*>([\d,.]+)<\/div>/);
+                    
+                    if (priceMatch && priceMatch[1]) {
+                      realPrice = parseFloat(priceMatch[1].replace(/,/g, ''));
+                      if (!isNaN(realPrice) && realPrice > 0) {
+                        useRealData = true;
+                        
+                        if (!changeMatch) changeMatch = htmlData.contents.match(/data-test="instrument-price-change"[^>]*>([^<]+)<\/span>/);
+                        if (!changePctMatch) changePctMatch = htmlData.contents.match(/data-test="instrument-price-change-percent"[^>]*>\(([^<]+)%\)<\/span>/);
+
+                        if (changeMatch && changeMatch[1]) {
+                          realChange = parseFloat(changeMatch[1].replace(/,/g, '').replace('+', ''));
+                        }
+                        
+                        if (changePctMatch && changePctMatch[1]) {
+                          realChangePercent = parseFloat(changePctMatch[1].replace(/,/g, '').replace('+', ''));
+                        }
+                      }
+                    }
+                  }
+                } catch (e) {
+                  console.log("Failed to scrape Investing.com for GIFT Nifty, falling back to algorithmic proxy");
+                }
+
+                if (useRealData) {
+                  return {
+                    ...idx,
+                    price: realPrice,
+                    change: realChange,
+                    changePercent: realChangePercent,
+                    status: getMarketStatus(idx.region, idx.symbol),
+                    lastUpdate: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    link: 'https://in.investing.com/indices/gift-nifty-50-c1-futures'
+                  };
+                }
+
+                // --- FALLBACK PROXY ALGORITHM ---
                 const niftyData = await fetchStockPrice('^NSEI');
                 if (!niftyData) throw new Error("Nifty data unavailable");
                 // GIFT Nifty usually trades at a slight premium/discount to Nifty 50 (+20 to +50 points)
@@ -125,7 +180,8 @@ const GlobalMarket: React.FC = () => {
                   change: mockChange,
                   changePercent: mockChangePercent,
                   status: getMarketStatus(idx.region, idx.symbol),
-                  lastUpdate: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  lastUpdate: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  link: 'https://in.investing.com/indices/gift-nifty-50-c1-futures'
                 };
               }
 
@@ -360,7 +416,7 @@ const GlobalMarket: React.FC = () => {
                             </svg>
                           </div>
 
-                          <div className="flex items-start justify-between mb-4 relative z-10">
+                          <div className="flex items-start justify-between mb-4 relative z-10 gap-2">
                             <div className="flex items-center gap-3">
                               {/* Flag Box */}
                               <div className="w-9 h-9 rounded-lg bg-slate-800/80 flex items-center justify-center text-xl border border-slate-700/50 shadow-inner group-hover:scale-110 transition-transform shrink-0 relative">
@@ -372,7 +428,13 @@ const GlobalMarket: React.FC = () => {
                               
                               <div className="min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <h3 className="font-black text-white text-[15px] leading-tight truncate">{index.name}</h3>
+                                  {(index as any).link ? (
+                                    <a href={(index as any).link} target="_blank" rel="noopener noreferrer" className="font-black text-white text-[15px] leading-tight truncate hover:underline hover:text-blue-400 cursor-pointer">
+                                      {index.name}
+                                    </a>
+                                  ) : (
+                                    <h3 className="font-black text-white text-[15px] leading-tight truncate">{index.name}</h3>
+                                  )}
                                   {index.status === 'open' && (
                                     <span className="px-1.5 py-[2px] rounded bg-indigo-500/10 border border-indigo-500/30 text-[8px] font-black text-indigo-400 uppercase tracking-widest shadow-[0_0_10px_rgba(99,102,241,0.2)]">
                                       LIVE
@@ -383,7 +445,7 @@ const GlobalMarket: React.FC = () => {
                               </div>
                             </div>
                             
-                            <div className={`px-2.5 py-1 rounded-lg text-[11px] font-black border flex items-center gap-1 ${
+                            <div className={`px-2.5 py-1 rounded-lg text-[11px] font-black border flex items-center gap-1 whitespace-nowrap shrink-0 ${
                               isPositive 
                                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
                                 : 'bg-red-500/10 text-red-400 border-red-500/20'

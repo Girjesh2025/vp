@@ -381,36 +381,38 @@ const SectoralFlow: React.FC = () => {
                     </div>
                     <div className="p-6 h-[480px]">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={sectoralFlowData} layout="vertical" margin={{ top: 5, right: 40, left: 10, bottom: 5 }}>
+                        <BarChart data={sectoralFlowData} margin={{ top: 20, right: 20, left: -20, bottom: 60 }}>
                           <defs>
-                            <linearGradient id="greenBar" x1="0" y1="0" x2="1" y2="0">
+                            <linearGradient id="greenBar" x1="0" y1="1" x2="0" y2="0">
                               <stop offset="0%" stopColor="#059669" stopOpacity={0.9} />
                               <stop offset="100%" stopColor="#34d399" stopOpacity={1} />
                             </linearGradient>
-                            <linearGradient id="redBar" x1="1" y1="0" x2="0" y2="0">
+                            <linearGradient id="redBar" x1="0" y1="0" x2="0" y2="1">
                               <stop offset="0%" stopColor="#dc2626" stopOpacity={0.9} />
                               <stop offset="100%" stopColor="#f87171" stopOpacity={1} />
                             </linearGradient>
                           </defs>
-                          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#1e293b50" />
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b50" />
                           <XAxis 
+                            dataKey="name" 
+                            type="category" 
+                            axisLine={false} 
+                            tickLine={false} 
+                            tick={{ fill: '#cbd5e1', fontSize: 10, fontWeight: 700 }} 
+                            angle={-45}
+                            textAnchor="end"
+                            height={60}
+                          />
+                          <YAxis 
                             type="number" 
                             axisLine={{ stroke: '#1e293b' }} 
                             tickLine={false} 
                             tick={{ fill: '#475569', fontSize: 10, fontWeight: 500 }} 
                             domain={['dataMin - 0.5', 'dataMax + 0.5']}
-                            tickFormatter={(v: number) => `${v > 0 ? '+' : ''}${v}%`}
-                          />
-                          <YAxis 
-                            dataKey="name" 
-                            type="category" 
-                            axisLine={false} 
-                            tickLine={false} 
-                            tick={{ fill: '#cbd5e1', fontSize: 11, fontWeight: 700 }} 
-                            width={90}
+                            tickFormatter={(v: number) => `${v > 0 ? '+' : ''}${v.toFixed(1)}%`}
                           />
                           <Tooltip content={<CustomTooltip />} cursor={{ fill: '#1e293b', opacity: 0.3 }} />
-                          <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={20}>
+                          <Bar dataKey="value" radius={[4, 4, 4, 4]} barSize={32}>
                             {sectoralFlowData.map((entry, index) => (
                               <Cell 
                                 key={`cell-${index}`} 
