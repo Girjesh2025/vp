@@ -66,7 +66,7 @@ const fetchRealSparkData = async (symbols: string[]): Promise<Record<string, num
 
 // Define the core constituents we want to track for our sectoral flow proxy
 const SECTOR_DEFINITIONS = [
-  { title: 'DEFENCE', ext: 'NIFTY IND DEFENCE', stocks: ['HAL', 'BEL', 'MAZAGON', 'BDL', 'ASTRAMICRO', 'PARAS', 'MTARTECH', 'DATAPATTNS', 'BEML', 'GRSE', 'MIDHANI', 'SOLARIND', 'BHEL'] },
+  { title: 'DEFENCE', ext: 'NIFTY IND DEFENCE', stocks: ['HAL', 'BEL', 'MAZAGON', 'BDL', 'ASTRAMICRO', 'PARAS', 'MTARTECH', 'DATAPATTNS', 'BEML', 'GRSE', 'MIDHANI', 'SOLARIND', 'BHEL', 'APOLLOMICRO', 'ZENITHEXPO'] },
   { title: 'PSU BANK', ext: 'NIFTY PSU BANK', stocks: ['SBIN', 'PNB', 'BANKINDIA', 'CANBK', 'UNIONBANK', 'INDIANB', 'BANKBARODA', 'MAHABANK', 'PSB', 'CENTRALBK', 'IOB', 'UCOBANK'] },
   { title: 'MEDIA', ext: 'NIFTY MEDIA', stocks: ['ZEEL', 'NETWORK18', 'PVRINOX', 'NDTV', 'SUNTV', 'TV18BRDCST', 'DISHTV', 'HATHWAY', 'NAVKARCORP', 'DBCORP'] },
   { title: 'BANK', ext: 'NIFTY BANK', stocks: ['HDFCBANK', 'ICICIBANK', 'SBIN', 'AXISBANK', 'KOTAKBANK', 'INDUSINDBK', 'PNB', 'AUBANK', 'BANKBARODA', 'FEDERALBNK', 'IDFCFIRSTB', 'BANDHANBNK'] },
@@ -520,6 +520,21 @@ const SectoralFlow: React.FC = () => {
                       const sectorChange = sectorData?.value ?? 0;
                       const isPositiveSector = sectorChange >= 0;
                       
+                      let advances = 0;
+                      let declines = 0;
+                      let totalTracked = 0;
+                      sector.stocks.forEach(sym => {
+                        const stock = liveData[sym];
+                        if (stock && stock.price > 0) {
+                          totalTracked++;
+                          if (stock.change >= 0) advances++;
+                          else declines++;
+                        }
+                      });
+                      
+                      const advancePct = totalTracked > 0 ? (advances / totalTracked) * 100 : 0;
+                      const declinePct = totalTracked > 0 ? (declines / totalTracked) * 100 : 0;
+                      
                       return (
                         <div 
                           key={sector.title} 
@@ -536,20 +551,46 @@ const SectoralFlow: React.FC = () => {
                           }} />
 
                           {/* Sector Header */}
-                          <div className="relative flex justify-between items-center p-5 border-b border-slate-700/50" style={{
+                          <div className="relative flex flex-col p-5 border-b border-slate-700/50" style={{
                             background: `linear-gradient(135deg, ${isPositiveSector ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'}, transparent)`
                           }}>
-                            <div>
-                              <h3 className="font-extrabold text-base text-white tracking-widest drop-shadow-md">{sector.ext || sector.title}</h3>
-                              <div className={`text-sm font-black mt-1 flex items-center gap-1.5 ${isPositiveSector ? 'text-emerald-400' : 'text-red-400'}`}>
-                                {isPositiveSector ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                                {isPositiveSector ? '+' : ''}{sectorChange.toFixed(2)}%
+                            <div className="flex justify-between items-start w-full">
+                              <div>
+                                <h3 className="font-extrabold text-base text-white tracking-widest drop-shadow-md flex items-center gap-2">
+                                  {sector.ext || sector.title}
+                                  <span className="flex items-center gap-1.5 bg-red-500/10 border border-red-500/30 text-red-400 px-2 py-0.5 rounded-full text-[9px] font-black shadow-[0_0_10px_rgba(239,68,68,0.2)] uppercase tracking-wider">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_5px_currentColor]" /> LIVE
+                                  </span>
+                                </h3>
+                                <div className={`text-sm font-black mt-1 flex items-center gap-1.5 ${isPositiveSector ? 'text-emerald-400' : 'text-red-400'}`}>
+                                  {isPositiveSector ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                                  {isPositiveSector ? '+' : ''}{sectorChange.toFixed(2)}%
+                                </div>
+                              </div>
+                              <span className="text-[10px] font-black text-slate-400 bg-[#0f1520] shadow-inner border border-slate-700/50 px-2.5 py-1 rounded-lg tracking-widest uppercase">
+                                {totalTracked} ASSETS
+                              </span>
+                            </div>
+                            
+                            {/* Breadth Progress Bar */}
+                            <div className="w-full mt-5 space-y-2">
+                              <div className="w-full h-2.5 rounded-full flex overflow-hidden bg-slate-800/50 shadow-inner">
+                                <div className="h-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] transition-all duration-500" style={{ width: `${advancePct}%` }} />
+                                <div className="h-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)] transition-all duration-500" style={{ width: `${declinePct}%` }} />
+                              </div>
+                              <div className="flex justify-between items-center text-[10px] font-bold tracking-wide">
+                                <span className="text-emerald-400 flex items-center gap-1.5">
+                                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_5px_currentColor]" />
+                                  {advances} stocks ({advancePct.toFixed(2)}% Up)
+                                </span>
+                                <span className="text-red-400 flex items-center gap-1.5">
+                                  <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_5px_currentColor]" />
+                                  {declines} stocks ({declinePct.toFixed(2)}% Down)
+                                </span>
                               </div>
                             </div>
-                            <span className="text-xs font-bold text-slate-300 bg-[#0f1520] shadow-inner border border-slate-700/50 px-3 py-1.5 rounded-xl">
-                              {Math.min(12, sector.stocks.length)} ASSETS
-                            </span>
                           </div>
+
                           
                           <div className="p-2 relative z-10">
                             {/* Table Header */}
