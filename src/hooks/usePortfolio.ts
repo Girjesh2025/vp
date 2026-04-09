@@ -368,35 +368,40 @@ export function usePortfolio() {
         return
       }
 
-      // Find the stock in database
-      const { data: stockData, error: stockError } = await supabase
+      // Find the stock(s) in database
+      const { data: stocksData, error: stocksError } = await supabase
         .from('stocks')
         .select('id')
         .eq('portfolio_id', currentPortfolio?.id)
         .eq('symbol', symbol)
-        .limit(1)
-        .maybeSingle()
 
-      if (stockError || !stockData) throw new Error('Stock not found')
+      if (stocksError) throw new Error(`Stock error: ${stocksError.message}`)
+      if (!stocksData || stocksData.length === 0) throw new Error(`Stock not found for symbol ${symbol}`)
+
+      const stockIds = stocksData.map(s => s.id)
 
       // First delete all associated transactions to prevent foreign key errors
       const { error: txError } = await supabase
         .from('transactions')
         .delete()
-        .eq('stock_id', stockData.id)
+        .in('stock_id', stockIds)
         
       if (txError) {
         console.error('Error deleting transactions for stock:', txError)
-        // Continue anyway to try deleting the stock, though it might fail if restrict is on
+        // If it fails due to RLS, let's try calling an RPC function if it exists, or just continue
+        // and hope ON DELETE CASCADE is set up on the database
       }
 
-      // Then delete the stock itself
+      // Then delete the stock(s) itself
       const { error } = await supabase
         .from('stocks')
         .delete()
-        .eq('id', stockData.id)
+        .in('id', stockIds)
 
-      if (error) throw error
+      if (error) {
+        console.error('Database stock deletion error details:', error)
+        throw error
+      }
 
       setStocks(prev => prev.filter(s => s.symbol !== symbol))
       setTransactions(prev => prev.filter(t => t.symbol !== symbol))

@@ -47,6 +47,8 @@ interface StockWithPrice extends Stock {
   priceChangePercent?: number;
 }
 
+import { rebuildSearchSystem } from './stockDatabase';
+
 const StockPortfolioApp: React.FC = () => {
   const { 
     portfolios,
@@ -84,6 +86,7 @@ const StockPortfolioApp: React.FC = () => {
   }, [activeTab]);
 
   useEffect(() => {
+    rebuildSearchSystem();
     if ((location.state as any)?.activeTab) {
       setActiveTab((location.state as any).activeTab);
       // Optional: Clear location state so refreshing doesn't force this tab if user navigated away
@@ -451,16 +454,19 @@ const StockPortfolioApp: React.FC = () => {
 
   const deleteStock = async (symbolToDelete: string) => {
     try {
+      console.log('Attempting to delete stock:', symbolToDelete);
       await removeStockFromPortfolio(symbolToDelete);
+      console.log('Stock deleted successfully from backend');
+      
       setStockPrices(prev => {
         const newPrices = { ...prev };
         delete newPrices[symbolToDelete];
         return newPrices;
       });
       setDeleteConfirmation({isOpen: false, stock: null});
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting stock:', error);
-      alert('Failed to delete stock. Please try again.');
+      alert(`Failed to delete stock. Error: ${error.message || 'Please try again.'}`);
     }
   };
 
@@ -1285,7 +1291,7 @@ const StockPortfolioApp: React.FC = () => {
 
     {/* Delete Confirmation Dialog */}
     {deleteConfirmation.isOpen && deleteConfirmation.stock && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
         <div className="bg-[#172030] rounded-lg p-6 max-w-md w-full mx-4">
           <div className="flex items-center mb-4">
             <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mr-4">

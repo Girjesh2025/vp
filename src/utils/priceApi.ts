@@ -44,6 +44,16 @@ const getMockPrice = (symbol: string): PriceData => {
 // More reliable proxy services
 const PROXY_SERVICES = [
   {
+    name: 'vite-proxy',
+    url: '/api/yahoo/',
+    transform: (data: any) => data
+  },
+  {
+    name: 'corsproxy',
+    url: 'https://corsproxy.io/?',
+    transform: (data: any) => data
+  },
+  {
     name: 'allorigins',
     url: 'https://api.allorigins.win/get?url=',
     transform: (data: any) => JSON.parse(data.contents)
@@ -52,38 +62,101 @@ const PROXY_SERVICES = [
     name: 'codetabs',
     url: 'https://api.codetabs.com/v1/proxy?quest=',
     transform: (data: any) => data
-  },
-  {
-    name: 'thingproxy',
-    url: 'https://thingproxy.freeboard.io/fetch/',
-    transform: (data: any) => data
   }
 ];
 
 const resolveBaseUrl = (): string => {
-  const envBase = (import.meta.env.VITE_API_BASE_URL && import.meta.env.VITE_API_BASE_URL.trim())
-    ? import.meta.env.VITE_API_BASE_URL.trim()
-    : '';
-  if (envBase) return envBase;
+  try {
+    const envBase = (import.meta?.env?.VITE_API_BASE_URL && import.meta.env.VITE_API_BASE_URL.trim())
+      ? import.meta.env.VITE_API_BASE_URL.trim()
+      : '';
+    if (envBase) return envBase;
+  } catch (e) {}
+  
+  // In development, hit the Vite dev server which proxies to 3001
   const isLocalHost = typeof window !== 'undefined' && (/^localhost$/i.test(window.location.hostname) || /^127\.0\.0\.1$/.test(window.location.hostname));
-  if (isLocalHost) return 'http://localhost:3001';
+  if (isLocalHost) return ''; // Empty string means it will hit the current origin (Vite dev server)
+  
   return '';
+};
+
+// Check if a symbol is a global index or futures symbol (e.g. ^DJI, ^NSEI, YM=F)
+// These must NOT be converted via toEODHDSymbols — send directly to proxy
+const isGlobalOrIndexSymbol = (symbol: string): boolean => {
+  return symbol.startsWith('^') || symbol.includes('=');
 };
 
 const toYahooSymbol = (symbol: string): string => {
   const clean = symbol.replace(/\.(NSE|BSE)$/i, '');
   if (/\.NSE$/i.test(symbol)) return `${clean}.NS`;
   if (/\.BSE$/i.test(symbol)) return `${clean}.BO`;
+  
+  // If it's a raw symbol without suffix and not a global index, intelligently guess
+  if (!clean.includes('.') && !isGlobalOrIndexSymbol(clean)) {
+    const usStocks = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'TSLA', 'META', 'NVDA', 'NFLX', 'ADBE', 'CRM', 'ORCL', 'IBM', 'INTC', 'AMD', 'UBER', 'LYFT', 'SNAP', 'TWTR', 'SPOT', 'SQ', 'PYPL', 'V', 'MA', 'JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'AXP', 'BRK.A', 'BRK.B', 'JNJ', 'PFE', 'MRK', 'ABBV', 'UNH', 'CVS', 'WMT', 'TGT', 'HD', 'LOW', 'NKE', 'SBUX', 'MCD', 'KO', 'PEP', 'DIS', 'CMCSA', 'VZ', 'T'];
+    if (usStocks.includes(clean)) return clean; // US stocks don't need suffix on Yahoo
+    return `${clean}.NS`; // Default Indian stocks to NSE
+  }
+  
   return clean;
 };
 
-const fetchYahooViaProxy = async (symbol: string): Promise<PriceData | null> => {
-  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${toYahooSymbol(symbol)}`;
+const fetchDirectFallback = async (symbol: string): Promise<PriceData | null> => {
+  // First try EODHD if it's a regular stock
+  if (!isGlobalOrIndexSymbol(symbol)) {
+    const candidates = toEODHDSymbols(symbol);
+    for (const cand of candidates) {
+      try {
+        const url = `https://eodhd.com/api/real-time/${cand}?api_token=68ded7adeebd01.04469623&fmt=json`;
+        const r = await fetch(url);
+        if (r.ok) {
+          const data = await r.json();
+          if (data && typeof data.close === 'number' && data.close > 0) {
+            const prevClose = data.previousClose || data.open || data.close;
+            const change = prevClose ? ((data.close - prevClose) / prevClose) * 100 : 0;
+            return {
+              price: Number(data.close.toFixed(2)),
+              change: Number(change.toFixed(2)),
+              previousClose: data.previousClose !== undefined ? data.previousClose : undefined,
+            };
+          }
+        }
+      } catch (e) {
+        console.warn(`[EODHD Fallback] Failed for ${cand}:`, e);
+      }
+    }
+  }
+
+  // Then try Yahoo via our Vite proxy or other proxies
+  const yahooSymbol = toYahooSymbol(symbol);
+  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}`;
   for (const p of PROXY_SERVICES) {
     try {
-      const r = await fetch(`${p.url}${encodeURIComponent(yahooUrl)}`, { method: 'GET' });
-      const raw = await r.json();
-      const data = p.transform(raw);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout per proxy
+      
+      const queryPart = yahooUrl.includes('?') ? yahooUrl.substring(yahooUrl.indexOf('?')) : '';
+      const targetUrl = p.name === 'vite-proxy' 
+        ? `${p.url}${yahooSymbol}${queryPart}` 
+        : `${p.url}${encodeURIComponent(yahooUrl)}`;
+
+      const r = await fetch(targetUrl, { 
+        method: 'GET',
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      
+      if (!r.ok) continue;
+      
+      let raw;
+      if (p.name === 'allorigins') {
+         const json = await r.json();
+         raw = JSON.parse(json.contents);
+      } else {
+         raw = await r.json();
+      }
+      
+      const data = p.transform ? p.transform(raw) : raw;
       const meta = data?.chart?.result?.[0]?.meta;
       if (meta && (typeof meta.regularMarketPrice === 'number' || typeof meta.previousClose === 'number')) {
         const close = meta.regularMarketPrice ?? meta.previousClose ?? 0;
@@ -95,7 +168,8 @@ const fetchYahooViaProxy = async (symbol: string): Promise<PriceData | null> => 
           previousClose: meta.previousClose !== undefined && meta.previousClose !== null ? Number(meta.previousClose.toFixed(2)) : undefined
         };
       }
-    } catch (_) {
+    } catch (e) {
+      console.warn(`[Yahoo Fallback] Error using proxy ${p.name}:`, e);
     }
   }
   return null;
@@ -114,7 +188,12 @@ export const fetchHistoricalPrices = async (symbol: string, days: number = 60): 
 
   for (const p of PROXY_SERVICES) {
     try {
-      const r = await fetch(`${p.url}${encodeURIComponent(yahooUrl)}`, { method: 'GET' });
+      const queryPart = yahooUrl.includes('?') ? yahooUrl.substring(yahooUrl.indexOf('?')) : '';
+      const targetUrl = p.name === 'vite-proxy' 
+        ? `${p.url}${yahooSymbol}${queryPart}` 
+        : `${p.url}${encodeURIComponent(yahooUrl)}`;
+
+      const r = await fetch(targetUrl, { method: 'GET' });
       if (!r.ok) continue;
       const raw = await r.json();
       const data = p.transform(raw);
@@ -173,7 +252,12 @@ export const fetchIntradayPrices = async (symbol: string): Promise<number[]> => 
   const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?range=1d&interval=5m`;
   for (const p of PROXY_SERVICES) {
     try {
-      const r = await fetch(`${p.url}${encodeURIComponent(yahooUrl)}`, { method: 'GET' });
+      const queryPart = yahooUrl.includes('?') ? yahooUrl.substring(yahooUrl.indexOf('?')) : '';
+      const targetUrl = p.name === 'vite-proxy' 
+        ? `${p.url}${yahooSymbol}${queryPart}` 
+        : `${p.url}${encodeURIComponent(yahooUrl)}`;
+
+      const r = await fetch(targetUrl, { method: 'GET' });
       if (!r.ok) continue;
       
       let raw;
@@ -340,12 +424,6 @@ const toEODHDSymbols = (symbol: string): string[] => {
   return [`${cleanSymbol}.NSE`, `${cleanSymbol}.BSE`];
 };
 
-// Check if a symbol is a global index or futures symbol (e.g. ^DJI, ^NSEI, YM=F)
-// These must NOT be converted via toEODHDSymbols — send directly to proxy
-const isGlobalOrIndexSymbol = (symbol: string): boolean => {
-  return symbol.startsWith('^') || symbol.includes('=');
-};
-
 // Main function to fetch stock prices using local proxy server
 export const fetchStockPrice = async (symbol: string): Promise<PriceData | null> => {
   try {
@@ -384,7 +462,7 @@ export const fetchStockPrice = async (symbol: string): Promise<PriceData | null>
       }
 
       // Fallback for global indices: try Yahoo via CORS proxies
-      const yahooFallback = await fetchYahooViaProxy(symbol);
+      const yahooFallback = await fetchDirectFallback(symbol);
       if (yahooFallback) return yahooFallback;
 
       console.warn(`❌ [DEBUG] Unable to fetch authentic price for global symbol ${symbol}`);
@@ -423,7 +501,7 @@ export const fetchStockPrice = async (symbol: string): Promise<PriceData | null>
 
     // Local proxy loop exhausted without returning — try Yahoo proxy directly
     console.warn(`⚠️ [DEBUG] All proxy candidates failed for ${symbol}, trying Yahoo fallback`);
-    const yahooFallback = await fetchYahooViaProxy(symbol);
+    const yahooFallback = await fetchDirectFallback(symbol);
     if (yahooFallback) return yahooFallback;
 
     // Fail gracefully instead of showing fake numbers
@@ -431,7 +509,7 @@ export const fetchStockPrice = async (symbol: string): Promise<PriceData | null>
     return null;
   } catch (error) {
     console.warn(`❌ [DEBUG] Failed to fetch real price for ${symbol}:`, error);
-    const yahooFallback = await fetchYahooViaProxy(symbol);
+    const yahooFallback = await fetchDirectFallback(symbol);
     if (yahooFallback) return yahooFallback;
     return null;
   }

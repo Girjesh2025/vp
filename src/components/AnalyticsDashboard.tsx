@@ -287,7 +287,7 @@ const AnalyticsDashboard: React.FC<Props> = ({ stocks, transactions, priceData, 
     <div className="space-y-6">
       {/* Key Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className={`bg-gradient-to-br ${getPerformanceBackground(portfolioMetrics.totalPnL)} rounded-2xl p-6 border relative overflow-hidden group hover:border-opacity-50 transition-colors`}>
+        <div className={`bg-gradient-to-br ${getPerformanceBackground(portfolioMetrics.totalPnL)} rounded-2xl p-6 border relative overflow-hidden group hover:border-slate-500/50 transition-colors`}>
           <div className="relative z-10">
             <div className="text-slate-400 text-sm font-medium">Total P&L</div>
             <div className="text-2xl font-bold mt-1 text-white">{formatCurrency(portfolioMetrics.totalPnL)}</div>
