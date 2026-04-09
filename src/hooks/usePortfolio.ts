@@ -128,18 +128,6 @@ export function usePortfolio() {
 
       if (stocksError) throw stocksError
 
-      // Load transactions
-      const { data: transactionsData, error: transactionsError } = await supabase
-        .from('transactions')
-        .select(`
-          *,
-          stocks!inner(symbol, name)
-        `)
-        .in('stock_id', stocksData?.map((s: { id: string }) => s.id) || [])
-        .order('date', { ascending: false })
-
-      if (transactionsError) throw transactionsError
-
       // Convert to local format
       const localStocks: Stock[] = stocksData?.map((stock: { symbol: string; name: string; exchange: string; quantity: string | number; average_price: string | number }) => ({
         symbol: stock.symbol,
@@ -149,17 +137,34 @@ export function usePortfolio() {
         avgPrice: Number(stock.average_price)
       })) || []
 
-      const localTransactions: Transaction[] = transactionsData?.map((transaction: { stocks: { symbol: string; name: string }; type: string; quantity: string | number; price: string | number; date: string }, index: number) => ({
-        id: Date.now() + index, // Unique ID to avoid key collisions
-        symbol: transaction.stocks.symbol,
-        displaySymbol: `${transaction.stocks.symbol}-${transaction.stocks.name}`,
-        name: transaction.stocks.name,
-        type: transaction.type as 'buy' | 'sell',
-        quantity: Number(transaction.quantity),
-        price: Number(transaction.price),
-        date: transaction.date,
-        total: Number(transaction.quantity) * Number(transaction.price)
-      })) || []
+      // Load transactions ONLY if there are stocks
+      let localTransactions: Transaction[] = []
+      
+      if (stocksData && stocksData.length > 0) {
+        const stockIds = stocksData.map((s: { id: string }) => s.id)
+        const { data: transactionsData, error: transactionsError } = await supabase
+          .from('transactions')
+          .select(`
+            *,
+            stocks!inner(symbol, name)
+          `)
+          .in('stock_id', stockIds)
+          .order('date', { ascending: false })
+
+        if (transactionsError) throw transactionsError
+
+        localTransactions = transactionsData?.map((transaction: { stocks: { symbol: string; name: string }; type: string; quantity: string | number; price: string | number; date: string }, index: number) => ({
+          id: Date.now() + index, // Unique ID to avoid key collisions
+          symbol: transaction.stocks.symbol,
+          displaySymbol: `${transaction.stocks.symbol}-${transaction.stocks.name}`,
+          name: transaction.stocks.name,
+          type: transaction.type as 'buy' | 'sell',
+          quantity: Number(transaction.quantity),
+          price: Number(transaction.price),
+          date: transaction.date,
+          total: Number(transaction.quantity) * Number(transaction.price)
+        })) || []
+      }
 
       setStocks(localStocks)
       setTransactions(localTransactions)
@@ -376,7 +381,7 @@ export function usePortfolio() {
         .eq('symbol', symbol)
 
       if (stocksError) throw new Error(`Stock error: ${stocksError.message}`)
-      if (!stocksData || stocksData.length === 0) throw new Error(`Stock not found for symbol ${symbol}`)
+      if (!stocksData || stocksData.length === 0) throw new Error(`Stock not found for symbol ${symbol} in portfolio ${currentPortfolio?.id || 'undefined'}`)
 
       const stockIds = stocksData.map(s => s.id)
 
