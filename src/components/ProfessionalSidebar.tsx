@@ -19,20 +19,13 @@ import {
   Radar
 } from 'lucide-react';
 
-interface SubMenuItem {
-  id: string;
-  label: string;
-  icon: React.ComponentType<any>;
-  isNew?: boolean;
-}
-
 interface MenuItem {
   id: string;
   label: string;
   icon: React.ComponentType<any>;
   badge?: string | number;
   isActive?: boolean;
-  children?: SubMenuItem[];
+  isNew?: boolean;
 }
 
 interface ProfessionalSidebarProps {
@@ -56,16 +49,10 @@ const ProfessionalSidebar: React.FC<ProfessionalSidebarProps> = ({
     { id: 'tools', label: 'Market Analysis', icon: Globe },
     { id: 'market-eye', label: 'Market Eye', icon: Eye },
     { id: 'swing-player', label: 'Swing Player', icon: Activity },
-    { 
-      id: 'options-player', 
-      label: 'Options Player', 
-      icon: TrendingUp,
-      children: [
-        { id: 'options-watch', label: 'Options Watch', icon: Radar, isNew: true },
-        { id: 'options-decode', label: 'Options Decode', icon: Brain },
-        { id: 'options-hint', label: 'Options Guide', icon: Brain },
-      ]
-    },
+    { id: 'options-player', label: 'Options Player', icon: TrendingUp },
+    { id: 'options-watch', label: 'Options Watch', icon: Radar, isNew: true },
+    { id: 'options-decode', label: 'Options Decode', icon: Brain },
+    { id: 'options-hint', label: 'Options Guide', icon: Brain },
     { id: 'trading-tools', label: 'Trading Tools', icon: Calculator },
     { id: 'analytics', label: 'Analytics', icon: TrendingUp },
     { id: 'alerts', label: 'Alerts', icon: Bell, badge: '3' },
@@ -78,24 +65,12 @@ const ProfessionalSidebar: React.FC<ProfessionalSidebarProps> = ({
     { id: 'logout', label: 'Sign Out', icon: LogOut },
   ];
 
-  const [expandedMenu, setExpandedMenu] = React.useState<string | null>('options-player');
-
-  const handleMenuClick = (itemId: string, hasChildren: boolean = false) => {
+  const handleMenuClick = (itemId: string) => {
     if (itemId === 'logout') {
       console.log('Logout clicked');
       return;
     }
-    
-    if (hasChildren) {
-      setExpandedMenu(prev => prev === itemId ? null : itemId);
-    } else {
-      onTabChange(itemId);
-    }
-  };
-
-  const isParentActive = (item: MenuItem) => {
-    if (!item.children) return false;
-    return item.children.some(child => child.id === activeTab);
+    onTabChange(itemId);
   };
 
   return (
@@ -145,73 +120,41 @@ const ProfessionalSidebar: React.FC<ProfessionalSidebarProps> = ({
           
           {menuItems.map((item) => {
             const Icon = item.icon;
-            const hasChildren = !!(item.children && item.children.length > 0);
-            const isExpanded = expandedMenu === item.id;
-            const parentActive = isParentActive(item);
-            const isActive = (activeTab === item.id && !hasChildren) || parentActive;
+            const isActive = activeTab === item.id;
 
             return (
-              <div key={item.id}>
-                {/* Parent Row */}
-                <button
-                  onClick={() => handleMenuClick(item.id, hasChildren)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-200 group ${
-                    isActive
-                      ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 shadow-sm shadow-emerald-500/10'
-                      : 'text-slate-400 hover:bg-[#1e293b] hover:text-white'
-                  }`}
-                  title={isCollapsed ? item.label : undefined}
-                >
-                  <Icon className={`w-5 h-5 shrink-0 ${
-                    isActive ? 'text-emerald-500' : 'text-slate-500 group-hover:text-slate-300'
-                  }`} />
-                  
-                  {!isCollapsed && (
-                    <>
-                      <span className="font-medium flex-1 text-sm">{item.label}</span>
-                      {item.badge && (
-                        <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${
-                          isActive 
-                            ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30' 
-                            : 'bg-[#1e293b] text-slate-300 border border-slate-700/50'
-                        }`}>
-                          {item.badge}
-                        </span>
-                      )}
-                      {hasChildren && (
-                        <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
-                      )}
-                    </>
-                  )}
-                </button>
-
-                {/* Submenu */}
-                {hasChildren && isExpanded && !isCollapsed && (
-                  <div className="ml-4 mt-1 pl-3 border-l border-[#1e293b] space-y-1">
-                    {item.children!.map((child) => {
-                      const ChildIcon = child.icon;
-                      const childActive = activeTab === child.id;
-                      return (
-                        <button
-                          key={child.id}
-                          onClick={() => onTabChange(child.id)}
-                          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-all duration-200 group text-sm ${
-                            childActive
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15'
-                              : 'text-slate-500 hover:bg-[#1e293b] hover:text-slate-200'
-                          }`}
-                        >
-                          <ChildIcon className={`w-4 h-4 shrink-0 ${childActive ? 'text-emerald-400' : 'text-slate-600 group-hover:text-slate-400'}`} />
-                          <span className="font-medium flex-1">{child.label}</span>
-                          {child.isNew && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-amber-400 tracking-wider">NEW</span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
+              <button
+                key={item.id}
+                onClick={() => handleMenuClick(item.id)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-200 group ${
+                  isActive
+                    ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 shadow-sm shadow-emerald-500/10'
+                    : 'text-slate-400 hover:bg-[#1e293b] hover:text-white'
+                }`}
+                title={isCollapsed ? item.label : undefined}
+              >
+                <Icon className={`w-5 h-5 shrink-0 ${
+                  isActive ? 'text-emerald-500' : 'text-slate-500 group-hover:text-slate-300'
+                }`} />
+                
+                {!isCollapsed && (
+                  <>
+                    <span className="font-medium flex-1 text-sm">{item.label}</span>
+                    {item.badge && (
+                      <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${
+                        isActive 
+                          ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/30' 
+                          : 'bg-[#1e293b] text-slate-300 border border-slate-700/50'
+                      }`}>
+                        {item.badge}
+                      </span>
+                    )}
+                    {item.isNew && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-amber-400 tracking-wider">NEW</span>
+                    )}
+                  </>
                 )}
-              </div>
+              </button>
             );
           })}
         </div>
