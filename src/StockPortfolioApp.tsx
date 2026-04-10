@@ -51,7 +51,7 @@ interface StockWithPrice extends Stock {
   priceChangePercent?: number;
 }
 
-import { rebuildSearchSystem } from './stockDatabase';
+
 
 const StockPortfolioApp: React.FC = () => {
   const { 
@@ -90,7 +90,7 @@ const StockPortfolioApp: React.FC = () => {
   }, [activeTab]);
 
   useEffect(() => {
-    rebuildSearchSystem();
+
     if ((location.state as any)?.activeTab) {
       setActiveTab((location.state as any).activeTab);
       // Optional: Clear location state so refreshing doesn't force this tab if user navigated away
