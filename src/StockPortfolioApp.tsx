@@ -1109,7 +1109,7 @@ const StockPortfolioApp: React.FC = () => {
             />
           )}
           {activeTab === 'tools' && (
-            <MarketAnalysis />
+            <MarketAnalysisTools />
           )}
           {activeTab === 'market-eye' && (
             <MarketEye />
