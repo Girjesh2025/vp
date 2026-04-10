@@ -399,55 +399,59 @@ const OptionsWatch: React.FC = () => {
                 <h2 className="text-sm font-bold text-slate-200 tracking-wide">Net Position</h2>
               </div>
               
-              <div className="flex-1 relative flex z-10">
-                {/* Y-Axis Ticks */}
-                <div className="absolute left-0 top-0 bottom-0 w-8 flex flex-col justify-between text-[9px] text-[#666] font-mono select-none z-10 pb-5">
-                  {yTicksNet.map((tick, i) => (
-                    <span key={i}>{formatNumber(tick)}</span>
-                  ))}
-                </div>
+              <div className="flex-1 relative flex flex-col z-10">
                 
-                {/* Chart Area */}
-                <div className="flex-1 ml-10 flex items-end justify-around relative border-b border-[#444] pb-0 pt-2 px-8">
-                  {/* Grid Lines */}
-                  <div className="absolute inset-0 flex flex-col justify-between -z-0 pointer-events-none pb-0">
-                    {yTicksNet.map((_, i) => (
-                      <div key={i} className="w-full h-px bg-[#2a2a2a] border-b border-dashed border-[#111]"></div>
+                {/* Top Section: Y-Axis & Chart Flex Row */}
+                <div className="flex-1 relative flex">
+                  {/* Y-Axis Ticks */}
+                  <div className="absolute left-0 top-0 bottom-0 w-8 flex flex-col justify-between text-[9px] text-[#666] font-mono select-none z-10">
+                    {yTicksNet.map((tick, i) => (
+                      <span key={i} className="leading-none">{formatNumber(tick)}</span>
                     ))}
                   </div>
                   
-                  {/* Bulls Bar */}
-                  <div className="w-16 flex flex-col items-center group z-10 h-full justify-end relative cursor-crosshair">
-                    <div className="absolute -top-6 bg-black/80 border border-emerald-500/30 text-emerald-400 font-mono text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
-                       {formatRaw(totalBulls)}
+                  {/* Chart Area */}
+                  <div className="flex-1 ml-10 flex items-end justify-around relative border-b border-[#444] pb-0 pt-2 px-8">
+                    {/* Grid Lines */}
+                    <div className="absolute inset-0 flex flex-col justify-between -z-0 pointer-events-none pb-0">
+                      {yTicksNet.map((_, i) => (
+                        <div key={i} className="w-full h-px bg-[#2a2a2a] border-b border-dashed border-[#111]"></div>
+                      ))}
                     </div>
-                    <div 
-                      className="w-full bg-gradient-to-t from-emerald-600 to-emerald-400 opacity-90 rounded-t shadow-[0_0_20px_rgba(52,211,153,0.2)] group-hover:opacity-100 group-hover:shadow-[0_0_30px_rgba(52,211,153,0.4)] transition-all origin-bottom border-t-2 border-emerald-300"
-                      style={{ height: `${(totalBulls / totalNet) * 95}%` }}
-                    />
-                  </div>
-                  
-                  {/* Bears Bar */}
-                  <div className="w-16 flex flex-col items-center group z-10 h-full justify-end relative cursor-crosshair">
-                    <div className="absolute -top-6 bg-black/80 border border-rose-500/30 text-rose-400 font-mono text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
-                       {formatRaw(totalBears)}
+                    
+                    {/* Bulls Bar */}
+                    <div className="w-16 flex flex-col items-center group z-10 h-full justify-end relative cursor-crosshair">
+                      <div className="absolute -top-6 bg-black/80 border border-emerald-500/30 text-emerald-400 font-mono text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
+                         {formatRaw(totalBulls)}
+                      </div>
+                      <div 
+                        className="w-full bg-gradient-to-t from-emerald-600 to-emerald-400 opacity-90 rounded-t shadow-[0_0_20px_rgba(52,211,153,0.2)] group-hover:opacity-100 group-hover:shadow-[0_0_30px_rgba(52,211,153,0.4)] transition-all origin-bottom border-t-2 border-emerald-300"
+                        style={{ height: `${(totalBulls / totalNet) * 95}%` }}
+                      />
                     </div>
-                    <div 
-                      className="w-full bg-gradient-to-t from-red-600 to-rose-400 opacity-80 rounded-t shadow-[0_0_20px_rgba(244,63,94,0.15)] group-hover:opacity-100 group-hover:shadow-[0_0_30px_rgba(244,63,94,0.3)] transition-all origin-bottom border-t-2 border-rose-300"
-                      style={{ height: `${(totalBears / totalNet) * 95}%` }}
-                    />
+                    
+                    {/* Bears Bar */}
+                    <div className="w-16 flex flex-col items-center group z-10 h-full justify-end relative cursor-crosshair">
+                      <div className="absolute -top-6 bg-black/80 border border-rose-500/30 text-rose-400 font-mono text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
+                         {formatRaw(totalBears)}
+                      </div>
+                      <div 
+                        className="w-full bg-gradient-to-t from-red-600 to-rose-400 opacity-80 rounded-t shadow-[0_0_20px_rgba(244,63,94,0.15)] group-hover:opacity-100 group-hover:shadow-[0_0_30px_rgba(244,63,94,0.3)] transition-all origin-bottom border-t-2 border-rose-300"
+                        style={{ height: `${(totalBears / totalNet) * 95}%` }}
+                      />
+                    </div>
                   </div>
                 </div>
                 
-                {/* X-Axis Labels */}
-                <div className="absolute -bottom-1 left-10 right-0 flex justify-around px-8">
-                   <div className="flex flex-col items-center gap-1 mt-2">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_5px_#34d399]"></span>
-                      <span className="text-[10px] text-[#888] font-bold tracking-wider uppercase">Put Writers</span>
+                {/* Bottom Section: X-Axis Labels in normal flow */}
+                <div className="ml-10 flex justify-around px-8 pt-3 pb-1">
+                   <div className="flex flex-col items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_5px_#34d399]"></span>
+                      <span className="text-[9px] text-[#888] font-bold tracking-wider uppercase">Put Writers</span>
                    </div>
-                   <div className="flex flex-col items-center gap-1 mt-2">
-                      <span className="w-2 h-2 rounded-full bg-rose-400 shadow-[0_0_5px_#f43f5e]"></span>
-                      <span className="text-[10px] text-[#888] font-bold tracking-wider uppercase">Call Writers</span>
+                   <div className="flex flex-col items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shadow-[0_0_5px_#f43f5e]"></span>
+                      <span className="text-[9px] text-[#888] font-bold tracking-wider uppercase">Call Writers</span>
                    </div>
                 </div>
               </div>
