@@ -38,36 +38,36 @@ const STRADDLE_DECAY = [
 
 const STRIKE_OI_FLOW: Record<Instrument, any[]> = {
   'NIFTY 50': [
-    { strike: 22200, callChg: -2.5, putChg: 15.2 },
-    { strike: 22300, callChg: -1.2, putChg: 22.4 },
-    { strike: 22400, callChg: 5.4, putChg: 18.1 },
-    { strike: 22500, callChg: 28.5, putChg: -3.2 },
-    { strike: 22600, callChg: 35.2, putChg: -5.5 },
-    { strike: 22700, callChg: 18.4, putChg: -1.1 },
+    { strike: 22200, callChg: -2.5, callChgNeg: 2.5, putChg: 15.2 },
+    { strike: 22300, callChg: -1.2, callChgNeg: 1.2, putChg: 22.4 },
+    { strike: 22400, callChg: 5.4, callChgNeg: -5.4, putChg: 18.1 },
+    { strike: 22500, callChg: 28.5, callChgNeg: -28.5, putChg: -3.2 },
+    { strike: 22600, callChg: 35.2, callChgNeg: -35.2, putChg: -5.5 },
+    { strike: 22700, callChg: 18.4, callChgNeg: -18.4, putChg: -1.1 },
   ],
   'BANKNIFTY': [
-    { strike: 47700, callChg: -4.5, putChg: 12.2 },
-    { strike: 47800, callChg: -2.2, putChg: 18.4 },
-    { strike: 48000, callChg: 15.4, putChg: 8.1 },
-    { strike: 48100, callChg: 28.5, putChg: -6.2 },
-    { strike: 48200, callChg: 32.2, putChg: -8.5 },
-    { strike: 48500, callChg: 12.4, putChg: -2.1 },
+    { strike: 47700, callChg: -4.5, callChgNeg: 4.5, putChg: 12.2 },
+    { strike: 47800, callChg: -2.2, callChgNeg: 2.2, putChg: 18.4 },
+    { strike: 48000, callChg: 15.4, callChgNeg: -15.4, putChg: 8.1 },
+    { strike: 48100, callChg: 28.5, callChgNeg: -28.5, putChg: -6.2 },
+    { strike: 48200, callChg: 32.2, callChgNeg: -32.2, putChg: -8.5 },
+    { strike: 48500, callChg: 12.4, callChgNeg: -12.4, putChg: -2.1 },
   ],
   'FINNIFTY': [
-    { strike: 21100, callChg: -1.5, putChg: 8.2 },
-    { strike: 21200, callChg: -0.2, putChg: 12.4 },
-    { strike: 21300, callChg: 4.4, putChg: 6.1 },
-    { strike: 21400, callChg: 14.5, putChg: -2.2 },
-    { strike: 21500, callChg: 18.2, putChg: -4.5 },
-    { strike: 21600, callChg: 8.4, putChg: -1.1 },
+    { strike: 21100, callChg: -1.5, callChgNeg: 1.5, putChg: 8.2 },
+    { strike: 21200, callChg: -0.2, callChgNeg: 0.2, putChg: 12.4 },
+    { strike: 21300, callChg: 4.4, callChgNeg: -4.4, putChg: 6.1 },
+    { strike: 21400, callChg: 14.5, callChgNeg: -14.5, putChg: -2.2 },
+    { strike: 21500, callChg: 18.2, callChgNeg: -18.2, putChg: -4.5 },
+    { strike: 21600, callChg: 8.4, callChgNeg: -8.4, putChg: -1.1 },
   ],
   'SENSEX': [
-    { strike: 73500, callChg: -3.5, putChg: 10.2 },
-    { strike: 73800, callChg: -1.2, putChg: 15.4 },
-    { strike: 74000, callChg: 8.4, putChg: 12.1 },
-    { strike: 74200, callChg: 22.5, putChg: -4.2 },
-    { strike: 74500, callChg: 28.2, putChg: -6.5 },
-    { strike: 75000, callChg: 15.4, putChg: -2.1 },
+    { strike: 73500, callChg: -3.5, callChgNeg: 3.5, putChg: 10.2 },
+    { strike: 73800, callChg: -1.2, callChgNeg: 1.2, putChg: 15.4 },
+    { strike: 74000, callChg: 8.4, callChgNeg: -8.4, putChg: 12.1 },
+    { strike: 74200, callChg: 22.5, callChgNeg: -22.5, putChg: -4.2 },
+    { strike: 74500, callChg: 28.2, callChgNeg: -28.2, putChg: -6.5 },
+    { strike: 75000, callChg: 15.4, callChgNeg: -15.4, putChg: -2.1 },
   ]
 };
 
@@ -315,8 +315,8 @@ const OptionsDecode: React.FC = () => {
                   />
                   <ReferenceLine x={0} stroke="#475569" strokeWidth={2} />
                   
-                  {/* Call Bar (Negative means Unwinding, Positive means Writing. We'll map Call to NEGATIVE side of X axis for symmetry, Put to POSITIVE) */}
-                  <Bar dataKey={(d) => -d.callChg} name="Call Writing (Bearish)" radius={[4,0,0,4]}>
+                  {/* Call Bar (Mapping Call Changes to the Left axis side using precalculated negative values) */}
+                  <Bar dataKey="callChgNeg" name="Call Writing (Bearish)" radius={[4,0,0,4]}>
                     {strikeData.map((entry, index) => (
                       <Cell key={`call-${index}`} fill={entry.callChg > 0 ? callColor : callUnwindColor} />
                     ))}
