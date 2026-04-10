@@ -56,7 +56,7 @@ const Login: React.FC = () => {
             ← Back to home
           </Link>
 
-          <div style={{ display:'inline-flex', alignItems:'center', justifyContent:'center',
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'center',
             width:'60px', height:'60px',
             background:'linear-gradient(135deg, #10b981, #059669)',
             borderRadius:'18px',

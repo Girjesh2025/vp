@@ -128,6 +128,18 @@ export function usePortfolio() {
 
       if (stocksError) throw stocksError
 
+      // Load transactions
+      const { data: transactionsData, error: transactionsError } = await supabase
+        .from('transactions')
+        .select(`
+          *,
+          stocks!inner(symbol, name)
+        `)
+        .in('stock_id', stocksData?.map((s: { id: string }) => s.id) || [])
+        .order('date', { ascending: false })
+
+      if (transactionsError) throw transactionsError
+
       // Convert to local format
       const localStocks: Stock[] = stocksData?.map((stock: { symbol: string; name: string; exchange: string; quantity: string | number; average_price: string | number }) => ({
         symbol: stock.symbol,
@@ -137,34 +149,17 @@ export function usePortfolio() {
         avgPrice: Number(stock.average_price)
       })) || []
 
-      // Load transactions ONLY if there are stocks
-      let localTransactions: Transaction[] = []
-      
-      if (stocksData && stocksData.length > 0) {
-        const stockIds = stocksData.map((s: { id: string }) => s.id)
-        const { data: transactionsData, error: transactionsError } = await supabase
-          .from('transactions')
-          .select(`
-            *,
-            stocks!inner(symbol, name)
-          `)
-          .in('stock_id', stockIds)
-          .order('date', { ascending: false })
-
-        if (transactionsError) throw transactionsError
-
-        localTransactions = transactionsData?.map((transaction: { stocks: { symbol: string; name: string }; type: string; quantity: string | number; price: string | number; date: string }, index: number) => ({
-          id: Date.now() + index, // Unique ID to avoid key collisions
-          symbol: transaction.stocks.symbol,
-          displaySymbol: `${transaction.stocks.symbol}-${transaction.stocks.name}`,
-          name: transaction.stocks.name,
-          type: transaction.type as 'buy' | 'sell',
-          quantity: Number(transaction.quantity),
-          price: Number(transaction.price),
-          date: transaction.date,
-          total: Number(transaction.quantity) * Number(transaction.price)
-        })) || []
-      }
+      const localTransactions: Transaction[] = transactionsData?.map((transaction: { stocks: { symbol: string; name: string }; type: string; quantity: string | number; price: string | number; date: string }, index: number) => ({
+        id: Date.now() + index, // Unique ID to avoid key collisions
+        symbol: transaction.stocks.symbol,
+        displaySymbol: `${transaction.stocks.symbol}-${transaction.stocks.name}`,
+        name: transaction.stocks.name,
+        type: transaction.type as 'buy' | 'sell',
+        quantity: Number(transaction.quantity),
+        price: Number(transaction.price),
+        date: transaction.date,
+        total: Number(transaction.quantity) * Number(transaction.price)
+      })) || []
 
       setStocks(localStocks)
       setTransactions(localTransactions)
@@ -202,8 +197,8 @@ export function usePortfolio() {
           symbol: stockData.symbol,
           name: stockData.name,
           exchange: stockData.exchange,
-          quantity: 0, // Set initial quantity to 0, transaction will update it
-          average_price: 0 // Set initial avg price to 0, transaction will update it
+          quantity: stockData.quantity,
+          average_price: stockData.avgPrice
         }])
         .select()
         .single()
@@ -276,13 +271,9 @@ export function usePortfolio() {
         .select('*')
         .eq('portfolio_id', currentPortfolio?.id)
         .eq('symbol', transactionData.stockSymbol)
-        .limit(1)
-        .single()
+        .maybeSingle()
 
-      if (stockError || !stockData) {
-        console.error('Stock query error:', stockError);
-        throw new Error(`Stock not found: ${stockError?.message || 'Unknown error'}`);
-      }
+      if (stockError || !stockData) throw new Error('Stock not found')
 
       const { data: newTransaction, error } = await supabase
         .from('transactions')
@@ -373,40 +364,34 @@ export function usePortfolio() {
         return
       }
 
-      // Find the stock(s) in database
-      const { data: stocksData, error: stocksError } = await supabase
+      // Find the stock in database
+      const { data: stockData, error: stockError } = await supabase
         .from('stocks')
         .select('id')
         .eq('portfolio_id', currentPortfolio?.id)
         .eq('symbol', symbol)
+        .maybeSingle()
 
-      if (stocksError) throw new Error(`Stock error: ${stocksError.message}`)
-      if (!stocksData || stocksData.length === 0) throw new Error(`Stock not found for symbol ${symbol} in portfolio ${currentPortfolio?.id || 'undefined'}`)
-
-      const stockIds = stocksData.map(s => s.id)
+      if (stockError || !stockData) throw new Error('Stock not found')
 
       // First delete all associated transactions to prevent foreign key errors
       const { error: txError } = await supabase
         .from('transactions')
         .delete()
-        .in('stock_id', stockIds)
+        .eq('stock_id', stockData.id)
         
       if (txError) {
         console.error('Error deleting transactions for stock:', txError)
-        // If it fails due to RLS, let's try calling an RPC function if it exists, or just continue
-        // and hope ON DELETE CASCADE is set up on the database
+        // Continue anyway to try deleting the stock, though it might fail if restrict is on
       }
 
-      // Then delete the stock(s) itself
+      // Then delete the stock itself
       const { error } = await supabase
         .from('stocks')
         .delete()
-        .in('id', stockIds)
+        .eq('id', stockData.id)
 
-      if (error) {
-        console.error('Database stock deletion error details:', error)
-        throw error
-      }
+      if (error) throw error
 
       setStocks(prev => prev.filter(s => s.symbol !== symbol))
       setTransactions(prev => prev.filter(t => t.symbol !== symbol))

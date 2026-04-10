@@ -81,19 +81,19 @@ const PortfolioSelector: React.FC<PortfolioSelectorProps> = ({
     <div className="relative" ref={dropdownRef}>
       {/* Current Portfolio Display */}
       <div 
-        className="bg-[#131b26] rounded-xl shadow-lg border border-slate-800 p-4 cursor-pointer hover:border-slate-700 transition-colors duration-200"
+        className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 cursor-pointer hover:shadow-md transition-shadow duration-200"
         onClick={() => setIsDropdownOpen(!isDropdownOpen)}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="p-2 bg-blue-500/20 rounded-lg">
-              <Briefcase className="w-5 h-5 text-blue-400" />
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Briefcase className="w-5 h-5 text-blue-600" />
             </div>
             <div>
-              <h3 className="font-semibold text-white">
+              <h3 className="font-semibold text-gray-900">
                 {currentPortfolio?.name || 'Select Portfolio'}
               </h3>
-              <p className="text-sm text-slate-400">
+              <p className="text-sm text-gray-500">
                 {portfolios.length} portfolio{portfolios.length !== 1 ? 's' : ''} available
               </p>
             </div>
@@ -102,31 +102,32 @@ const PortfolioSelector: React.FC<PortfolioSelectorProps> = ({
           {portfolioStats && (
             <div className="flex items-center space-x-4">
               <div className="text-right">
-                <div className="flex items-center justify-end space-x-2">
-                  <span className="font-semibold text-white">
+                <div className="flex items-center space-x-2">
+                  <DollarSign className="w-4 h-4 text-gray-400" />
+                  <span className="font-semibold text-gray-900">
                     {formatCurrency(portfolioStats.totalValue)}
                   </span>
                 </div>
-                <div className="flex items-center justify-end space-x-1 mt-0.5">
-                  <TrendingUp className={`w-3 h-3 ${portfolioStats.totalGainLoss >= 0 ? 'text-emerald-400' : 'text-red-400'}`} />
-                  <span className={`text-sm font-medium ${portfolioStats.totalGainLoss >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                <div className="flex items-center space-x-1">
+                  <TrendingUp className={`w-3 h-3 ${portfolioStats.totalGainLoss >= 0 ? 'text-green-500' : 'text-red-500'}`} />
+                  <span className={`text-sm font-medium ${portfolioStats.totalGainLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {formatCurrency(portfolioStats.totalGainLoss)} ({formatPercentage(portfolioStats.totalGainLossPercent)})
                   </span>
                 </div>
               </div>
-              <ChevronDown className={`w-5 h-5 text-slate-500 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
             </div>
           )}
           
           {!portfolioStats && (
-            <ChevronDown className={`w-5 h-5 text-slate-500 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
           )}
         </div>
       </div>
 
       {/* Dropdown Menu */}
       {isDropdownOpen && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-[#131b26] rounded-xl shadow-xl border border-slate-800 z-50 max-h-96 overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-lg border border-gray-200 z-50 max-h-96 overflow-y-auto">
           <div className="p-2">
             {/* Portfolio List */}
             {portfolios.map((portfolio) => (
@@ -139,7 +140,7 @@ const PortfolioSelector: React.FC<PortfolioSelectorProps> = ({
                       onChange={(e) => setEditPortfolioName(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && handleEditPortfolio(portfolio)}
                       onBlur={() => handleEditPortfolio(portfolio)}
-                      className="flex-1 px-3 py-1 border border-slate-700 bg-slate-800/50 text-white rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-500"
+                      className="flex-1 px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="Portfolio name"
                       autoFocus
                     />
@@ -148,8 +149,8 @@ const PortfolioSelector: React.FC<PortfolioSelectorProps> = ({
                   <div 
                     className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-colors duration-150 ${
                       currentPortfolio?.id === portfolio.id 
-                        ? 'bg-[#1e293b] border border-blue-500/30' 
-                        : 'hover:bg-slate-800/50 border border-transparent'
+                        ? 'bg-blue-50 border border-blue-200' 
+                        : 'hover:bg-gray-50'
                     }`}
                     onClick={() => {
                       onPortfolioChange(portfolio);
@@ -159,20 +160,18 @@ const PortfolioSelector: React.FC<PortfolioSelectorProps> = ({
                     <div className="flex items-center space-x-3">
                       <div className={`p-1.5 rounded-md ${
                         currentPortfolio?.id === portfolio.id 
-                          ? 'bg-blue-500/20' 
-                          : 'bg-slate-800'
+                          ? 'bg-blue-100' 
+                          : 'bg-gray-100'
                       }`}>
                         <Briefcase className={`w-4 h-4 ${
                           currentPortfolio?.id === portfolio.id 
-                            ? 'text-blue-400' 
-                            : 'text-slate-400'
+                            ? 'text-blue-600' 
+                            : 'text-gray-600'
                         }`} />
                       </div>
                       <div>
-                        <p className={`font-medium ${currentPortfolio?.id === portfolio.id ? 'text-white' : 'text-slate-300'}`}>
-                          {portfolio.name}
-                        </p>
-                        <p className="text-xs text-slate-500">
+                        <p className="font-medium text-gray-900">{portfolio.name}</p>
+                        <p className="text-xs text-gray-500">
                           Created {new Date(portfolio.created_at).toLocaleDateString()}
                         </p>
                       </div>
@@ -185,7 +184,7 @@ const PortfolioSelector: React.FC<PortfolioSelectorProps> = ({
                           setIsEditing(portfolio.id);
                           setEditPortfolioName(portfolio.name);
                         }}
-                        className="p-1.5 text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-md transition-colors duration-150"
+                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors duration-150"
                       >
                         <Edit2 className="w-3 h-3" />
                       </button>
@@ -195,7 +194,7 @@ const PortfolioSelector: React.FC<PortfolioSelectorProps> = ({
                             e.stopPropagation();
                             onDeletePortfolio(portfolio);
                           }}
-                          className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-md transition-colors duration-150"
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors duration-150"
                         >
                           <Trash2 className="w-3 h-3" />
                         </button>
@@ -207,7 +206,7 @@ const PortfolioSelector: React.FC<PortfolioSelectorProps> = ({
             ))}
 
             {/* Create New Portfolio */}
-            <div className="border-t border-slate-800 mt-2 pt-2">
+            <div className="border-t border-gray-100 mt-2 pt-2">
               {isCreating ? (
                 <div className="flex items-center space-x-2 p-3">
                   <input
@@ -220,7 +219,7 @@ const PortfolioSelector: React.FC<PortfolioSelectorProps> = ({
                         setIsCreating(false);
                       }
                     }}
-                    className="flex-1 px-3 py-2 border border-slate-700 bg-slate-800/50 text-white rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-500"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Enter portfolio name"
                     autoFocus
                   />
@@ -234,9 +233,9 @@ const PortfolioSelector: React.FC<PortfolioSelectorProps> = ({
               ) : (
                 <button
                   onClick={() => setIsCreating(true)}
-                  className="w-full flex items-center space-x-3 p-3 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors duration-150"
+                  className="w-full flex items-center space-x-3 p-3 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors duration-150"
                 >
-                  <div className="p-1.5 bg-slate-800 rounded-md">
+                  <div className="p-1.5 bg-gray-100 rounded-md">
                     <Plus className="w-4 h-4" />
                   </div>
                   <span className="font-medium">Create New Portfolio</span>

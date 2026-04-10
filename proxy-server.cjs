@@ -186,9 +186,10 @@ app.get('/api/stock/:symbol', async (req, res) => {
     }
   }
   
-  // If all APIs fail, DO NOT use mock data. Return error to ensure authenticity.
-  console.log(`⚠️ All APIs failed for ${symbol}, returning 500 to ensure authenticity`);
-  return res.status(500).json({ error: 'Failed to fetch authentic market data from all sources' });
+  // If all APIs fail, use mock data
+  console.log(`⚠️ All APIs failed for ${symbol}, using mock data`);
+  const mockData = generateMockData(symbol);
+  res.json(mockData);
 });
 
 // Seeded mock monthly data for sector indices (used when Yahoo is unavailable)
@@ -318,18 +319,9 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    timestamp: new Date().toISOString(),
-    sources: ['Yahoo Finance', 'Alpha Vantage', 'EODHD', 'Mock Data']
-  });
-});
-
-// Start server
-// Fetch FII/DII Data from NSE
-app.get('/api/fii-dii', async (req, res) => {
+// Fetch Options Chain Data from NSE
+app.get('/api/options/:symbol', async (req, res) => {
+  const symbol = req.params.symbol.toUpperCase();
   const agent = new https.Agent({ keepAlive: true });
   const options = {
     headers: {
@@ -342,6 +334,7 @@ app.get('/api/fii-dii', async (req, res) => {
   };
 
   try {
+    console.log(`fetching options data for ${symbol}...`);
     // 1. Get cookies
     const cookies = await new Promise((resolve, reject) => {
       https.get('https://www.nseindia.com/', options, (response) => {
@@ -360,8 +353,14 @@ app.get('/api/fii-dii', async (req, res) => {
       }
     };
     
+    // NSE Options chain API: indices or equities
+    const isIndex = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY'].includes(symbol);
+    const apiUrl = isIndex 
+      ? `https://www.nseindia.com/api/option-chain-indices?symbol=${symbol}`
+      : `https://www.nseindia.com/api/option-chain-equities?symbol=${symbol}`;
+
     const dataStr = await new Promise((resolve, reject) => {
-      https.get('https://www.nseindia.com/api/fiidiiTradeReact', fetchOptions, (response) => {
+      https.get(apiUrl, fetchOptions, (response) => {
         const chunks = [];
         response.on('data', (chunk) => chunks.push(chunk));
         response.on('end', () => {
@@ -380,11 +379,21 @@ app.get('/api/fii-dii', async (req, res) => {
     const data = JSON.parse(dataStr);
     return res.json(data);
   } catch (err) {
-    console.error('Error fetching FII/DII data:', err);
-    return res.status(500).json({ error: 'Failed to fetch FII/DII data' });
+    console.error(`Error fetching Options data for ${symbol}:`, err);
+    return res.status(500).json({ error: `Failed to fetch Options data for ${symbol}` });
   }
 });
 
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    sources: ['Yahoo Finance', 'Alpha Vantage', 'EODHD', 'Mock Data']
+  });
+});
+
+// Start server
 app.listen(PORT, () => {
   console.log(`🚀 Proxy server running on http://localhost:${PORT}`);
   console.log(`📊 Stock API endpoint: http://localhost:${PORT}/api/stock/{symbol}`);

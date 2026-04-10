@@ -12,15 +12,42 @@ const PerformanceChart: React.FC<Props> = ({ stocks, priceData }) => {
   // Handle empty portfolio case
   if (stocks.length === 0) {
     return (
-      <div className="flex items-center justify-center h-32 mt-12">
-        <div className="text-center">
-          <div className="text-slate-500 mb-2">
-            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-lg font-bold text-gray-900">Portfolio Performance</h3>
+          <div className="flex items-center space-x-2">
+            <TrendingUp className="text-gray-400" size={20} />
+            <span className="text-sm font-semibold text-gray-400">+0.00%</span>
           </div>
-          <p className="text-slate-400 text-sm">No performance data</p>
-          <p className="text-slate-500 text-xs mt-1">Add stocks to see trends</p>
+        </div>
+
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-gray-900">₹0.0L</div>
+            <div className="text-sm text-gray-500">Current Value</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-gray-900">₹0.0L</div>
+            <div className="text-sm text-gray-500">Invested</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-green-600">+₹0K</div>
+            <div className="text-sm text-gray-500">P&L</div>
+          </div>
+        </div>
+
+        {/* Empty State Chart */}
+        <div className="flex items-center justify-center h-32">
+          <div className="text-center">
+            <div className="text-gray-400 mb-2">
+              <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </div>
+            <p className="text-gray-500 text-sm">No performance data</p>
+            <p className="text-gray-400 text-xs mt-1">Add stocks to see trends</p>
+          </div>
         </div>
       </div>
     );
@@ -130,16 +157,17 @@ const PerformanceChart: React.FC<Props> = ({ stocks, priceData }) => {
   };
 
   return (
-    <div>
-      <div className="flex items-center justify-end mb-6">
+    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-lg font-bold text-gray-900">Portfolio Performance</h3>
         <div className="flex items-center space-x-2">
           {gainLossPercentage >= 0 ? (
-            <TrendingUp className="text-emerald-500" size={20} />
+            <TrendingUp className="text-green-600" size={20} />
           ) : (
-            <TrendingDown className="text-red-500" size={20} />
+            <TrendingDown className="text-red-600" size={20} />
           )}
           <span className={`text-sm font-semibold ${
-            gainLossPercentage >= 0 ? 'text-emerald-500' : 'text-red-500'
+            gainLossPercentage >= 0 ? 'text-green-600' : 'text-red-600'
           }`}>
             {gainLossPercentage >= 0 ? '+' : ''}{gainLossPercentage.toFixed(2)}%
           </span>
@@ -149,20 +177,20 @@ const PerformanceChart: React.FC<Props> = ({ stocks, priceData }) => {
       {/* Statistics Cards */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="text-center">
-          <div className="text-2xl font-bold text-white">{formatCurrency(totalValue)}</div>
-          <div className="text-sm text-slate-400">Current Value</div>
+          <div className="text-2xl font-bold text-gray-900">{formatCurrency(totalValue)}</div>
+          <div className="text-sm text-gray-500">Current Value</div>
         </div>
         <div className="text-center">
-          <div className="text-2xl font-bold text-white">{formatCurrency(totalInvestment)}</div>
-          <div className="text-sm text-slate-400">Invested</div>
+          <div className="text-2xl font-bold text-gray-900">{formatCurrency(totalInvestment)}</div>
+          <div className="text-sm text-gray-500">Invested</div>
         </div>
         <div className="text-center">
           <div className={`text-2xl font-bold ${
-            totalGainLoss >= 0 ? 'text-emerald-500' : 'text-red-500'
+            totalGainLoss >= 0 ? 'text-green-600' : 'text-red-600'
           }`}>
             {totalGainLoss >= 0 ? '+' : ''}{formatCurrency(Math.abs(totalGainLoss))}
           </div>
-          <div className="text-sm text-slate-400">P&L</div>
+          <div className="text-sm text-gray-500">P&L</div>
         </div>
       </div>
 
@@ -172,7 +200,7 @@ const PerformanceChart: React.FC<Props> = ({ stocks, priceData }) => {
           {/* Grid lines */}
           <defs>
             <pattern id="grid" width="50" height="20" patternUnits="userSpaceOnUse">
-              <path d="M 50 0 L 0 0 0 20" fill="none" stroke="#1e293b" strokeWidth="1"/>
+              <path d="M 50 0 L 0 0 0 20" fill="none" stroke="#f3f4f6" strokeWidth="1"/>
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#grid)" />
@@ -213,7 +241,7 @@ const PerformanceChart: React.FC<Props> = ({ stocks, priceData }) => {
                   cy={y}
                   r="4"
                   fill={gainLossPercentage >= 0 ? "#10b981" : "#ef4444"}
-                  stroke="#172030"
+                  stroke="white"
                   strokeWidth="2"
                   className="hover:r-6 transition-all cursor-pointer drop-shadow-sm"
                 />
@@ -222,7 +250,7 @@ const PerformanceChart: React.FC<Props> = ({ stocks, priceData }) => {
                   cy={y}
                   r="8"
                   fill="transparent"
-                  className="hover:fill-white hover:fill-opacity-10 transition-all cursor-pointer"
+                  className="hover:fill-black hover:fill-opacity-10 transition-all cursor-pointer"
                 >
                   <title>{`${point.month}: ${formatCurrency(point.value * 100000)}`}</title>
                 </circle>
@@ -234,7 +262,7 @@ const PerformanceChart: React.FC<Props> = ({ stocks, priceData }) => {
         {/* X-axis labels */}
         <div className="flex justify-between mt-2 px-5">
           {months.map((month) => (
-            <span key={month} className="text-xs text-slate-500">{month}</span>
+            <span key={month} className="text-xs text-gray-500">{month}</span>
           ))}
         </div>
       </div>

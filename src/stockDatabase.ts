@@ -151,7 +151,6 @@ export const stockDatabase: StockInfo[] = [
   { symbol: 'CROMPTON', name: 'Crompton Greaves Consumer Electricals Limited', exchange: 'NSE', sector: 'Consumer Durables', marketCap: 'Small' },
   { symbol: 'DEEPAKNTR', name: 'Deepak Nitrite Limited', exchange: 'NSE', sector: 'Chemicals', marketCap: 'Small' },
   { symbol: 'EMAMILTD', name: 'Emami Limited', exchange: 'NSE', sector: 'FMCG', marketCap: 'Small' },
-  { symbol: 'BHEL', name: 'Bharat Heavy Electricals Limited', exchange: 'NSE', sector: 'Capital Goods', marketCap: 'Mid', isin: 'INE257A01026' },
   { symbol: 'EQUITAS', name: 'Equitas Holdings Limited', exchange: 'NSE', sector: 'Banking', marketCap: 'Small' },
   { symbol: 'FINEORG', name: 'Fine Organic Industries Limited', exchange: 'NSE', sector: 'Chemicals', marketCap: 'Small' },
   { symbol: 'FLUOROCHEM', name: 'Gujarat Fluorochemicals Limited', exchange: 'NSE', sector: 'Chemicals', marketCap: 'Small' },
@@ -385,14 +384,11 @@ export const stockDatabase: StockInfo[] = [
    { symbol: '539876', name: 'Crompton Greaves Consumer Electricals Limited', exchange: 'BSE', sector: 'Consumer Durables', marketCap: 'Small' },
    { symbol: '506401', name: 'Deepak Nitrite Limited', exchange: 'BSE', sector: 'Chemicals', marketCap: 'Small' },
    { symbol: '531162', name: 'Emami Limited', exchange: 'BSE', sector: 'FMCG', marketCap: 'Small' },
-  { symbol: '500103', name: 'Bharat Heavy Electricals Limited', exchange: 'BSE', sector: 'Capital Goods', marketCap: 'Mid', isin: 'INE257A01026' },
-  { symbol: '543243', name: 'Equitas Holdings Limited', exchange: 'BSE', sector: 'Banking', marketCap: 'Small' },
+   { symbol: '543243', name: 'Equitas Holdings Limited', exchange: 'BSE', sector: 'Banking', marketCap: 'Small' },
    { symbol: '543300', name: 'Fine Organic Industries Limited', exchange: 'BSE', sector: 'Chemicals', marketCap: 'Small' },
    { symbol: '506480', name: 'Gujarat Fluorochemicals Limited', exchange: 'BSE', sector: 'Chemicals', marketCap: 'Small' },
    { symbol: '532843', name: 'Fortis Healthcare Limited', exchange: 'BSE', sector: 'Healthcare', marketCap: 'Small' },
-  { symbol: 'GRSE', name: 'Garden Reach Shipbuilders & Engineers Ltd', exchange: 'NSE', sector: 'Defence', marketCap: 'Small', isin: 'INE092T01019' },
-  { symbol: '541556', name: 'Garden Reach Shipbuilders & Engineers Ltd', exchange: 'BSE', sector: 'Defence', marketCap: 'Small', isin: 'INE092T01019' },
-  { symbol: '532481', name: 'General Insurance Corporation of India', exchange: 'BSE', sector: 'Insurance', marketCap: 'Small' },
+   { symbol: '532481', name: 'General Insurance Corporation of India', exchange: 'BSE', sector: 'Insurance', marketCap: 'Small' },
    { symbol: '507815', name: 'Gillette India Limited', exchange: 'BSE', sector: 'FMCG', marketCap: 'Small' },
    { symbol: '500670', name: 'Gujarat Narmada Valley Fertilizers & Chemicals Limited', exchange: 'BSE', sector: 'Fertilizers', marketCap: 'Small' },
    { symbol: '540716', name: 'Godrej Agrovet Limited', exchange: 'BSE', sector: 'Agriculture', marketCap: 'Small' },
@@ -548,8 +544,8 @@ export function searchStocks(query: string): StockInfo[] {
   return stockDatabase.filter(stock => 
     stock.symbol.toLowerCase().includes(searchTerm) ||
     stock.name.toLowerCase().includes(searchTerm) ||
-    (stock.sector && stock.sector.toLowerCase().includes(searchTerm)) ||
-    (stock.isin && stock.isin.toLowerCase().includes(searchTerm))
+    stock.sector.toLowerCase().includes(searchTerm) ||
+    (stock.isin ? stock.isin.toLowerCase().includes(searchTerm) : false)
   ).slice(0, 50); // Limit results for performance
 }
 
@@ -574,7 +570,7 @@ export function searchStocksFast(query: string): StockInfo[] {
 
 export function searchStocksBySector(sector: string): StockInfo[] {
   return stockDatabase.filter(stock => 
-    stock.sector?.toLowerCase().includes(sector.toLowerCase())
+    stock.sector.toLowerCase().includes(sector.toLowerCase())
   );
 }
 
@@ -595,7 +591,7 @@ export function getStocksByExchange(exchange: 'NSE' | 'BSE'): StockInfo[] {
 
 export function getStocksBySector(sector: string): StockInfo[] {
   return stockDatabase.filter(stock => 
-    stock.sector?.toLowerCase() === sector.toLowerCase()
+    stock.sector.toLowerCase() === sector.toLowerCase()
   );
 }
 
@@ -604,7 +600,7 @@ export function getStocksByMarketCap(marketCap: 'Large' | 'Mid' | 'Small'): Stoc
 }
 
 export function getAllSectors(): string[] {
-  const sectors = new Set(stockDatabase.map(stock => stock.sector).filter((s): s is string => !!s));
+  const sectors = new Set(stockDatabase.map(stock => stock.sector));
   return Array.from(sectors).sort();
 }
 
@@ -842,12 +838,7 @@ class SearchOptimizer {
 }
 
 // Global search optimizer instance
-let searchOptimizer = new SearchOptimizer();
-
-// Function to fully rebuild the search system
-export function rebuildSearchSystem(): void {
-  searchOptimizer = new SearchOptimizer();
-}
+const searchOptimizer = new SearchOptimizer();
 
 // Debounced search function
 let searchTimeout: NodeJS.Timeout | null = null;
@@ -927,12 +918,7 @@ export function getSearchPerformanceStats(): {
   };
 }
 
-// Force rebuild index if needed
-export function rebuildSearchIndex(): void {
+// Clear search cache (useful for memory management)
+export function clearSearchCache(): void {
   searchOptimizer.clearCache();
-  // We can't cleanly force rebuild without exposing the method, 
-  // but clearing the cache will force new searches to traverse properly
 }
-
-// Ensure the cache is clear and indexes are rebuilt upon load
-searchOptimizer.clearCache();

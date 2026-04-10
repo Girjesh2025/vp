@@ -14,12 +14,11 @@ import AlertsPage from './components/AlertsPage';
 import AITradingSuggestions from './components/AITradingSuggestions';
 import ToolsDashboard from './components/ToolsDashboard';
 import MarketAnalysis from './components/MarketAnalysis';
-import MarketAnalysisTools from './components/MarketAnalysisTools';
-import MarketEye from './components/MarketEye';
-import SwingPlayer from './components/SwingPlayer';
 import StockRecommendations from './components/StockRecommendations';
-import HelpAndSupport from './components/HelpAndSupport';
-import { MarketTicker } from './components/MarketTicker';
+import OptionsPlayer from './components/OptionsPlayer';
+import OptionsHint   from './components/OptionsHint';
+import OptionsWatch  from './components/OptionsWatch';
+import SwingPlayer from './components/SwingPlayer';
 import { fetchStockPrice } from './utils/priceApi';
 import { 
   getStockBySymbol,
@@ -47,8 +46,6 @@ interface StockWithPrice extends Stock {
   priceChangePercent?: number;
 }
 
-import { rebuildSearchSystem } from './stockDatabase';
-
 const StockPortfolioApp: React.FC = () => {
   const { 
     portfolios,
@@ -73,7 +70,6 @@ const StockPortfolioApp: React.FC = () => {
   const [popularStockPrices, setPopularStockPrices] = useState<Record<string, PriceData>>({});
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
-  const [transactionModalType, setTransactionModalType] = useState<'buy' | 'sell'>('buy');
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
   
   const location = useLocation();
@@ -86,7 +82,6 @@ const StockPortfolioApp: React.FC = () => {
   }, [activeTab]);
 
   useEffect(() => {
-    rebuildSearchSystem();
     if ((location.state as any)?.activeTab) {
       setActiveTab((location.state as any).activeTab);
       // Optional: Clear location state so refreshing doesn't force this tab if user navigated away
@@ -108,10 +103,9 @@ const StockPortfolioApp: React.FC = () => {
   const [priceAlertsEnabled, setPriceAlertsEnabled] = useState(true);
   const [portfolioUpdatesEnabled, setPortfolioUpdatesEnabled] = useState(true);
   const [marketNewsEnabled, setMarketNewsEnabled] = useState(false);
-  const [priceAlerts, setPriceAlerts] = useState<PriceAlert[]>(() => { const saved = localStorage.getItem("priceAlerts"); return saved ? JSON.parse(saved) : []; });
+  const [priceAlerts, setPriceAlerts] = useState<PriceAlert[]>([]);
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(getNotificationSettings());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  useEffect(() => { localStorage.setItem("priceAlerts", JSON.stringify(priceAlerts)); }, [priceAlerts]);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{isOpen: boolean, stock: Stock | null}>({isOpen: false, stock: null});
 
   const memoPortfolioSymbols = useMemo(() => [...new Set(portfolioStocks.map(stock => stock.symbol))], [portfolioStocks]);
@@ -337,9 +331,9 @@ const StockPortfolioApp: React.FC = () => {
       Object.entries(stockPrices).forEach(([symbol, priceData]) => {
         currentPrices[symbol] = priceData.price;
       });
-      let changed=false;const updated=priceAlerts.map(a=>{if(!a.isActive)return a;const cp=stockPrices[a.symbol]?.price;if(!cp)return a;const sa=(a.condition==="above"&&cp>=a.targetPrice)||(a.condition==="below"&&cp<=a.targetPrice);if(sa){changed=true;checkPriceAlerts([a],{[a.symbol]:cp});const sh=localStorage.getItem("alertHistory");const h=sh?JSON.parse(sh):[];h.unshift({...a,triggeredAt:new Date().toISOString(),currentPrice:cp});localStorage.setItem("alertHistory",JSON.stringify(h.slice(0,50)));return{...a,isActive:false};}return a;});if(changed)setPriceAlerts(updated);
+      checkPriceAlerts(priceAlerts, currentPrices);
     }
-  }, [stockPrices, priceAlertsEnabled]);
+  }, [stockPrices, priceAlertsEnabled, priceAlerts]);
 
   // Send portfolio update notifications
   useEffect(() => {
@@ -428,6 +422,7 @@ const StockPortfolioApp: React.FC = () => {
       
       // Automatically open transaction modal to add initial purchase
       setSelectedStock(stock);
+      setTransactionModalType('buy');
       setIsTransactionModalOpen(true);
     } catch (error) {
       console.error('Error adding stock:', error);
@@ -446,27 +441,24 @@ const StockPortfolioApp: React.FC = () => {
       });
       setIsTransactionModalOpen(false);
       setSelectedStock(null);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error adding transaction:', error);
-      alert(`Failed to add transaction. Error: ${error.message || 'Please try again.'}`);
+      alert('Failed to add transaction. Please try again.');
     }
   };
 
   const deleteStock = async (symbolToDelete: string) => {
     try {
-      console.log('Attempting to delete stock:', symbolToDelete);
       await removeStockFromPortfolio(symbolToDelete);
-      console.log('Stock deleted successfully from backend');
-      
       setStockPrices(prev => {
         const newPrices = { ...prev };
         delete newPrices[symbolToDelete];
         return newPrices;
       });
       setDeleteConfirmation({isOpen: false, stock: null});
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error deleting stock:', error);
-      alert(`Failed to delete stock. Error: ${error.message || 'Please try again.'}`);
+      alert('Failed to delete stock. Please try again.');
     }
   };
 
@@ -681,7 +673,7 @@ const StockPortfolioApp: React.FC = () => {
       />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+      <div className="flex-1 flex flex-col">
         {/* Professional Header */}
         <ProfessionalHeader
           currentPortfolio={currentPortfolio}
@@ -693,19 +685,16 @@ const StockPortfolioApp: React.FC = () => {
           isLoading={isLoading}
           lastUpdated={priceUpdateTime}
           onStockSelect={(stock) => {
-            addStock(stock);
+            setSelectedStock(stock);
+            setIsAddModalOpen(true);
           }}
         />
 
         {/* Main Content Area */}
-        <main className="flex-1 p-4 md:p-6 bg-[#0f1520] min-h-0 overflow-y-auto custom-scrollbar">
+        <div className="flex-1 p-6 bg-[#0f1520] min-h-[calc(100vh-64px)]">
           <div className="max-w-7xl mx-auto">
-            
-            {/* Global Market Ticker */}
-            <MarketTicker />
-
-            {/* Portfolio Selector - ONLY SHOW ON DASHBOARD, PORTFOLIO, AND ANALYTICS TABS */}
-            {(activeTab === 'dashboard' || activeTab === 'portfolio' || activeTab === 'analytics') && (
+            {/* Portfolio Selector */}
+            {(activeTab === 'dashboard' || activeTab === 'portfolio') && (
               <div className="mb-8">
                 <PortfolioSelector
                   portfolios={portfolios}
@@ -904,8 +893,7 @@ const StockPortfolioApp: React.FC = () => {
                           <th className="text-left py-3 px-4 font-semibold text-slate-400">Avg Price</th>
                           <th className="text-left py-3 px-4 font-semibold text-slate-400">Current Price</th>
                           <th className="text-left py-3 px-4 font-semibold text-slate-400">Market Value</th>
-                          <th className="text-left py-3 px-4 font-semibold text-slate-400">Unrealized P&L</th>
-                          <th className="text-left py-3 px-4 font-semibold text-slate-400">Booked P&L</th>
+                          <th className="text-left py-3 px-4 font-semibold text-slate-400">P&L</th>
                           <th className="text-left py-3 px-4 font-semibold text-slate-400">Actions</th>
                         </tr>
                       </thead>
@@ -916,17 +904,12 @@ const StockPortfolioApp: React.FC = () => {
                             t.type === 'buy' ? sum + t.quantity : sum - t.quantity, 0
                           );
                           
-                          // Calculate average buy price
-                          const avgPrice = stockTransactions.reduce((sum, t) => 
+                          // Show all stocks, including those with zero shares
+                          const avgPrice = totalShares > 0 ? stockTransactions.reduce((sum, t) => 
                             t.type === 'buy' ? sum + (t.price * t.quantity) : sum, 0
-                          ) / (stockTransactions.reduce((sum, t) => 
+                          ) / stockTransactions.reduce((sum, t) => 
                             t.type === 'buy' ? sum + t.quantity : sum, 0
-                          ) || 1);
-
-                          // Calculate realized P&L from sell transactions
-                          const realizedPnl = stockTransactions.reduce((sum, t) => 
-                            t.type === 'sell' ? sum + ((t.price - avgPrice) * t.quantity) : sum, 0
-                          );
+                          ) : 0;
 
                           const currentPrice = stockPrices[stock.symbol]?.price || 0;
                           const marketValue = currentPrice * totalShares;
@@ -953,38 +936,20 @@ const StockPortfolioApp: React.FC = () => {
                                 </div>
                               </td>
                               <td className="py-4 px-4">
-                                <div className={`${realizedPnl >= 0 ? 'text-emerald-400' : 'text-red-400'} font-semibold`}>
-                                  {realizedPnl >= 0 ? '+' : '-'}₹{Math.abs(realizedPnl).toFixed(2)}
-                                </div>
-                              </td>
-                              <td className="py-4 px-4">
                                 <div className="flex gap-2">
                                   <button
                                     onClick={() => {
                                       setSelectedStock(stock);
-                                      setTransactionModalType('buy');
                                       setIsTransactionModalOpen(true);
                                     }}
-                                    className="px-3 py-1.5 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded font-semibold text-xs transition-colors"
-                                    title="Buy more shares"
+                                    className="p-2 text-indigo-400 hover:bg-indigo-900/40 rounded-lg transition-colors"
+                                    title={totalShares === 0 ? "Add your first transaction" : "Add transaction"}
                                   >
-                                    Buy
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setSelectedStock(stock);
-                                      setTransactionModalType('sell');
-                                      setIsTransactionModalOpen(true);
-                                    }}
-                                    disabled={totalShares === 0}
-                                    className="px-3 py-1.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded font-semibold text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                    title={totalShares === 0 ? "No shares to sell" : "Sell shares & book profit"}
-                                  >
-                                    Sell
+                                    {totalShares === 0 ? <Plus className="w-4 h-4" /> : <Edit className="w-4 h-4" />}
                                   </button>
                                   <button
                                     onClick={() => handleDeleteClick(stock)}
-                                    className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-900/40 rounded transition-colors group"
+                                    className="p-2 text-red-400 hover:bg-red-900/40 rounded-lg transition-colors group"
                                     title="Delete stock from portfolio"
                                   >
                                     <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
@@ -1096,7 +1061,7 @@ const StockPortfolioApp: React.FC = () => {
                   stocks={portfolioStocks}
                   transactions={portfolioTransactions}
                   priceData={stockPrices}
-                  getStockInfo={(symbol) => getStockBySymbol(symbol) || null}
+                  getStockInfo={getStockBySymbol}
                 />
               )}
           {activeTab === 'ai-trading' && (
@@ -1104,20 +1069,16 @@ const StockPortfolioApp: React.FC = () => {
               portfolioSymbols={allPortfolioSymbols.length > 0 ? allPortfolioSymbols : memoPortfolioSymbols}
             />
           )}
-          {activeTab === 'tools' && (
-            <MarketAnalysisTools />
+          {activeTab === 'tools' && <ToolsDashboard />}
+          {activeTab === 'market-analysis' && (
+            <MarketAnalysis />
           )}
-          {activeTab === 'market-eye' && (
-            <MarketEye />
-          )}
-          {activeTab === 'swing-player' && (
-            <SwingPlayer />
-          )}
-          {activeTab === 'trading-tools' && (
-            <ToolsDashboard />
-          )}
-              {activeTab === 'stock-recommendations' && <StockRecommendations />}
-              {activeTab === 'alerts' && (
+          {activeTab === 'swing-player' && <SwingPlayer />}
+          {activeTab === 'stock-recommendations' && <StockRecommendations />}
+          {activeTab === 'options-player' && <OptionsPlayer />}
+          {activeTab === 'options-hint'   && <OptionsHint />}
+          {activeTab === 'options-watch'  && <OptionsWatch />}
+          {activeTab === 'alerts' && (
                 <AlertsPage 
                   stocks={portfolioStocks}
                   priceData={stockPrices}
@@ -1137,83 +1098,115 @@ const StockPortfolioApp: React.FC = () => {
                 />
               )}
               {activeTab === 'settings' && (
-                <div className="space-y-6 max-w-4xl mx-auto">
+                <div className="space-y-6">
                   <div className="flex justify-between items-center">
-                    <h2 className="text-2xl font-bold text-white">Platform Settings</h2>
+                    <h2 className="text-2xl font-bold text-slate-200">Settings</h2>
                   </div>
 
                   {/* Profile Settings */}
-                  <div className="bg-[#131b26] border border-slate-800 rounded-2xl p-6 shadow-lg">
-                    <h3 className="text-lg font-bold text-white mb-6">Profile Settings</h3>
+                  <div className="bg-[#172030] rounded-2xl p-6 shadow-lg">
+                    <h3 className="text-xl font-bold text-slate-200 mb-6">Profile Settings</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
-                        <label className="block text-sm font-semibold text-slate-400 mb-2">
+                        <label className="block text-sm font-semibold text-slate-300 mb-2">
                           Full Name
                         </label>
                         <input
                           type="text"
-                          defaultValue="Trader Pro"
-                          className="w-full px-4 py-3 bg-[#172030] border border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all outline-none"
+                          defaultValue="John Doe"
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-semibold text-slate-400 mb-2">
+                        <label className="block text-sm font-semibold text-slate-300 mb-2">
                           Email
                         </label>
                         <input
                           type="email"
-                          defaultValue="trader@paperprofit.app"
-                          className="w-full px-4 py-3 bg-[#172030] border border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all outline-none"
+                          defaultValue="john.doe@example.com"
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                         />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-300 mb-2">
+                          Phone
+                        </label>
+                        <input
+                          type="tel"
+                          defaultValue="+91 98765 43210"
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-300 mb-2">
+                          Investment Experience
+                        </label>
+                        <select className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                          <option>Beginner (0-2 years)</option>
+                          <option>Intermediate (2-5 years)</option>
+                          <option selected>Advanced (5+ years)</option>
+                        </select>
                       </div>
                     </div>
                   </div>
 
                   {/* Portfolio Preferences */}
-                  <div className="bg-[#131b26] border border-slate-800 rounded-2xl p-6 shadow-lg">
-                    <h3 className="text-lg font-bold text-white mb-6">Trading Preferences</h3>
+                  <div className="bg-[#172030] rounded-2xl p-6 shadow-lg">
+                    <h3 className="text-xl font-bold text-slate-200 mb-6">Portfolio Preferences</h3>
                     <div className="space-y-6">
                       <div>
-                        <label className="block text-sm font-semibold text-slate-400 mb-2">
+                        <label className="block text-sm font-semibold text-slate-300 mb-2">
                           Default Currency
                         </label>
-                        <select className="w-full px-4 py-3 bg-[#172030] border border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all outline-none appearance-none">
-                          <option selected>INR (₹) - Indian Rupee</option>
-                          <option>USD ($) - US Dollar</option>
-                          <option>EUR (€) - Euro</option>
+                        <select className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                          <option selected>INR (₹)</option>
+                          <option>USD ($)</option>
+                          <option>EUR (€)</option>
                         </select>
                       </div>
                       
                       <div>
-                        <label className="block text-sm font-semibold text-slate-400 mb-3">
-                          Risk Tolerance Profile
+                        <label className="block text-sm font-semibold text-slate-300 mb-2">
+                          Risk Tolerance
                         </label>
-                        <div className="flex gap-3">
-                          <button className="flex-1 py-3 px-4 rounded-xl font-semibold bg-[#172030] border border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-300 transition-colors">
+                        <div className="flex gap-2">
+                          <button className="flex-1 py-3 px-4 rounded-lg font-semibold bg-gray-100 text-slate-300 hover:bg-gray-200 transition-colors">
                             Conservative
                           </button>
-                          <button className="flex-1 py-3 px-4 rounded-xl font-semibold bg-blue-600/20 border border-blue-500/30 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.15)] transition-colors">
+                          <button className="flex-1 py-3 px-4 rounded-lg font-semibold bg-indigo-600 text-white transition-colors">
                             Moderate
                           </button>
-                          <button className="flex-1 py-3 px-4 rounded-xl font-semibold bg-[#172030] border border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-300 transition-colors">
+                          <button className="flex-1 py-3 px-4 rounded-lg font-semibold bg-gray-100 text-slate-300 hover:bg-gray-200 transition-colors">
                             Aggressive
                           </button>
                         </div>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-300 mb-2">
+                          Investment Goal
+                        </label>
+                        <select className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                          <option>Wealth Preservation</option>
+                          <option selected>Long-term Growth</option>
+                          <option>Income Generation</option>
+                          <option>Retirement Planning</option>
+                        </select>
                       </div>
                     </div>
                   </div>
 
                   {/* API & Data Settings */}
-                  <div className="bg-[#131b26] border border-slate-800 rounded-2xl p-6 shadow-lg">
-                    <h3 className="text-lg font-bold text-white mb-6">Data & API Settings</h3>
+                  <div className="bg-[#172030] rounded-2xl p-6 shadow-lg">
+                    <h3 className="text-xl font-bold text-slate-200 mb-6">API & Data Settings</h3>
                     <div className="space-y-6">
                       <div className="flex items-center justify-between">
                         <div>
                           <label className="block text-sm font-semibold text-slate-300 mb-1">
-                            Auto-refresh Market Data
+                            Auto-refresh Stock Prices
                           </label>
                           <p className="text-sm text-slate-500">
-                            Automatically update stock prices in the background to keep portfolio live
+                            Automatically update stock prices every 5 minutes to conserve API usage
                           </p>
                         </div>
                         <label className="relative inline-flex items-center cursor-pointer">
@@ -1223,44 +1216,181 @@ const StockPortfolioApp: React.FC = () => {
                             onChange={(e) => setAutoRefreshEnabled(e.target.checked)}
                             className="sr-only peer"
                           />
-                          <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#172030] after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
                         </label>
                       </div>
                       
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-amber-500/10 rounded-xl border border-amber-500/20 gap-4">
-                        <div className="flex items-start sm:items-center">
-                          <div className="w-2 h-2 bg-amber-500 rounded-full mr-3 mt-1.5 sm:mt-0 shadow-[0_0_8px_rgba(245,158,11,0.6)]"></div>
+                      <div className="flex items-center justify-between p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                        <div className="flex items-center">
+                          <div className="w-2 h-2 bg-yellow-500 rounded-full mr-3"></div>
                           <div>
-                            <p className="text-sm font-bold text-amber-400">API Quota Protection Active</p>
-                            <p className="text-xs text-amber-500/70 mt-0.5">
-                              Auto-refresh is throttled to 5-minute intervals to prevent Yahoo Finance rate limits.
+                            <p className="text-sm font-semibold text-yellow-800">API Usage Conservation</p>
+                            <p className="text-xs text-yellow-700">
+                              Auto-refresh is set to 5 minutes to prevent API quota exhaustion
                             </p>
                           </div>
                         </div>
                         <button
-                          onClick={() => updatePrices()}
+                          onClick={updatePrices}
                           disabled={isLoading}
-                          className="px-5 py-2.5 bg-[#172030] border border-slate-700 text-white text-sm font-bold rounded-xl hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
+                          className="px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
-                          {isLoading ? 'Fetching...' : 'Force Refresh'}
+                          {isLoading ? 'Updating...' : 'Refresh Now'}
                         </button>
+                      </div>
+                      
+                      {/* API Usage Tracker */}
+                      <div className="p-4 bg-indigo-900/20 rounded-lg border border-indigo-800/30">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-sm font-semibold text-blue-800">Daily API Usage</h4>
+                          <span className="text-sm font-bold text-blue-900">
+                            {apiCallCount} / {dailyApiLimit}
+                          </span>
+                        </div>
+                        <div className="w-full bg-blue-200 rounded-full h-2">
+                          <div 
+                            className={`h-2 rounded-full transition-all duration-300 ${
+                              apiCallCount / dailyApiLimit > 0.8 
+                                ? 'bg-red-900/200' 
+                                : apiCallCount / dailyApiLimit > 0.6 
+                                ? 'bg-yellow-500' 
+                                : 'bg-indigo-900/200'
+                            }`}
+                            style={{ width: `${Math.min((apiCallCount / dailyApiLimit) * 100, 100)}%` }}
+                          ></div>
+                        </div>
+                        <p className="text-xs text-indigo-400 mt-2">
+                          {apiCallCount >= dailyApiLimit * 0.8 
+                            ? '⚠️ Approaching daily limit' 
+                            : apiCallCount >= dailyApiLimit * 0.6 
+                            ? '⚡ Moderate usage' 
+                            : '✅ Usage within limits'
+                          }
+                        </p>
                       </div>
                     </div>
                   </div>
-                  
-                  {/* Save Button */}
-                  <div className="flex justify-end pt-4">
-                    <button className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold shadow-[0_0_20px_rgba(37,99,235,0.3)] transition-all">
-                      Save Changes
+
+                  {/* Notifications */}
+                  <div className="bg-[#172030] rounded-2xl p-6 shadow-lg">
+                    <h3 className="text-xl font-bold text-slate-200 mb-6">Notifications</h3>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-semibold text-slate-200">Price Alerts</div>
+                          <div className="text-sm text-slate-400">Get notified when stock prices change significantly</div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            checked={priceAlertsEnabled}
+                            onChange={(e) => setPriceAlertsEnabled(e.target.checked)}
+                            className="sr-only peer" 
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#172030] after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                        </label>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-semibold text-slate-200">Portfolio Updates</div>
+                          <div className="text-sm text-slate-400">Daily portfolio performance summaries</div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            checked={portfolioUpdatesEnabled}
+                            onChange={(e) => setPortfolioUpdatesEnabled(e.target.checked)}
+                            className="sr-only peer" 
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#172030] after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                        </label>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-semibold text-slate-200">Market News</div>
+                          <div className="text-sm text-slate-400">Breaking news and market updates</div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            checked={marketNewsEnabled}
+                            onChange={(e) => setMarketNewsEnabled(e.target.checked)}
+                            className="sr-only peer" 
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#172030] after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Market News Panel */}
+                  <MarketNewsPanel 
+                    isEnabled={marketNewsEnabled}
+                    onToggle={setMarketNewsEnabled}
+                  />
+
+                  {/* Security */}
+                  <div className="bg-[#172030] rounded-2xl p-6 shadow-lg">
+                    <h3 className="text-xl font-bold text-slate-200 mb-6">Security</h3>
+                    <div className="space-y-4">
+                      <button className="w-full text-left p-4 border border-gray-300 rounded-lg hover:bg-[#0f1520] transition-colors">
+                      <div className="font-semibold text-slate-200">Change Password</div>
+                      <div className="text-sm text-slate-400">Update your account password</div>
+                    </button>
+                    
+                    <button className="w-full text-left p-4 border border-gray-300 rounded-lg hover:bg-[#0f1520] transition-colors">
+                      <div className="font-semibold text-slate-200">Two-Factor Authentication</div>
+                      <div className="text-sm text-slate-400">Add an extra layer of security</div>
+                    </button>
+                    
+                    <button className="w-full text-left p-4 border border-gray-300 rounded-lg hover:bg-[#0f1520] transition-colors">
+                      <div className="font-semibold text-slate-200">Login History</div>
+                      <div className="text-sm text-slate-400">View recent account activity</div>
                     </button>
                   </div>
                 </div>
-              )}
-              {activeTab === 'help' && (
-                <HelpAndSupport />
-              )}
+
+                {/* Performance Testing */}
+                <div className="bg-[#172030] rounded-2xl p-6 shadow-lg">
+                  <h3 className="text-xl font-bold text-slate-200 mb-6">Search Performance</h3>
+                  <div className="space-y-4">
+                    <div className="p-4 bg-indigo-900/20 rounded-lg">
+                      <div className="font-semibold text-blue-800 mb-2">Database Statistics</div>
+                      <div className="text-sm text-indigo-400">
+                        Total stocks: {getSearchPerformanceStats().totalStocks} | 
+                        Cache size: {getSearchPerformanceStats().cacheStats.size}/{getSearchPerformanceStats().cacheStats.maxSize}
+                      </div>
+                    </div>
+                    
+                    <button 
+                      onClick={() => {
+                        console.log('🚀 Running search performance test...');
+                        runFullPerformanceTest();
+                      }}
+                      className="w-full p-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors"
+                    >
+                      <div className="font-semibold">Run Performance Test</div>
+                      <div className="text-sm opacity-90">Test optimized search functions (check console)</div>
+                    </button>
+                    
+                    <div className="text-xs text-slate-500 mt-2">
+                      Performance test results will be displayed in the browser console (F12 → Console)
+                    </div>
+                  </div>
+                </div>
+
+                {/* Save Button */}
+                <div className="flex justify-end">
+                  <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors">
+                    Save Changes
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-        </main>
+        </div>
       </div>
     </div>
 
@@ -1279,19 +1409,11 @@ const StockPortfolioApp: React.FC = () => {
       }}
       onAdd={addTransaction}
       stock={selectedStock}
-      initialType={transactionModalType}
-      currentQuantity={
-        selectedStock 
-          ? transactions
-              .filter(t => t.symbol === selectedStock.symbol)
-              .reduce((sum, t) => t.type === 'buy' ? sum + t.quantity : sum - t.quantity, 0)
-          : 0
-      }
     />
 
     {/* Delete Confirmation Dialog */}
     {deleteConfirmation.isOpen && deleteConfirmation.stock && (
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-[#172030] rounded-lg p-6 max-w-md w-full mx-4">
           <div className="flex items-center mb-4">
             <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mr-4">

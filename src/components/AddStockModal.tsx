@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Search, Plus, TrendingUp } from 'lucide-react';
 import type { Stock } from '../types';
 import { searchStocksOptimized, getPopularStocks, type StockInfo } from '../stockDatabase';
-import StockLogo from './StockLogo';
 
 interface Props {
   isOpen: boolean;
@@ -112,7 +111,9 @@ const AddStockModal: React.FC<Props> = ({ isOpen, onClose, onAdd }) => {
                   className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-[#1e293b] group transition-all text-left border border-transparent hover:border-slate-700/50"
                 >
                   <div className="flex items-center gap-4 flex-1 min-w-0">
-                    <StockLogo symbol={stock.symbol} className="w-10 h-10 ring-1 ring-slate-700 group-hover:ring-slate-600 transition-all shadow-md" />
+                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs shrink-0 ring-1 ring-slate-700 group-hover:ring-slate-600 transition-all shadow-md">
+                      {stock.symbol.substring(0, 2)}
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-slate-200 text-[15px] tracking-wide">{stock.symbol}</span>

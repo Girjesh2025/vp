@@ -1,150 +1,146 @@
-# 🚀 Deployment Guide - Stock Portfolio App
+<div align="center">
 
-## Prerequisites
-- GitHub account
-- Vercel account (free tier available)
-- Supabase project (for database)
+# 🚀 Deployment Guide
+**Professional Stock Portfolio & Market Analysis Dashboard**
 
-## 📋 Step-by-Step Deployment Instructions
+[![Vite](https://img.shields.io/badge/vite-%23646CFF.svg?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)](https://reactjs.org/)
+[![TailwindCSS](https://img.shields.io/badge/tailwindcss-%2338B2AC.svg?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+[![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com)
+[![Vercel](https://img.shields.io/badge/vercel-%23000000.svg?style=for-the-badge&logo=vercel&logoColor=white)](https://vercel.com)
 
-### 1. GitHub Repository Setup
+*A comprehensive guide to deploying your professional stock trading dashboard to production.*
 
-1. **Initialize Git Repository** (if not already done):
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial commit: Stock Portfolio App with notifications"
-   ```
-
-2. **Add GitHub Remote**:
-   ```bash
-   git remote add origin https://github.com/Girjesh2025/vp.git
-   git branch -M main
-   git push -u origin main
-   ```
-
-### 2. Vercel Deployment
-
-1. **Connect to Vercel**:
-   - Go to [vercel.com](https://vercel.com)
-   - Sign in with GitHub
-   - Click "New Project"
-   - Import your GitHub repository: `Girjesh2025/vp`
-
-2. **Configure Build Settings**:
-   - Framework Preset: **Vite**
-   - Build Command: `npm run build`
-   - Output Directory: `dist`
-   - Install Command: `npm install`
-
-3. **Environment Variables Setup**:
-   Add these environment variables in Vercel dashboard:
-
-   ```
-   VITE_SUPABASE_URL=your_supabase_project_url
-   VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-   VITE_CLERK_PUBLISHABLE_KEY=your_clerk_key (optional)
-   VITE_API_BASE_URL=https://your-app-name.vercel.app
-   ```
-
-### 3. Database Setup (Supabase)
-
-1. **Create Supabase Project**:
-   - Go to [supabase.com](https://supabase.com)
-   - Create new project
-   - Note down your project URL and anon key
-
-2. **Run Database Schema**:
-   - Use one of the provided schema files:
-     - `supabase-schema-simple.sql` (basic setup)
-     - `supabase-schema-secure.sql` (with RLS policies)
-   - Run in Supabase SQL editor
-
-### 4. Post-Deployment Configuration
-
-1. **Update CORS Settings**:
-   - Add your Vercel domain to any API CORS configurations
-   - Update Supabase allowed origins if needed
-
-2. **Test Deployment**:
-   - Visit your Vercel URL
-   - Test all features:
-     - Stock portfolio management
-     - Real-time price updates
-     - Notifications system
-     - Market news panel
-
-## 🔧 Configuration Files
-
-### `vercel.json`
-- Handles SPA routing
-- Environment variable mapping
-- Build configuration
-
-### `.env.production`
-- Template for production environment variables
-- Copy values to Vercel dashboard
-
-## 🚨 Important Notes
-
-1. **API Keys**: Never commit real API keys to GitHub
-2. **Environment Variables**: Set all required variables in Vercel dashboard
-3. **Database**: Ensure Supabase RLS policies are properly configured
-4. **HTTPS**: Vercel automatically provides HTTPS
-5. **Custom Domain**: Can be configured in Vercel dashboard
-
-## 📱 Features Included in Deployment
-
-- ✅ Stock Portfolio Management
-- ✅ Real-time Price Updates
-- ✅ Performance Charts
-- ✅ Transaction History
-- ✅ Browser Notifications
-- ✅ Market News Panel
-- ✅ Settings & Preferences
-- ✅ Responsive Design
-- ✅ PWA Ready
-
-## 🔄 Continuous Deployment
-
-Once connected to GitHub:
-- Every push to `main` branch triggers automatic deployment
-- Preview deployments for pull requests
-- Rollback capability through Vercel dashboard
-
-## 🆘 Troubleshooting
-
-### Common Issues:
-
-1. **Build Fails**:
-   - Check TypeScript errors
-   - Verify all dependencies are installed
-   - Check environment variables
-
-2. **API Errors**:
-   - Verify Supabase URL and keys
-   - Check CORS settings
-   - Ensure database schema is applied
-
-3. **Notifications Not Working**:
-   - Check browser permissions
-   - Verify HTTPS is enabled (required for notifications)
-   - Test in different browsers
-
-### Support:
-- Check Vercel deployment logs
-- Review browser console for errors
-- Verify all environment variables are set
-
-## 🎯 Next Steps After Deployment
-
-1. Set up custom domain (optional)
-2. Configure analytics
-3. Set up monitoring
-4. Add real stock API integration
-5. Implement user authentication
-6. Add more notification features
+</div>
 
 ---
 
-**Happy Deploying! 🚀**
+## 📑 Table of Contents
+
+- [🛠️ Prerequisites](#️-prerequisites)
+- [1️⃣ GitHub Repository Setup](#1️⃣-github-repository-setup)
+- [2️⃣ Database Setup (Supabase)](#2️⃣-database-setup-supabase)
+- [3️⃣ Vercel Deployment](#3️⃣-vercel-deployment)
+- [⚙️ Post-Deployment Configuration](#️-post-deployment-configuration)
+- [🆘 Troubleshooting](#-troubleshooting)
+
+---
+
+## �️ Prerequisites
+
+Before you begin, ensure you have the following accounts set up:
+
+- [x] **GitHub Account** (for version control)
+- [x] **Vercel Account** (free tier is sufficient for hosting)
+- [x] **Supabase Account** (for PostgreSQL database & backend)
+
+---
+
+## 1️⃣ GitHub Repository Setup
+
+First, let's get your code pushed to GitHub so Vercel can access it.
+
+> [!TIP]
+> If you've already pushed your code to GitHub, you can skip this step!
+
+```bash
+# Initialize Git Repository
+git init
+git add .
+git commit -m "🚀 Initial commit: Stock Portfolio App with Options Player"
+
+# Link to GitHub and Push
+git remote add origin https://github.com/Girjesh2025/vp.git
+git branch -M main
+git push -u origin main
+```
+
+---
+
+## 2️⃣ Database Setup (Supabase)
+
+Your application relies on Supabase for real-time portfolio data and authentication.
+
+### 🌐 Create a Project
+1. Go to [Supabase](https://supabase.com) and create a new project.
+2. Save your **Project URL** and **anon public key** (you'll need these later).
+
+### 🗄️ Initialize the Database
+1. Navigate to the **SQL Editor** in your Supabase dashboard.
+2. Copy the contents of `supabase-schema-secure.sql` (recommended for RLS policies) or `supabase-schema-simple.sql`.
+3. Run the query to set up your tables.
+
+---
+
+## 3️⃣ Vercel Deployment
+
+Vercel provides seamless integration with Vite and GitHub for instant deployments.
+
+### 🔌 Connect & Configure
+
+1. Log in to [Vercel](https://vercel.com) and click **Add New Project**.
+2. Import your repository: `Girjesh2025/vp`.
+3. Vercel should automatically detect **Vite**. Ensure the settings match:
+   - **Framework Preset:** `Vite`
+   - **Build Command:** `npm run build`
+   - **Output Directory:** `dist`
+   - **Install Command:** `npm install`
+
+### 🔐 Environment Variables
+
+> [!IMPORTANT]
+> You must add these variables in the Vercel deployment settings before clicking deploy!
+
+| Variable Name | Description |
+| :--- | :--- |
+| `VITE_SUPABASE_URL` | Your Supabase Project URL |
+| `VITE_SUPABASE_ANON_KEY` | Your Supabase anon/public key |
+| `VITE_CLERK_PUBLISHABLE_KEY` | *(Optional)* Your Clerk Auth key |
+| `VITE_API_BASE_URL` | E.g., `https://your-app-name.vercel.app` |
+
+Once configured, click **Deploy**! 🚀
+
+---
+
+## ⚙️ Post-Deployment Configuration
+
+After a successful deployment, there are a few final touches:
+
+1. **Update CORS Settings:**
+   - Add your new Vercel domain (`https://your-app-name.vercel.app`) to your Supabase **Authentication -> URL Configuration** allowed origins.
+2. **Test Live Features:**
+   - ✅ Real-time Market Data & Options Player
+   - ✅ FII/DII Proxy Data Loading
+   - ✅ Portfolio CRUD Operations
+   - ✅ Browser Notifications
+   - ✅ Breakout Beacon & Swing Player Accuracy
+
+---
+
+## 🆘 Troubleshooting
+
+Encountering issues? Here are the most common fixes:
+
+> [!WARNING]
+> **Build Fails (`npm run build`)**
+> - Check your Vercel deployment logs for TypeScript errors.
+> - Ensure all dependencies in `package.json` are properly installed.
+
+> [!NOTE]
+> **API / Database Errors**
+> - Verify that `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are exactly correct in Vercel.
+> - Check the browser's Network tab for CORS or 403 Forbidden errors.
+
+> [!CAUTION]
+> **NSE API Proxy Failing in Production**
+> - The local Node proxy (`proxy-server.cjs`) bypasses NSE API protections locally. Since Vercel React deployments are static, ensure your proxy is either deployed correctly as a Vercel Serverless Function, or hosted on a persistent backend service like Render/Railway.
+
+---
+
+<div align="center">
+
+**Happy Deploying! 🎉**
+
+*Built with ❤️ for professional traders.*
+
+</div>

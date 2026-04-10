@@ -5,7 +5,6 @@ import {
   Info, CheckCircle, AlertCircle, BarChart2, PieChart, Sparkles, Briefcase
 } from 'lucide-react';
 import { aiTradingService, AIAnalysis } from '../utils/aiTradingService';
-import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from 'recharts';
 
 // ─── Top NSE / BSE stocks for AI Market Picks ───────────────────────────────
 const TOP_NSE_BSE_STOCKS = [
@@ -313,14 +312,14 @@ const AITradingSuggestions: React.FC<AITradingSuggestionsProps> = ({ portfolioSy
       {loading && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {[...Array(isPortfolioMode ? Math.min(portfolioSymbolsUniq.length, 6) : 9)].map((_, i) => (
-            <div key={i} className="p-5 bg-[#172030] rounded-2xl border border-slate-800 shadow-sm animate-pulse">
+            <div key={i} className="p-5 bg-[#172030] rounded-2xl border border-slate-100 shadow-sm animate-pulse">
               <div className="flex justify-between mb-4">
-                <div className="h-5 bg-slate-800 rounded-lg w-20" />
-                <div className="h-6 bg-slate-800 rounded-full w-16" />
+                <div className="h-5 bg-slate-100 rounded-lg w-20" />
+                <div className="h-6 bg-slate-100 rounded-full w-16" />
               </div>
-              <div className="h-8 bg-slate-800 rounded-lg w-28 mb-3" />
-              <div className="h-4 bg-slate-800 rounded w-full mb-2" />
-              <div className="h-4 bg-slate-800 rounded w-4/5" />
+              <div className="h-8 bg-slate-100 rounded-lg w-28 mb-3" />
+              <div className="h-4 bg-slate-100 rounded w-full mb-2" />
+              <div className="h-4 bg-slate-100 rounded w-4/5" />
             </div>
           ))}
         </div>
@@ -338,7 +337,7 @@ const AITradingSuggestions: React.FC<AITradingSuggestionsProps> = ({ portfolioSy
             return (
               <div
                 key={a.symbol}
-                className="bg-[#172030] rounded-2xl border border-slate-800 shadow-sm hover:shadow-lg hover:border-slate-700 transition-all duration-300 overflow-hidden cursor-pointer"
+                className="bg-[#172030] rounded-2xl border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden cursor-pointer"
                 onClick={() => setSelectedStock(expanded ? null : a.symbol)}
               >
                 <div className="h-1 w-full" style={{ background: c.dot }} />
@@ -385,17 +384,17 @@ const AITradingSuggestions: React.FC<AITradingSuggestionsProps> = ({ portfolioSy
 
                   {/* Row 3 */}
                   <div className="grid grid-cols-3 gap-2 mb-3">
-                    <div className="bg-[#0f1520] rounded-xl p-2.5 text-center border border-slate-800/50">
+                    <div className="bg-slate-50 rounded-xl p-2.5 text-center">
                       <div className="text-xs text-slate-400 mb-0.5">Confidence</div>
-                      <div className="text-sm font-bold text-slate-200">{a.signals.confidence}%</div>
+                      <div className="text-sm font-bold text-slate-800">{a.signals.confidence}%</div>
                     </div>
-                    <div className="bg-[#0f1520] rounded-xl p-2.5 text-center border border-slate-800/50">
+                    <div className="bg-slate-50 rounded-xl p-2.5 text-center">
                       <div className="text-xs text-slate-400 mb-0.5">Return</div>
-                      <div className={`text-sm font-bold ${a.signals.expectedReturn >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
+                      <div className={`text-sm font-bold ${a.signals.expectedReturn >= 0 ? 'text-emerald-600' : 'text-red-400'}`}>
                         {fmtPct(a.signals.expectedReturn)}
                       </div>
                     </div>
-                    <div className="bg-[#0f1520] rounded-xl p-2.5 text-center border border-slate-800/50">
+                    <div className="bg-slate-50 rounded-xl p-2.5 text-center">
                       <div className="text-xs text-slate-400 mb-0.5">R:R</div>
                       <div className="text-sm font-bold text-indigo-400">{a.signals.riskRewardRatio.toFixed(1)}x</div>
                     </div>
@@ -403,19 +402,19 @@ const AITradingSuggestions: React.FC<AITradingSuggestionsProps> = ({ portfolioSy
 
                   {/* SL / Target */}
                   <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1 text-red-400 font-semibold">
+                    <div className="flex items-center gap-1 text-red-500 font-semibold">
                       <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
                       SL {fmt(a.signals.stopLoss)}
                     </div>
-                    <div className="h-px flex-1 bg-slate-800 mx-2" />
-                    <div className="flex items-center gap-1 text-emerald-500 font-semibold">
+                    <div className="h-px flex-1 bg-slate-100 mx-2" />
+                    <div className="flex items-center gap-1 text-emerald-600 font-semibold">
                       TGT {fmt(a.signals.targetPrice)}
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                     </div>
                   </div>
 
                   {/* Risk + expand */}
-                  <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-800/60">
+                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-50">
                     <span className={`text-xs px-2 py-0.5 rounded-full border ${riskBg(a.signals.riskLevel)}`}>
                       {a.signals.riskLevel.replace('_', ' ')} Risk
                     </span>
@@ -427,49 +426,24 @@ const AITradingSuggestions: React.FC<AITradingSuggestionsProps> = ({ portfolioSy
 
                 {/* Expanded */}
                 {expanded && (
-                  <div className="border-t border-slate-800/60 bg-[#0f1520] p-5 space-y-5">
-                    {/* Radar Chart for AI Score Breakdown */}
-                    <div>
-                      <div className="flex items-center gap-2 mb-3">
-                        <Brain className="w-4 h-4 text-emerald-500" />
-                        <span className="text-sm font-bold text-slate-200">AI Score Breakdown</span>
-                      </div>
-                      <div className="bg-[#172030] rounded-xl border border-slate-800 p-4 h-48 flex items-center justify-center">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <RadarChart 
-                            cx="50%" cy="50%" outerRadius="70%" 
-                            data={[
-                              { subject: 'Technical', A: a.subScores?.technical || 50, fullMark: 100 },
-                              { subject: 'Momentum', A: a.subScores?.momentum || 50, fullMark: 100 },
-                              { subject: 'Fundamental', A: a.subScores?.fundamental || 50, fullMark: 100 },
-                              { subject: 'Risk Profile', A: a.subScores?.risk || 50, fullMark: 100 },
-                            ]}
-                          >
-                            <PolarGrid stroke="#334155" />
-                            <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                            <Radar name="AI Score" dataKey="A" stroke="#10b981" fill="#10b981" fillOpacity={0.2} dot={{ r: 3, fill: '#10b981' }} />
-                          </RadarChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </div>
-
+                  <div className="border-t border-slate-100 bg-slate-50 p-5 space-y-4">
                     {/* Technical */}
                     <div>
                       <div className="flex items-center gap-2 mb-3">
-                        <BarChart3 className="w-4 h-4 text-emerald-500" />
-                        <span className="text-sm font-bold text-slate-200">Technical Indicators</span>
+                        <BarChart3 className="w-4 h-4 text-slate-500" />
+                        <span className="text-sm font-bold text-slate-700">Technical Indicators</span>
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-2 gap-2">
                         {[
                           { label: 'RSI', value: a.signals.technicalIndicators.rsi.toFixed(1), note: a.signals.technicalIndicators.rsi < 30 ? 'Oversold' : a.signals.technicalIndicators.rsi > 70 ? 'Overbought' : 'Neutral', color: a.signals.technicalIndicators.rsi < 30 ? '#10b981' : a.signals.technicalIndicators.rsi > 70 ? '#ef4444' : '#3b82f6' },
                           { label: 'ADX', value: a.signals.technicalIndicators.adx.toFixed(1), note: a.trendStrength.replace('_', ' '), color: '#8b5cf6' },
                           { label: 'Stoch %K', value: a.signals.technicalIndicators.stochastic.k.toFixed(1), note: '', color: '#0ea5e9' },
                           { label: 'Williams %R', value: a.signals.technicalIndicators.williams.toFixed(1), note: '', color: '#f59e0b' },
                         ].map(ind => (
-                          <div key={ind.label} className="bg-[#172030] rounded-xl p-3 border border-slate-800">
+                          <div key={ind.label} className="bg-[#172030] rounded-xl p-3 border border-slate-100">
                             <div className="text-xs text-slate-400">{ind.label}</div>
                             <div className="text-lg font-bold" style={{ color: ind.color }}>{ind.value}</div>
-                            {ind.note && <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">{ind.note}</div>}
+                            {ind.note && <div className="text-xs text-slate-500">{ind.note}</div>}
                           </div>
                         ))}
                       </div>
@@ -478,20 +452,20 @@ const AITradingSuggestions: React.FC<AITradingSuggestionsProps> = ({ portfolioSy
                     {/* Price targets */}
                     <div>
                       <div className="flex items-center gap-2 mb-3">
-                        <Target className="w-4 h-4 text-emerald-500" />
-                        <span className="text-sm font-bold text-slate-200">Price Targets</span>
+                        <Target className="w-4 h-4 text-slate-500" />
+                        <span className="text-sm font-bold text-slate-700">Price Targets</span>
                       </div>
                       <div className="space-y-2">
-                        <div className="flex justify-between items-center p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
-                          <span className="text-xs font-semibold text-emerald-500 uppercase tracking-wider">🎯 Target</span>
-                          <span className="font-bold text-emerald-400">{fmt(a.signals.targetPrice)}</span>
+                        <div className="flex justify-between items-center p-2.5 bg-emerald-50 rounded-xl border border-emerald-100">
+                          <span className="text-xs font-semibold text-emerald-700">🎯 Target</span>
+                          <span className="font-bold text-emerald-600">{fmt(a.signals.targetPrice)}</span>
                         </div>
-                        <div className="flex justify-between items-center p-3 bg-red-500/10 rounded-xl border border-red-500/20">
-                          <span className="text-xs font-semibold text-red-500 uppercase tracking-wider">🛡️ Stop Loss</span>
+                        <div className="flex justify-between items-center p-2.5 bg-red-900/20 rounded-xl border border-red-100">
+                          <span className="text-xs font-semibold text-red-400">🛡️ Stop Loss</span>
                           <span className="font-bold text-red-400">{fmt(a.signals.stopLoss)}</span>
                         </div>
-                        <div className="flex justify-between items-center p-3 bg-indigo-500/10 rounded-xl border border-indigo-500/20">
-                          <span className="text-xs font-semibold text-indigo-500 uppercase tracking-wider">⚖️ R:R Ratio</span>
+                        <div className="flex justify-between items-center p-2.5 bg-indigo-900/20 rounded-xl border border-blue-100">
+                          <span className="text-xs font-semibold text-indigo-400">⚖️ R:R Ratio</span>
                           <span className="font-bold text-indigo-400">{a.signals.riskRewardRatio.toFixed(2)}:1</span>
                         </div>
                       </div>
@@ -500,41 +474,41 @@ const AITradingSuggestions: React.FC<AITradingSuggestionsProps> = ({ portfolioSy
                     {/* Market data */}
                     <div>
                       <div className="flex items-center gap-2 mb-3">
-                        <PieChart className="w-4 h-4 text-emerald-500" />
-                        <span className="text-sm font-bold text-slate-200">Market Data</span>
+                        <PieChart className="w-4 h-4 text-slate-500" />
+                        <span className="text-sm font-bold text-slate-700">Market Data</span>
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-[#172030] rounded-xl p-3 border border-slate-800"><div className="text-[10px] text-slate-500 uppercase tracking-wider">52W High</div><div className="font-bold text-slate-200">{fmt(a.marketData.week52High)}</div></div>
-                        <div className="bg-[#172030] rounded-xl p-3 border border-slate-800"><div className="text-[10px] text-slate-500 uppercase tracking-wider">52W Low</div><div className="font-bold text-slate-200">{fmt(a.marketData.week52Low)}</div></div>
-                        {a.marketData.pe && <div className="bg-[#172030] rounded-xl p-3 border border-slate-800"><div className="text-[10px] text-slate-500 uppercase tracking-wider">P/E Ratio</div><div className="font-bold text-slate-200">{a.marketData.pe.toFixed(1)}</div></div>}
-                        <div className="bg-[#172030] rounded-xl p-3 border border-slate-800"><div className="text-[10px] text-slate-500 uppercase tracking-wider">Time Horizon</div><div className="font-bold text-slate-200 text-sm">{a.signals.timeHorizon}</div></div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-[#172030] rounded-xl p-3 border border-slate-100"><div className="text-xs text-slate-400">52W High</div><div className="font-bold text-slate-800">{fmt(a.marketData.week52High)}</div></div>
+                        <div className="bg-[#172030] rounded-xl p-3 border border-slate-100"><div className="text-xs text-slate-400">52W Low</div><div className="font-bold text-slate-800">{fmt(a.marketData.week52Low)}</div></div>
+                        {a.marketData.pe && <div className="bg-[#172030] rounded-xl p-3 border border-slate-100"><div className="text-xs text-slate-400">P/E Ratio</div><div className="font-bold text-slate-800">{a.marketData.pe.toFixed(1)}</div></div>}
+                        <div className="bg-[#172030] rounded-xl p-3 border border-slate-100"><div className="text-xs text-slate-400">Time Horizon</div><div className="font-bold text-slate-800 text-sm">{a.signals.timeHorizon}</div></div>
                       </div>
                     </div>
 
                     {/* AI Reasoning */}
                     <div>
                       <div className="flex items-center gap-2 mb-3">
-                        <Sparkles className="w-4 h-4 text-emerald-500" />
-                        <span className="text-sm font-bold text-slate-200">AI Reasoning</span>
+                        <Brain className="w-4 h-4 text-slate-500" />
+                        <span className="text-sm font-bold text-slate-700">AI Reasoning</span>
                       </div>
-                      <div className="bg-[#172030] rounded-xl border border-slate-800 p-4 space-y-3">
+                      <div className="bg-[#172030] rounded-xl border border-slate-100 p-3 space-y-2">
                         {a.signals.reasoning.slice(0, 4).map((r, i) => (
                           <div key={i} className="flex items-start gap-2">
-                            <CheckCircle className="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" />
-                            <span className="text-xs text-slate-300 leading-relaxed">{r}</span>
+                            <CheckCircle className="w-3.5 h-3.5 text-emerald-500 mt-0.5 flex-shrink-0" />
+                            <span className="text-xs text-slate-600 leading-relaxed">{r}</span>
                           </div>
                         ))}
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between bg-[#172030] rounded-xl border border-slate-800 p-4">
-                      <div className="flex items-center gap-2 text-xs">
-                        <Clock className="w-4 h-4 text-slate-500" />
-                        <span className="text-slate-400">Horizon:</span><span className="font-semibold text-emerald-400">{a.signals.timeHorizon}</span>
+                    <div className="flex items-center justify-between bg-[#172030] rounded-xl border border-slate-100 p-3">
+                      <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                        <Clock className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Horizon:</span><span className="font-semibold text-slate-800">{a.signals.timeHorizon}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-xs">
-                        <Activity className="w-4 h-4 text-slate-500" />
-                        <span className="text-slate-400">Momentum:</span><span className="font-semibold text-emerald-400">{a.momentum.replace('_', ' ')}</span>
+                      <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                        <Activity className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Momentum:</span><span className="font-semibold text-slate-800">{a.momentum.replace('_', ' ')}</span>
                       </div>
                     </div>
                   </div>
@@ -557,10 +531,10 @@ const AITradingSuggestions: React.FC<AITradingSuggestionsProps> = ({ portfolioSy
       {/* Empty portfolio mode */}
       {!loading && isPortfolioMode && analyses.length === 0 && portfolioSymbolsUniq.length === 0 && (
         <div className="text-center py-16">
-          <Brain className="w-16 h-16 text-slate-600 mx-auto mb-4" />
-          <h3 className="font-semibold text-slate-200 mb-1">No stocks to analyze</h3>
+          <Brain className="w-16 h-16 text-slate-200 mx-auto mb-4" />
+          <h3 className="font-semibold text-slate-700 mb-1">No stocks to analyze</h3>
           <p className="text-slate-400 text-sm mb-4">Add stocks to your portfolio, or switch to AI Market Picks to discover new opportunities.</p>
-          <button onClick={() => setMode('market')} className="px-6 py-2.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-xl font-semibold text-sm hover:bg-emerald-500/20 transition-all">
+          <button onClick={() => setMode('market')} className="px-6 py-2.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl font-semibold text-sm hover:bg-emerald-100 transition-all">
             Try AI Market Picks →
           </button>
         </div>
@@ -568,10 +542,10 @@ const AITradingSuggestions: React.FC<AITradingSuggestionsProps> = ({ portfolioSy
 
       {/* Disclaimer */}
       {!loading && analyses.length > 0 && (
-        <div className="flex items-start gap-3 p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-          <Info className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
-          <p className="text-xs text-amber-400/90 leading-relaxed">
-            <span className="font-semibold text-amber-500">Disclaimer:</span> AI signals are for educational purposes only. Not financial advice. This is a paper trading platform — no real money involved. Always do your own research.
+        <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+          <Info className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+          <p className="text-xs text-amber-800 leading-relaxed">
+            <span className="font-semibold">Disclaimer:</span> AI signals are for educational purposes only. Not financial advice. This is a paper trading platform — no real money involved. Always do your own research.
           </p>
         </div>
       )}

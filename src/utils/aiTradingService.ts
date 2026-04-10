@@ -144,12 +144,6 @@ export interface AIAnalysis {
   marketData: MarketData;
   timestamp: Date;
   aiScore: number; // Overall AI confidence score 0-100
-  subScores: {
-    technical: number;
-    momentum: number;
-    fundamental: number;
-    risk: number;
-  };
   trendStrength: 'VERY_STRONG' | 'STRONG' | 'MODERATE' | 'WEAK' | 'VERY_WEAK';
   momentum: 'ACCELERATING' | 'STEADY' | 'DECELERATING' | 'REVERSING';
 }
@@ -1227,12 +1221,6 @@ class AITradingService {
 
       const aiScore = Math.min(signals.confidence + (indicators.adx > 30 ? 10 : 0) + (Math.abs(indicators.momentum) > 3 ? 5 : 0), 100);
 
-      // Calculate sub-scores for radar chart
-      const technicalScore = Math.min(100, Math.max(0, 50 + (signals.recommendation.includes('BUY') ? 25 : signals.recommendation.includes('SELL') ? -25 : 0) + (indicators.macd.histogram > 0 ? 15 : -15)));
-      const momentumScore = Math.min(100, Math.max(0, 50 + (indicators.momentum * 5) + (indicators.adx > 25 ? 20 : 0)));
-      const fundamentalScore = Math.min(100, Math.max(0, 70 + (marketData.pe && marketData.pe < 20 ? 15 : -10)));
-      const riskScore = Math.min(100, Math.max(0, 100 - (indicators.atr / currentPrice * 100 * 10)));
-
       let trendStrength: 'VERY_STRONG' | 'STRONG' | 'MODERATE' | 'WEAK' | 'VERY_WEAK' = 'MODERATE';
       if (indicators.adx > 50) trendStrength = 'VERY_STRONG';
       else if (indicators.adx > 35) trendStrength = 'STRONG';
@@ -1252,9 +1240,7 @@ class AITradingService {
         symbol, currentPrice, analysis, signals, marketSentiment,
         volatility: indicators.atr / currentPrice,
         volume: this.estimateVolume(currentPrice, indicators),
-        marketData, timestamp: new Date(), aiScore, 
-        subScores: { technical: technicalScore, momentum: momentumScore, fundamental: fundamentalScore, risk: riskScore },
-        trendStrength, momentum,
+        marketData, timestamp: new Date(), aiScore, trendStrength, momentum,
       };
 
       this.cache.set(symbol, { data: result, timestamp: Date.now() });
@@ -1303,12 +1289,6 @@ class AITradingService {
     const indicators = this.calculateTechnicalIndicators(historicalPrices, marketData);
     const signals = this.generateSwingTradingSignal(symbol, currentPrice, indicators, marketData);
     const aiScore = Math.min(50 + Math.round(rnd(0, 35, 5)), 100);
-    const subScores = {
-      technical: Math.min(100, Math.max(0, 50 + rnd(-20, 30, 6))),
-      momentum: Math.min(100, Math.max(0, 50 + rnd(-20, 30, 7))),
-      fundamental: Math.min(100, Math.max(0, 60 + rnd(-10, 20, 8))),
-      risk: Math.min(100, Math.max(0, 50 + rnd(-10, 40, 9)))
-    };
 
     let marketSentiment: 'VERY_BULLISH' | 'BULLISH' | 'NEUTRAL' | 'BEARISH' | 'VERY_BEARISH' = 'NEUTRAL';
     if (signals.recommendation.includes('BUY')) marketSentiment = 'BULLISH';
@@ -1320,7 +1300,7 @@ class AITradingService {
       symbol, currentPrice, analysis, signals, marketSentiment,
       volatility: indicators.atr / currentPrice,
       volume: this.estimateVolume(currentPrice, indicators),
-      marketData, timestamp: new Date(), aiScore, subScores, trendStrength: 'MODERATE', momentum: 'STEADY',
+      marketData, timestamp: new Date(), aiScore, trendStrength: 'MODERATE', momentum: 'STEADY',
     };
     this.cache.set(symbol, { data: result, timestamp: Date.now() });
     return result;
