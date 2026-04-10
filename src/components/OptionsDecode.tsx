@@ -1,416 +1,345 @@
-import React, { useState, useEffect, useRef } from 'react';
-import {
-  Clock, TrendingUp, TrendingDown, Zap, Target, BarChart2,
-  Globe, Star, Activity, ChevronRight, Info, RefreshCw, Layers
+import React, { useState, useMemo } from 'react';
+import { 
+  Activity, ArrowDownRight, ArrowUpRight, BarChart2,
+  Zap, ShieldAlert, Crosshair, TrendingUp, AlertTriangle, CheckCircle2, ChevronDown
 } from 'lucide-react';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  LineChart, Line, Area, AreaChart, ReferenceLine, Cell
+} from 'recharts';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-type Interval = '5m' | '15m' | '30m' | '1h' | '1D';
-type Bias = 'strong-bull' | 'mild-bull' | 'neutral' | 'mild-bear' | 'strong-bear';
+// ─── Types & Mock Configurations ───────────────────────────────────────────────
+type Instrument = 'NIFTY 50' | 'BANKNIFTY' | 'FINNIFTY' | 'SENSEX';
+type Expiry = 'Current Expiry' | 'Next Expiry' | 'Monthly Expiry';
 
-interface IntervalData {
-  bias: Bias;
-  callOI: number;
-  putOI: number;
-  callChange: number;
-  putChange: number;
-  netPosition: number; // positive = bullish, negative = bearish
-  summary: string;
-}
-
-// ─── Mock data per interval ───────────────────────────────────────────────────
-const INTERVAL_DATA: Record<Interval, IntervalData> = {
-  '5m':  { bias: 'mild-bull',   callOI: 12.4, putOI: 10.1, callChange: +8.2,  putChange: -3.4, netPosition: +22,  summary: 'Short-term call unwinding with mild bullish buildup. Big players adding calls cautiously.' },
-  '15m': { bias: 'strong-bull', callOI: 18.7, putOI: 11.2, callChange: +14.5, putChange: -8.1, netPosition: +67,  summary: 'Strong call buildup. Institutions buying calls aggressively — bullish momentum building.' },
-  '30m': { bias: 'neutral',     callOI: 15.3, putOI: 15.1, callChange: +2.1,  putChange: +1.8, netPosition: +4,   summary: 'Balanced positioning. Big players are waiting — no clear directional bias yet.' },
-  '1h':  { bias: 'mild-bear',   callOI: 9.8,  putOI: 13.6, callChange: -5.2,  putChange: +9.7, netPosition: -38,  summary: 'Put buildup visible. Institutions hedging or building short positions on hourly timeframe.' },
-  '1D':  { bias: 'strong-bear', callOI: 8.2,  putOI: 19.4, callChange: -11.3, putChange: +18.2, netPosition: -82, summary: 'Heavy put buildup on daily TF. Big players have significant bearish positions — avoid longs.' },
+const INSTRUMENT_CONFIG: Record<Instrument, { spot: number, ivr: number, ivp: number, pcr: number, maxPain: number, gexStatus: string }> = {
+  'NIFTY 50': { spot: 22452.15, ivr: 42, ivp: 68, pcr: 1.15, maxPain: 22400, gexStatus: 'Positive Gamma (+)' },
+  'BANKNIFTY': { spot: 48123.50, ivr: 58, ivp: 82, pcr: 0.82, maxPain: 48000, gexStatus: 'Negative Gamma (-)' },
+  'FINNIFTY': { spot: 21350.25, ivr: 34, ivp: 45, pcr: 1.05, maxPain: 21300, gexStatus: 'Neutral Gamma' },
+  'SENSEX': { spot: 74215.30, ivr: 40, ivp: 60, pcr: 1.10, maxPain: 74000, gexStatus: 'Positive Gamma (+)' }
 };
 
-const BIAS_CONFIG: Record<Bias, { label: string; color: string; glow: string; bg: string; angle: number; icon: typeof TrendingUp }> = {
-  'strong-bull': { label: 'STRONG BULLISH', color: '#10b981', glow: 'rgba(16,185,129,0.4)',  bg: 'rgba(16,185,129,0.1)',  angle: -70, icon: TrendingUp },
-  'mild-bull':   { label: 'MILD BULLISH',   color: '#4ade80', glow: 'rgba(74,222,128,0.3)',  bg: 'rgba(74,222,128,0.08)', angle: -30, icon: TrendingUp },
-  'neutral':     { label: 'NEUTRAL',        color: '#eab308', glow: 'rgba(234,179,8,0.3)',   bg: 'rgba(234,179,8,0.08)',  angle: 0,   icon: Activity },
-  'mild-bear':   { label: 'MILD BEARISH',   color: '#f97316', glow: 'rgba(249,115,22,0.3)',  bg: 'rgba(249,115,22,0.08)', angle: 30,  icon: TrendingDown },
-  'strong-bear': { label: 'STRONG BEARISH', color: '#ef4444', glow: 'rgba(239,68,68,0.4)',   bg: 'rgba(239,68,68,0.1)',   angle: 70,  icon: TrendingDown },
-};
-
-// ─── Feature cards ─────────────────────────────────────────────────────────────
-const FEATURES = [
-  {
-    id: 'apex',
-    name: 'Option Apex',
-    icon: Target,
-    color: '#a855f7',
-    glow: 'rgba(168,85,247,0.25)',
-    tag: 'PEAK ZONES',
-    desc: 'Identifies peak Open Interest strike zones where big players have maximum exposure. These act as strong support or resistance levels.',
-    bullets: ['Max Pain calculation', 'Peak OI strike mapping', 'Support/resistance via OI'],
-  },
-  {
-    id: 'clock',
-    name: 'Option Clock',
-    icon: Clock,
-    color: '#38bdf8',
-    glow: 'rgba(56,189,248,0.25)',
-    tag: 'TIME INTEL',
-    desc: 'Time-based intelligence showing when big players build or unwind positions across different intraday windows (9:15–3:30).',
-    bullets: ['Hourly OI change map', 'Position buildup timing', 'Smart money entry windows'],
-  },
-  {
-    id: 'swing',
-    name: 'Swing Spectrum',
-    icon: BarChart2,
-    color: '#fb923c',
-    glow: 'rgba(251,146,60,0.25)',
-    tag: 'SWING SIGNALS',
-    desc: 'Multi-timeframe swing trade signals based on institutional accumulation and distribution patterns across days to weeks.',
-    bullets: ['3–10 day swing signals', 'Volume-price divergence', 'Institutional accumulation'],
-  },
-  {
-    id: 'insider',
-    name: 'Insider Strategy',
-    icon: Star,
-    color: '#fbbf24',
-    glow: 'rgba(251,191,36,0.25)',
-    tag: 'SMART MONEY',
-    desc: 'Tracks unusual options activity — large block trades, sudden spikes in OI, and abnormal IV changes that indicate informed trading.',
-    bullets: ['Unusual OI spike alerts', 'Block trade detection', 'IV anomaly tracker'],
-  },
-  {
-    id: 'sector',
-    name: 'Sector Scope',
-    icon: Globe,
-    color: '#34d399',
-    glow: 'rgba(52,211,153,0.25)',
-    tag: 'SECTOR VIEW',
-    desc: 'Sector-wise big player activity — see which sectors (IT, Bank, Auto, Pharma) institutions are bullish or bearish on.',
-    bullets: ['NIFTY sectoral OI flow', 'FII/DII by sector', 'Rotation tracker'],
-  },
-  {
-    id: 'pulse',
-    name: 'Market Pulse',
-    icon: Activity,
-    color: '#f43f5e',
-    glow: 'rgba(244,63,94,0.25)',
-    tag: 'HEALTH CHECK',
-    desc: 'Real-time market health dashboard — breadth, advance-decline, VIX movement, PCR trend, and FII net activity in one view.',
-    bullets: ['Market breadth live', 'VIX & PCR trend', 'FII net activity tracker'],
-  },
-  {
-    id: 'research',
-    name: 'Quality Research',
-    icon: Layers,
-    color: '#818cf8',
-    glow: 'rgba(129,140,248,0.25)',
-    tag: 'RESEARCH',
-    desc: 'Curated, high-conviction trade setups vetted by quantitative models — only the best risk-reward setups make the cut.',
-    bullets: ['Quantitative screener', 'Risk/reward ranked ideas', 'Weekly conviction picks'],
-  },
+const FII_DATA = [
+  { category: 'Index Futures', FII: 45000, PRO: 12000, CLIENT: -57000 },
+  { category: 'Index Options', FII: 125000, PRO: -45000, CLIENT: -80000 },
+  { category: 'Stock Futures', FII: -15000, PRO: 32000, CLIENT: -17000 },
 ];
 
-// ─── Option Clock Visual ───────────────────────────────────────────────────────
-const OptionClockVisual: React.FC<{ data: IntervalData; bias: typeof BIAS_CONFIG[Bias] }> = ({ data, bias }) => {
-  const total = data.callOI + data.putOI;
-  const callPct = (data.callOI / total) * 100;
-  const putPct  = (data.putOI  / total) * 100;
+const STRADDLE_DECAY = [
+  { time: '09:15', premium: 425.5, iv: 18.2 },
+  { time: '10:00', premium: 410.2, iv: 17.5 },
+  { time: '11:00', premium: 395.0, iv: 16.8 },
+  { time: '12:00', premium: 388.5, iv: 16.5 },
+  { time: '13:00', premium: 375.2, iv: 15.9 },
+  { time: '14:00', premium: 360.8, iv: 15.2 },
+  { time: '15:00', premium: 345.5, iv: 14.8 },
+  { time: '15:30', premium: 338.0, iv: 14.5 },
+];
 
-  // SVG arc helpers
-  const polarToCartesian = (cx: number, cy: number, r: number, angleDeg: number) => {
-    const rad = ((angleDeg - 90) * Math.PI) / 180;
-    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-  };
-  const arc = (cx: number, cy: number, r: number, start: number, end: number) => {
-    const s = polarToCartesian(cx, cy, r, start);
-    const e = polarToCartesian(cx, cy, r, end);
-    const large = end - start > 180 ? 1 : 0;
-    return `M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${e.x} ${e.y}`;
-  };
-
-  const callEnd  = Math.round(callPct * 3.6);     // degrees
-  const putStart = callEnd;
-  const putEnd   = 360;
-  const rotation = data.netPosition; // -100 to +100 → -90 to +90 deg needle
-
-  return (
-    <div className="relative flex items-center justify-center">
-      <svg width="220" height="220" viewBox="0 0 220 220" className="overflow-visible">
-        <defs>
-          <filter id="glow-clock">
-            <feGaussianBlur stdDeviation="6" result="blur" />
-            <feComposite in="SourceGraphic" in2="blur" operator="over" />
-          </filter>
-          <radialGradient id="bg-grad" cx="50%" cy="50%" r="50%">
-            <stop offset="0%"   stopColor="#1e2d3d" />
-            <stop offset="100%" stopColor="#0a0e17" />
-          </radialGradient>
-        </defs>
-
-        {/* Outer ring background */}
-        <circle cx="110" cy="110" r="100" fill="url(#bg-grad)" stroke="#1e293b" strokeWidth="2" />
-
-        {/* Call OI arc — green */}
-        <path d={arc(110, 110, 88, 0, callEnd)} fill="none" stroke="#10b981" strokeWidth="14" strokeLinecap="round" filter="url(#glow-clock)" opacity="0.85" />
-
-        {/* Put OI arc — red */}
-        <path d={arc(110, 110, 88, putStart, putEnd)} fill="none" stroke="#ef4444" strokeWidth="14" strokeLinecap="round" filter="url(#glow-clock)" opacity="0.85" />
-
-        {/* Inner decorative ring */}
-        <circle cx="110" cy="110" r="70" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="1" strokeDasharray="4 8" />
-
-        {/* Needle */}
-        <g transform={`translate(110,110) rotate(${rotation * 0.9})`} style={{ transition: 'transform 1.2s cubic-bezier(.34,1.56,.64,1)' }}>
-          <polygon points="-2.5,8 2.5,8 0,-62" fill={bias.color} />
-          <circle cx="0" cy="0" r="10" fill="#0a0e17" stroke={bias.color} strokeWidth="2.5" />
-          <circle cx="0" cy="0" r="4"  fill={bias.color} />
-        </g>
-
-        {/* Center text */}
-        <text x="110" y="104" textAnchor="middle" fill={bias.color} fontSize="13" fontWeight="900" letterSpacing="1">{bias.label}</text>
-        <text x="110" y="120" textAnchor="middle" fill="#64748b" fontSize="9"  fontWeight="600" letterSpacing="2">BIG PLAYER BIAS</text>
-
-        {/* OI legend */}
-        <circle cx="28"  cy="200" r="5" fill="#10b981" />
-        <text   x="37"  y="204" fill="#94a3b8" fontSize="9.5" fontWeight="600">CALL OI {data.callOI}L</text>
-        <circle cx="118" cy="200" r="5" fill="#ef4444" />
-        <text   x="127" y="204" fill="#94a3b8" fontSize="9.5" fontWeight="600">PUT OI {data.putOI}L</text>
-      </svg>
-    </div>
-  );
+const STRIKE_OI_FLOW: Record<Instrument, any[]> = {
+  'NIFTY 50': [
+    { strike: 22200, callChg: -2.5, putChg: 15.2 },
+    { strike: 22300, callChg: -1.2, putChg: 22.4 },
+    { strike: 22400, callChg: 5.4, putChg: 18.1 },
+    { strike: 22500, callChg: 28.5, putChg: -3.2 },
+    { strike: 22600, callChg: 35.2, putChg: -5.5 },
+    { strike: 22700, callChg: 18.4, putChg: -1.1 },
+  ],
+  'BANKNIFTY': [
+    { strike: 47700, callChg: -4.5, putChg: 12.2 },
+    { strike: 47800, callChg: -2.2, putChg: 18.4 },
+    { strike: 48000, callChg: 15.4, putChg: 8.1 },
+    { strike: 48100, callChg: 28.5, putChg: -6.2 },
+    { strike: 48200, callChg: 32.2, putChg: -8.5 },
+    { strike: 48500, callChg: 12.4, putChg: -2.1 },
+  ],
+  'FINNIFTY': [
+    { strike: 21100, callChg: -1.5, putChg: 8.2 },
+    { strike: 21200, callChg: -0.2, putChg: 12.4 },
+    { strike: 21300, callChg: 4.4, putChg: 6.1 },
+    { strike: 21400, callChg: 14.5, putChg: -2.2 },
+    { strike: 21500, callChg: 18.2, putChg: -4.5 },
+    { strike: 21600, callChg: 8.4, putChg: -1.1 },
+  ],
+  'SENSEX': [
+    { strike: 73500, callChg: -3.5, putChg: 10.2 },
+    { strike: 73800, callChg: -1.2, putChg: 15.4 },
+    { strike: 74000, callChg: 8.4, putChg: 12.1 },
+    { strike: 74200, callChg: 22.5, putChg: -4.2 },
+    { strike: 74500, callChg: 28.2, putChg: -6.5 },
+    { strike: 75000, callChg: 15.4, putChg: -2.1 },
+  ]
 };
 
-// ─── Feature Card ──────────────────────────────────────────────────────────────
-const FeatureCard: React.FC<{ f: typeof FEATURES[0] }> = ({ f }) => {
-  const Icon = f.icon;
-  return (
-    <div
-      className="group rounded-2xl border p-5 space-y-3 cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-xl"
-      style={{ background: `${f.color}08`, borderColor: `${f.color}30`, boxShadow: `0 4px 24px rgba(0,0,0,0.3)` }}
-      onMouseEnter={e => (e.currentTarget.style.boxShadow = `0 8px 32px ${f.glow}`)}
-      onMouseLeave={e => (e.currentTarget.style.boxShadow = `0 4px 24px rgba(0,0,0,0.3)`)}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${f.color}20` }}>
-            <Icon className="w-5 h-5" style={{ color: f.color }} />
+// ─── Custom Tooltip Components ────────────────────────────────────────────────
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-[#0f1520] border border-slate-700 p-3 rounded-lg shadow-xl">
+        <p className="text-slate-300 font-bold mb-2 text-xs">{label}</p>
+        {payload.map((entry: any, index: number) => (
+          <div key={index} className="flex items-center gap-2 text-xs mb-1">
+            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+            <span className="text-slate-400">{entry.name}:</span>
+            <span className="font-bold text-white">
+              {entry.value > 0 ? '+' : ''}{(entry.value / 1000).toFixed(1)}k
+            </span>
           </div>
-          <div>
-            <div className="font-bold text-sm text-slate-100">{f.name}</div>
-            <span className="text-[9px] font-bold tracking-[0.18em] px-1.5 py-0.5 rounded" style={{ color: f.color, background: `${f.color}18` }}>{f.tag}</span>
-          </div>
-        </div>
-        <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-slate-400 group-hover:translate-x-0.5 transition-all shrink-0 mt-1" />
-      </div>
-      <p className="text-slate-400 text-xs leading-relaxed">{f.desc}</p>
-      <ul className="space-y-1">
-        {f.bullets.map((b, i) => (
-          <li key={i} className="text-xs text-slate-300 flex items-center gap-1.5">
-            <span style={{ color: f.color }} className="text-[8px]">◆</span>
-            {b}
-          </li>
         ))}
-      </ul>
-    </div>
-  );
+      </div>
+    );
+  }
+  return null;
 };
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 const OptionsDecode: React.FC = () => {
-  const [interval, setInterval]   = useState<Interval>('15m');
-  const [refreshing, setRefreshing] = useState(false);
+  const [instrument, setInstrument] = useState<Instrument>('NIFTY 50');
+  const [expiry, setExpiry] = useState<Expiry>('Current Expiry');
 
-  const data  = INTERVAL_DATA[interval];
-  const bias  = BIAS_CONFIG[data.bias];
-  const BiasIcon = bias.icon;
+  const config = INSTRUMENT_CONFIG[instrument];
+  const strikeData = STRIKE_OI_FLOW[instrument];
 
-  const handleRefresh = () => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1200);
-  };
+  // Colors
+  const callColor = '#ef4444'; // Red for Call Writing (Bearish)
+  const callUnwindColor = '#fca5a5';
+  const putColor = '#10b981'; // Green for Put Writing (Bullish)
+  const putUnwindColor = '#6ee7b7';
 
-  const intervals: Interval[] = ['5m','15m','30m','1h','1D'];
+  // Derived metrics
+  const isVolExpensive = config.ivp > 75;
+  const isVolCheap = config.ivp < 30;
 
   return (
-    <div className="min-h-screen bg-[#0a0e17] text-slate-300 p-6">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="min-h-screen bg-[#0a0e17] text-slate-300 p-4 md:p-6 pb-24">
+      <div className="max-w-7xl mx-auto space-y-6">
 
-        {/* ── Hero ─────────────────────────────────────────────────── */}
-        <div className="relative rounded-3xl overflow-hidden border border-white/8 p-6"
-          style={{ background: 'linear-gradient(135deg, rgba(56,189,248,0.08) 0%, #12192b 50%, rgba(168,85,247,0.08) 100%)' }}>
-          {/* Grid pattern */}
-          <div className="absolute inset-0 opacity-30 pointer-events-none"
-            style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
-
-          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-500 to-violet-600 flex items-center justify-center shadow-lg">
-                  <Zap className="w-4 h-4 text-white" />
-                </div>
-                <span className="text-xs font-black tracking-[0.25em] uppercase px-3 py-1 rounded-full border"
-                  style={{ color: '#38bdf8', borderColor: 'rgba(56,189,248,0.35)', background: 'rgba(56,189,248,0.1)' }}>
-                  Options Decode
-                </span>
+        {/* ── Header & Instrument Selectors ─────────────────────────────── */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 rounded-lg bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
+                <Crosshair className="w-4 h-4 text-indigo-400" />
               </div>
-              <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight leading-tight">
-                Decode the <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-violet-400">Big Players'</span> Game Plan
-              </h1>
-              <p className="text-slate-400 text-sm mt-2 max-w-lg leading-relaxed">
-                See whether institutions and FIIs have built <strong className="text-emerald-400">bullish</strong> or <strong className="text-rose-400">bearish</strong> positions across different time intervals — before you take a trade.
-              </p>
+              <h1 className="text-2xl font-black text-white tracking-tight">Quantitative <span className="text-indigo-400">Options</span> Intel</h1>
             </div>
-            <div className="flex flex-col gap-2 items-start md:items-end text-xs shrink-0">
-              <div className="flex gap-4">
-                <div className="text-center">
-                  <div className="text-slate-500">Features</div>
-                  <div className="text-white font-black text-lg">7+</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-slate-500">Data Points</div>
-                  <div className="text-white font-black text-lg">500+</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-slate-500">Accuracy</div>
-                  <div className="text-emerald-400 font-black text-lg">78%</div>
-                </div>
-              </div>
-              <div className="text-slate-600 text-[10px] tracking-wider">NSE F&O INTELLIGENCE PLATFORM</div>
-            </div>
+            <p className="text-xs text-slate-400">Institutional grade delta-neutral and directional options flow analytics.</p>
           </div>
-        </div>
 
-        {/* ── Option Clock Section ──────────────────────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-          {/* Clock card */}
-          <div className="bg-white/4 backdrop-blur border border-white/8 rounded-2xl p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-sky-400" />
-                <span className="text-sm font-bold text-slate-200">Option Clock</span>
-                <span className="text-[10px] text-slate-500 border border-slate-700/50 px-1.5 py-0.5 rounded">LIVE</span>
-              </div>
-              <button onClick={handleRefresh} className="p-1.5 rounded-lg hover:bg-white/8 transition-colors">
-                <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${refreshing ? 'animate-spin' : ''}`} />
-              </button>
-            </div>
-
-            {/* Interval selector */}
-            <div className="flex gap-1.5">
-              {intervals.map(iv => (
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Instrument Tabs */}
+            <div className="flex bg-[#131b26] p-1 rounded-xl border border-slate-800">
+              {(['NIFTY 50', 'BANKNIFTY', 'FINNIFTY', 'SENSEX'] as Instrument[]).map(inst => (
                 <button
-                  key={iv}
-                  onClick={() => setInterval(iv)}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 border ${
-                    interval === iv
-                      ? 'border-sky-500/60 bg-sky-500/20 text-sky-300 shadow-[0_0_12px_rgba(56,189,248,0.2)]'
-                      : 'border-white/8 bg-white/4 text-slate-500 hover:text-slate-300 hover:bg-white/8'
+                  key={inst}
+                  onClick={() => setInstrument(inst)}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                    instrument === inst 
+                      ? 'bg-indigo-500/20 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.15)]' 
+                      : 'text-slate-500 hover:text-slate-300'
                   }`}
                 >
-                  {iv}
+                  {inst}
                 </button>
               ))}
             </div>
 
-            {/* Clock visual */}
-            <div className="flex justify-center py-2">
-              <OptionClockVisual data={data} bias={bias} />
+            {/* Expiry Dropdown (Visual only for mock) */}
+            <div className="relative group">
+              <button className="flex items-center gap-2 bg-[#131b26] border border-slate-800 px-4 py-2 rounded-xl text-xs font-bold text-slate-300 hover:border-slate-700 transition-colors">
+                {expiry} <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Top GEX Warning Banner ────────────────────────────────────── */}
+        <div className={`rounded-xl border p-4 flex items-center justify-between shadow-lg ${
+          config.gexStatus.includes('Positive') 
+            ? 'bg-emerald-500/10 border-emerald-500/20 shadow-emerald-500/5' 
+            : config.gexStatus.includes('Negative')
+            ? 'bg-rose-500/10 border-rose-500/20 shadow-rose-500/5'
+            : 'bg-slate-800/30 border-slate-700/50'
+        }`}>
+          <div className="flex items-center gap-3">
+            <ShieldAlert className={`w-5 h-5 ${config.gexStatus.includes('Positive') ? 'text-emerald-400' : 'text-rose-400'}`} />
+            <div>
+              <h3 className={`text-sm font-bold ${config.gexStatus.includes('Positive') ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {config.gexStatus} Environment Detected
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {config.gexStatus.includes('Positive') 
+                  ? 'Market Makers are buying dips and selling rips. Expect lower volatility, mean-reversion, and theta decay.' 
+                  : 'Market Makers are selling into weakness. Expect high volatility, sudden spikes, and trend continuation.'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Core KPI Grid ─────────────────────────────────────────────── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-[#131b26] border border-slate-800 rounded-2xl p-5 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-sky-500/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
+            <p className="text-slate-500 text-[10px] font-bold tracking-wider uppercase mb-1">{instrument} SPOT</p>
+            <div className="text-2xl font-black text-white">{config.spot.toLocaleString()}</div>
+            <div className="text-xs text-sky-400 font-semibold mt-1 flex items-center gap-1">
+              <Activity className="w-3.5 h-3.5" /> ATM Base
             </div>
           </div>
 
-          {/* Position analysis */}
-          <div className="space-y-4">
-            {/* Bias pill */}
-            <div className="rounded-2xl border p-5 space-y-4" style={{ background: bias.bg, borderColor: `${bias.color}40` }}>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: `${bias.color}20` }}>
-                  <BiasIcon className="w-5 h-5" style={{ color: bias.color }} />
-                </div>
-                <div>
-                  <div className="text-xs text-slate-500 font-semibold tracking-wider">BIG PLAYER BIAS · {interval}</div>
-                  <div className="font-black text-lg" style={{ color: bias.color }}>{bias.label}</div>
-                </div>
-              </div>
-              <p className="text-slate-300 text-sm leading-relaxed">{data.summary}</p>
+          <div className="bg-[#131b26] border border-slate-800 rounded-2xl p-5 relative overflow-hidden">
+            <div className={`absolute top-0 right-0 w-24 h-24 ${isVolExpensive ? 'bg-rose-500/10' : isVolCheap ? 'bg-emerald-500/10' : 'bg-amber-500/10'} rounded-full blur-2xl -translate-y-1/2 translate-x-1/2`} />
+            <p className="text-slate-500 text-[10px] font-bold tracking-wider uppercase mb-1">IV Percentile (IVP)</p>
+            <div className="flex items-end gap-2">
+              <div className="text-2xl font-black text-white">{config.ivp}</div>
+              <div className="text-lg font-bold text-slate-600 mb-0.5">/ 100</div>
+            </div>
+            <div className={`text-xs font-semibold mt-1 flex items-center gap-1 ${isVolExpensive ? 'text-rose-400' : isVolCheap ? 'text-emerald-400' : 'text-amber-400'}`}>
+              {isVolExpensive ? 'Premium is Expensive (Favorable for Sellers)' : isVolCheap ? 'Premium is Cheap (Favorable for Buyers)' : 'Premium is Neutral'}
+            </div>
+          </div>
 
-              {/* Net position bar */}
+          <div className="bg-[#131b26] border border-slate-800 rounded-2xl p-5 relative overflow-hidden">
+            <div className={`absolute top-0 right-0 w-24 h-24 ${config.pcr > 1.2 ? 'bg-emerald-500/10' : config.pcr < 0.8 ? 'bg-rose-500/10' : 'bg-slate-500/10'} rounded-full blur-2xl -translate-y-1/2 translate-x-1/2`} />
+            <p className="text-slate-500 text-[10px] font-bold tracking-wider uppercase mb-1">Put-Call Ratio (PCR)</p>
+            <div className="text-2xl font-black text-white">{config.pcr.toFixed(2)}</div>
+            <div className="text-xs text-slate-400 font-semibold mt-1">
+              {config.pcr > 1.2 ? 'Oversold / Strong Support' : config.pcr < 0.8 ? 'Overbought / Strong Resistance' : 'Neutral Territory'}
+            </div>
+          </div>
+
+          <div className="bg-[#131b26] border border-slate-800 rounded-2xl p-5 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-violet-500/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
+            <p className="text-slate-500 text-[10px] font-bold tracking-wider uppercase mb-1">Max Pain Strike</p>
+            <div className="text-2xl font-black text-violet-400">{config.maxPain.toLocaleString()}</div>
+            <div className="text-xs text-slate-400 font-semibold mt-1">
+              Highest likelihood of expiry
+            </div>
+          </div>
+        </div>
+
+        {/* ── Main Charts Grid ──────────────────────────────────────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+          {/* Institutional Footprint (FII/PRO vs Retail) */}
+          <div className="bg-[#131b26] rounded-2xl border border-slate-800 p-5 flex flex-col min-h-[400px]">
+            <div className="flex items-center justify-between mb-6">
               <div>
-                <div className="flex justify-between text-xs mb-1.5">
-                  <span className="text-rose-400 font-semibold">BEARISH</span>
-                  <span className="text-slate-500">Net: {data.netPosition > 0 ? '+' : ''}{data.netPosition}</span>
-                  <span className="text-emerald-400 font-semibold">BULLISH</span>
-                </div>
-                <div className="h-3 rounded-full bg-white/5 border border-white/8 overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-1000"
-                    style={{
-                      width: `${Math.abs(data.netPosition) / 2}%`,
-                      marginLeft: data.netPosition >= 0 ? '50%' : `${50 - Math.abs(data.netPosition) / 2}%`,
-                      background: data.netPosition >= 0 ? 'linear-gradient(90deg,#10b981,#34d399)' : 'linear-gradient(90deg,#ef4444,#f87171)',
-                    }}
+                <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                  <BarChart2 className="w-4 h-4 text-indigo-400" />
+                  Institutional Net Positioning (EOD)
+                </h2>
+                <p className="text-[10px] text-slate-500 tracking-wider mt-1 uppercase">FII & PRO vs Retail Clients</p>
+              </div>
+            </div>
+
+            <div className="flex-1 w-full relative">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={FII_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }} barGap={2} barSize={20}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                  <XAxis dataKey="category" stroke="#475569" fontSize={10} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#475569" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `${v/1000}k`} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: '#1e293b', opacity: 0.4 }} />
+                  <Bar dataKey="FII" name="Foreign (FII)" fill="#3b82f6" radius={[4,4,0,0]} />
+                  <Bar dataKey="PRO" name="Proprietary" fill="#8b5cf6" radius={[4,4,0,0]} />
+                  <Bar dataKey="CLIENT" name="Retail Client" fill="#64748b" radius={[4,4,0,0]} />
+                  <ReferenceLine y={0} stroke="#475569" strokeWidth={1} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Intraday Theta Decay (Straddle Tracking) */}
+          <div className="bg-[#131b26] rounded-2xl border border-slate-800 p-5 flex flex-col min-h-[400px]">
+             <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-amber-500" />
+                  ATM Straddle Decay Tracker
+                </h2>
+                <p className="text-[10px] text-slate-500 tracking-wider mt-1 uppercase">Combined Call + Put Premium intraday drop</p>
+              </div>
+              <div className="bg-amber-500/10 px-2.5 py-1 rounded-md border border-amber-500/20 text-amber-500 text-[10px] font-bold underline decoration-dashed underline-offset-2">
+                THETA BLEED
+              </div>
+            </div>
+
+            <div className="flex-1 w-full relative">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={STRADDLE_DECAY} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorDecay" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                  <XAxis dataKey="time" stroke="#475569" fontSize={10} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#475569" fontSize={10} tickLine={false} axisLine={false} domain={['dataMin - 10', 'dataMax + 10']} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#0f1520', border: '1px solid #334155', borderRadius: '8px' }}
+                    itemStyle={{ color: '#fcfcfc', fontSize: '12px' }}
+                    labelStyle={{ color: '#94a3b8', fontSize: '10px', marginBottom: '4px' }}
                   />
-                </div>
+                  <Area type="monotone" dataKey="premium" name="Straddle Price (₹)" stroke="#f59e0b" strokeWidth={3} fillOpacity={1} fill="url(#colorDecay)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Strike-wise OI Flow Heatmap (Bottom Full Width) */}
+          <div className="col-span-1 lg:col-span-2 bg-[#131b26] rounded-2xl border border-slate-800 p-5 flex flex-col min-h-[450px]">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-emerald-400" />
+                  Intraday Options Flow (Live Additions/Unwinding)
+                </h2>
+                <p className="text-[10px] text-slate-500 tracking-wider mt-1 uppercase">Changes in Open Interest at near-ATM strikes (in Lakhs)</p>
+              </div>
+              <div className="flex items-center gap-4 text-[10px] font-bold">
+                <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded bg-red-500"/> Call Writing (Bearish)</div>
+                <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded bg-emerald-500"/> Put Writing (Bullish)</div>
               </div>
             </div>
 
-            {/* OI stats grid */}
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { label: 'Call OI', value: `${data.callOI}L`, change: data.callChange, color: '#10b981' },
-                { label: 'Put OI',  value: `${data.putOI}L`,  change: data.putChange,  color: '#ef4444' },
-              ].map((stat, i) => (
-                <div key={i} className="bg-white/4 border border-white/8 rounded-xl p-4">
-                  <div className="text-slate-500 text-xs font-semibold tracking-wider mb-1">{stat.label}</div>
-                  <div className="text-xl font-black" style={{ color: stat.color }}>{stat.value}</div>
-                  <div className={`text-xs font-bold mt-0.5 ${stat.change >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {stat.change >= 0 ? '▲' : '▼'} {Math.abs(stat.change)}% change
-                  </div>
-                </div>
-              ))}
-              <div className="col-span-2 bg-white/4 border border-white/8 rounded-xl p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Info className="w-3.5 h-3.5 text-slate-500" />
-                  <span className="text-xs text-slate-500 font-semibold tracking-wider">SIGNAL INTERPRETATION</span>
-                </div>
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  {data.netPosition >= 50  && '✅ Strong bullish signal — consider buying calls or futures at dips.'}
-                  {data.netPosition >= 10  && data.netPosition < 50 && '🟡 Mild bullish — wait for confirmation before entering call positions.'}
-                  {data.netPosition > -10  && data.netPosition < 10 && '⚪ Neutral — avoid directional trades; use range strategies.'}
-                  {data.netPosition <= -10 && data.netPosition > -50 && '🟠 Mild bearish — exercise caution; prefer put hedges.'}
-                  {data.netPosition <= -50 && '🔴 Strong bearish — avoid buying calls; look for put opportunities.'}
-                </p>
-              </div>
+            <div className="flex-1 w-full relative">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={strikeData} layout="vertical" margin={{ top: 10, right: 30, left: 30, bottom: 5 }} barSize={16}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
+                  <XAxis type="number" stroke="#475569" fontSize={10} tickLine={false} axisLine={{ stroke: '#334155' }} />
+                  <YAxis dataKey="strike" type="category" stroke="#94a3b8" fontSize={11} fontWeight="bold" tickLine={false} axisLine={false} />
+                  <Tooltip 
+                    cursor={{ fill: '#1e293b', opacity: 0.4 }}
+                    formatter={(value: number, name: string) => [`${Math.abs(value)}L`, name.includes('Call') ? 'Call OI Change' : 'Put OI Change']}
+                  />
+                  <ReferenceLine x={0} stroke="#475569" strokeWidth={2} />
+                  
+                  {/* Call Bar (Negative means Unwinding, Positive means Writing. We'll map Call to NEGATIVE side of X axis for symmetry, Put to POSITIVE) */}
+                  <Bar dataKey={(d) => -d.callChg} name="Call Writing (Bearish)" radius={[4,0,0,4]}>
+                    {strikeData.map((entry, index) => (
+                      <Cell key={`call-${index}`} fill={entry.callChg > 0 ? callColor : callUnwindColor} />
+                    ))}
+                  </Bar>
+                  
+                  <Bar dataKey="putChg" name="Put Writing (Bullish)" radius={[0,4,4,0]}>
+                    {strikeData.map((entry, index) => (
+                      <Cell key={`put-${index}`} fill={entry.putChg > 0 ? putColor : putUnwindColor} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            
+            <div className="mt-4 p-3 rounded-lg bg-slate-800/30 border border-slate-700/50 flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-slate-400">
+                <strong className="text-slate-200">Pro Tip:</strong> When significant <span className="text-emerald-400">Put Writing</span> coincides with <span className="text-rose-300">Call Unwinding</span> at a strike, it transforms into extremely robust support for the intraday session.
+              </p>
             </div>
           </div>
-        </div>
 
-        {/* ── Feature Cards ─────────────────────────────────────────── */}
-        <div>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="h-px flex-1 bg-white/6" />
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-500 tracking-[0.2em] uppercase">
-              <Zap className="w-3.5 h-3.5 text-violet-400" />
-              Included Features
-            </div>
-            <div className="h-px flex-1 bg-white/6" />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {FEATURES.map(f => <FeatureCard key={f.id} f={f} />)}
-          </div>
         </div>
-
-        {/* ── CTA Banner ────────────────────────────────────────────── */}
-        <div className="relative rounded-2xl overflow-hidden border border-violet-500/20 p-6 text-center"
-          style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.12), rgba(56,189,248,0.08))' }}>
-          <div className="text-slate-400 text-xs tracking-wider uppercase mb-1">Never miss another trade</div>
-          <h2 className="text-xl font-black text-white">
-            Be a <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-violet-400">Profitable Trader</span> with Big Player Intelligence
-          </h2>
-          <p className="text-slate-500 text-xs mt-2">
-            Options Decode · Option Apex · Option Clock · Swing Spectrum · Insider Strategy · Sector Scope · Market Pulse · Quality Research
-          </p>
-        </div>
-
       </div>
     </div>
   );
