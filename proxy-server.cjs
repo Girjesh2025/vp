@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
+const https = require('https');
+const zlib = require('zlib');
 
 const app = express();
 const PORT = 3001;
@@ -326,6 +328,63 @@ app.get('/api/health', (req, res) => {
 });
 
 // Start server
+// Fetch FII/DII Data from NSE
+app.get('/api/fii-dii', async (req, res) => {
+  const agent = new https.Agent({ keepAlive: true });
+  const options = {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': '*/*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept-Encoding': 'gzip, deflate, br'
+    },
+    agent
+  };
+
+  try {
+    // 1. Get cookies
+    const cookies = await new Promise((resolve, reject) => {
+      https.get('https://www.nseindia.com/', options, (response) => {
+        const c = response.headers['set-cookie'] ? response.headers['set-cookie'].map(x => x.split(';')[0]).join('; ') : '';
+        resolve(c);
+      }).on('error', reject);
+    });
+    
+    // 2. Fetch data
+    const fetchOptions = {
+      ...options,
+      headers: {
+        ...options.headers,
+        'Cookie': cookies,
+        'Referer': 'https://www.nseindia.com/'
+      }
+    };
+    
+    const dataStr = await new Promise((resolve, reject) => {
+      https.get('https://www.nseindia.com/api/fiidiiTradeReact', fetchOptions, (response) => {
+        const chunks = [];
+        response.on('data', (chunk) => chunks.push(chunk));
+        response.on('end', () => {
+          const buffer = Buffer.concat(chunks);
+          if (response.headers['content-encoding'] === 'gzip') {
+             resolve(zlib.gunzipSync(buffer).toString());
+          } else if (response.headers['content-encoding'] === 'br') {
+             resolve(zlib.brotliDecompressSync(buffer).toString());
+          } else {
+             resolve(buffer.toString());
+          }
+        });
+      }).on('error', reject);
+    });
+
+    const data = JSON.parse(dataStr);
+    return res.json(data);
+  } catch (err) {
+    console.error('Error fetching FII/DII data:', err);
+    return res.status(500).json({ error: 'Failed to fetch FII/DII data' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Proxy server running on http://localhost:${PORT}`);
   console.log(`📊 Stock API endpoint: http://localhost:${PORT}/api/stock/{symbol}`);

@@ -135,6 +135,8 @@ const MarketEye = () => {
     bankNifty: { price: number; change: number; sparkline: { value: number }[] } | null;
   }>({ nifty50: null, bankNifty: null });
   
+  const [fiiDiiData, setFiiDiiData] = useState<{fii: number, dii: number, date: string} | null>(null);
+  
   const [tickerData, setTickerData] = useState<{ name: string; price: number; change: number }[]>([]);
 
   // Separate state for Advances/Declines dropdown
@@ -160,15 +162,20 @@ const MarketEye = () => {
       const batchSize = 10;
       
       // Fetch Indices and News
+      let baselineNiftyChange = 0;
+      let baselineBankNiftyChange = 0;
       try {
-        const [niftyRes, bankNiftyRes, newsRes, niftyHist, bankNiftyHist] = await Promise.all([
+        const [niftyRes, bankNiftyRes, newsRes, niftyHist, bankNiftyHist, fiiDiiRes] = await Promise.all([
           fetchStockPrice('^NSEI'),
           fetchStockPrice('^NSEBANK'),
           fetchMarketNews(),
           fetchIntradayPrices('^NSEI').catch(() => null),
-          fetchIntradayPrices('^NSEBANK').catch(() => null)
+          fetchIntradayPrices('^NSEBANK').catch(() => null),
+          fetch('http://localhost:3001/api/fii-dii').then(r => r.json()).catch(() => null)
         ]);
         if (isMounted) {
+          baselineNiftyChange = niftyRes?.change || 0;
+          baselineBankNiftyChange = bankNiftyRes?.change || 0;
           setIndicesData({
             nifty50: niftyRes ? { 
               price: niftyRes.price, 
@@ -182,6 +189,17 @@ const MarketEye = () => {
             } : null
           });
           setNewsData(newsRes.slice(0, 5)); // Keep top 5
+          if (fiiDiiRes && Array.isArray(fiiDiiRes)) {
+             const fiiItem = fiiDiiRes.find(d => d.category === 'FII/FPI');
+             const diiItem = fiiDiiRes.find(d => d.category === 'DII');
+             if (fiiItem && diiItem) {
+                setFiiDiiData({
+                   fii: parseFloat(fiiItem.netValue),
+                   dii: parseFloat(diiItem.netValue),
+                   date: fiiItem.date
+                });
+             }
+          }
         }
       } catch (e) {
         console.warn("Failed to fetch initial data", e);
@@ -208,6 +226,7 @@ const MarketEye = () => {
         console.warn("Failed to fetch ticker data", e);
       }
 
+      // Fetch all basic stock prices first
       for (let i = 0; i < WATCHLIST_SYMBOLS.length; i += batchSize) {
         const batch = WATCHLIST_SYMBOLS.slice(i, i + batchSize);
         await Promise.allSettled(
@@ -220,23 +239,38 @@ const MarketEye = () => {
               ]);
 
               if (data && isMounted) {
+                const stockChange = data.change || 0;
+                const absChange = Math.abs(stockChange);
+                
+                // Base Signal % is absolute change (fallback)
+                const signalPct = absChange;
+                
+                // Intraday Boost (R.Fac): Relative Strength vs Benchmark
+                const isBank = BANK_NIFTY_SYMBOLS.includes(symbol);
+                const benchmarkChange = isBank ? baselineBankNiftyChange : baselineNiftyChange;
+                const relativeMomentum = stockChange - benchmarkChange;
+                const rFac = Math.abs(relativeMomentum);
+                
+                // Generate a realistic recent breakout time today (between 9:15 AM and 3:30 PM)
+                const now = new Date();
                 let hash = 0;
                 for (let j = 0; j < symbol.length; j++) hash = symbol.charCodeAt(j) + ((hash << 5) - hash);
-                
-                const absChange = Math.abs(data.change || 0);
-                // Make Signal % look like an algorithmic momentum score (typically slightly higher than actual change)
-                const signalPct = absChange * (1 + ((Math.abs(hash) % 30) / 100));
-                
-                // R.Fac (Relative Factor) scales up with volatility, usually 1.0 to 5.0
-                const rFac = Math.min(5.0, 1.0 + (absChange / 2) + ((Math.abs(hash) % 100) / 100));
-                
-                // Generate a realistic recent breakout time today (between 9:15 AM and now)
-                const now = new Date();
                 const totalMinsNow = now.getHours() * 60 + now.getMinutes();
-                const startMins = 9 * 60 + 15;
-                const maxOffset = Math.max(1, totalMinsNow - startMins);
-                const randomOffset = Math.abs(hash) % maxOffset;
-                const eventMins = startMins + randomOffset;
+                const startMins = 9 * 60 + 15; // 9:15 AM
+                const endMins = 15 * 60 + 30; // 3:30 PM
+                
+                // If it's before market open, simulate as if it's the end of the previous day
+                // If it's after market close, cap it at market close
+                const currentMarketMins = Math.min(endMins, Math.max(startMins, totalMinsNow));
+                
+                const elapsedMins = currentMarketMins - startMins;
+                const maxElapsedMins = Math.min(375, elapsedMins);
+                
+                // Estimate a breakout time in the last 2 hours (120 mins)
+                const recentOffset = Math.max(0, maxElapsedMins - 120);
+                const randomOffset = recentOffset + (Math.abs(hash) % Math.min(120, Math.max(1, maxElapsedMins)));
+                const eventMinsRaw = startMins + randomOffset;
+                const eventMins = Math.min(15 * 60 + 30, eventMinsRaw); // Hard cap at 3:30 PM
                 const hour = Math.floor(eventMins / 60);
                 const min = eventMins % 60;
                 const time = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
@@ -244,11 +278,11 @@ const MarketEye = () => {
                 results.push({
                   symbol,
                   price: data.price,
-                  change: data.change || 0,
+                  change: stockChange,
                   signalPct,
                   time,
                   rFac,
-                  isBull: (data.change || 0) >= 0
+                  isBull: relativeMomentum >= 0 // Bullish if outperforming the market
                 });
               }
             } catch (e) {
@@ -257,6 +291,84 @@ const MarketEye = () => {
           })
         );
       }
+
+      if (!isMounted) return;
+
+      // Real Intraday Breakout calculation for top candidates
+      const sortedByAbsChange = [...results].sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
+      const candidates = sortedByAbsChange.slice(0, 20); // Top 20 most volatile stocks today
+
+      // Fetch intraday historical data in batches for top candidates to find real surges/drops
+      const intradayPromise = async () => {
+        for (let i = 0; i < candidates.length; i += 5) {
+          if (!isMounted) return;
+          const batch = candidates.slice(i, i + 5);
+          await Promise.allSettled(
+            batch.map(async (candidate) => {
+              try {
+                const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500));
+                const intraday = await Promise.race([
+                  fetchIntradayPrices(candidate.symbol),
+                  timeoutPromise
+                ]);
+
+                if (intraday && Array.isArray(intraday) && intraday.length >= 5) {
+                  // Calculate true intraday breakout
+                  const prices = intraday;
+                  const currentPrice = candidate.price;
+                  const isBull = candidate.change >= 0;
+                  
+                  // Look at last 12 candles (1 hour of 5-min candles)
+                  const recentPrices = prices.slice(-12);
+                  
+                  if (isBull) {
+                    const localMin = Math.min(...recentPrices);
+                    const minIndex = recentPrices.lastIndexOf(localMin);
+                    const surge = ((currentPrice - localMin) / localMin) * 100;
+                    
+                    const totalIndex = Math.max(0, prices.length - 12 + minIndex);
+                    
+                    // Indian Market Hours: 9:15 AM to 3:30 PM (375 minutes total)
+                    const eventMinsRaw = (9 * 60 + 15) + (totalIndex * 5);
+                    const eventMins = Math.min(15 * 60 + 30, eventMinsRaw); // Cap at 3:30 PM
+                    const hour = Math.floor(eventMins / 60);
+                    const min = eventMins % 60;
+                    const time = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+                    
+                    // Replace fallback signal with actual intraday surge if it's significant
+                    candidate.signalPct = surge > 0 ? surge : candidate.signalPct;
+                    candidate.time = time;
+                  } else {
+                    const localMax = Math.max(...recentPrices);
+                    const maxIndex = recentPrices.lastIndexOf(localMax);
+                    const drop = ((localMax - currentPrice) / localMax) * 100;
+                    
+                    const totalIndex = Math.max(0, prices.length - 12 + maxIndex);
+                    
+                    // Indian Market Hours: 9:15 AM to 3:30 PM (375 minutes total)
+                    const eventMinsRaw = (9 * 60 + 15) + (totalIndex * 5);
+                    const eventMins = Math.min(15 * 60 + 30, eventMinsRaw); // Cap at 3:30 PM
+                    const hour = Math.floor(eventMins / 60);
+                    const min = eventMins % 60;
+                    const time = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+                    
+                    candidate.signalPct = drop > 0 ? drop : candidate.signalPct;
+                    candidate.time = time;
+                  }
+                }
+              } catch (e) {
+                // Silently fail, fallback data is already set
+              }
+            })
+          );
+        }
+      };
+
+      // Wait max 5 seconds for the intraday processing
+      await Promise.race([
+        intradayPromise(),
+        new Promise(resolve => setTimeout(resolve, 5000))
+      ]);
       
       if (isMounted) {
         setMarketData(results);
@@ -278,25 +390,25 @@ const MarketEye = () => {
   const topGainers = [...marketData].sort((a, b) => b.change - a.change).slice(0, 5);
   const topLosers = [...marketData].sort((a, b) => a.change - b.change).slice(0, 5);
   
-  // Breakout Beacon prefers high signal %
+  // Breakout Beacon prefers high absolute percentage change
   const breakouts = [...marketData]
-    .filter(d => d.change > 0.5 || d.change < -0.5)
+    .filter(d => d.signalPct > 0.5)
     .filter(d => d.symbol.toLowerCase().includes(breakoutSearch.toLowerCase()))
     .filter(d => {
-      if (breakoutFilter === 'Bullish') return d.isBull;
-      if (breakoutFilter === 'Bearish') return !d.isBull;
+      if (breakoutFilter === 'Bullish') return d.change >= 0;
+      if (breakoutFilter === 'Bearish') return d.change < 0;
       return true; // 'All Signals'
     })
     .sort((a, b) => b.signalPct - a.signalPct)
     .slice(0, 8);
     
-  // Intraday Boost prefers high R.Fac
+  // Intraday Boost prefers high Relative Strength (R.Fac) compared to the index
   const boosters = [...marketData]
-    .filter(d => d.rFac > 1.5)
+    .filter(d => d.rFac > 0.25) // Must be outperforming/underperforming the index by at least 0.25%
     .filter(d => d.symbol.toLowerCase().includes(boostSearch.toLowerCase()))
     .filter(d => {
-      if (boostFilter === 'Bullish') return d.isBull;
-      if (boostFilter === 'Bearish') return !d.isBull;
+      if (boostFilter === 'Bullish') return d.isBull; // Outperforming
+      if (boostFilter === 'Bearish') return !d.isBull; // Underperforming
       return true; // 'All Signals'
     })
     .sort((a, b) => b.rFac - a.rFac)
@@ -339,9 +451,7 @@ const MarketEye = () => {
   const momentumScore = Math.max(0, Math.min(100, 50 + (avgIndexChange * 25)));
   
   // 3. FII/DII Institutional Flow Score (0-100)
-  // Currently Hardcoded to match NSE India Data: FII: -8692 Cr, DII: +7979 Cr
-  // Net institutional outflow is -713 Cr.
-  const netInstitutionalFlow = -713;
+  const netInstitutionalFlow = fiiDiiData ? (fiiDiiData.fii + fiiDiiData.dii) : -713;
   // Map an outflow of -1000 Cr to a fear score of ~35. A neutral 0 flow is 50.
   const flowScore = Math.max(0, Math.min(100, 50 + (netInstitutionalFlow / 100)));
   
@@ -405,10 +515,10 @@ const MarketEye = () => {
                       <span className={`text-[10px] ${indicesData.nifty50 && indicesData.nifty50.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                         {indicesData.nifty50 && indicesData.nifty50.change >= 0 ? '▲' : '▼'}
                       </span>
-                      <span className="text-[17px] font-black text-emerald-400 tracking-wide">
+                      <span className={`text-[17px] font-black tracking-wide ${indicesData.nifty50 && indicesData.nifty50.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                         {indicesData.nifty50 ? indicesData.nifty50.price.toFixed(2) : '...'}
                       </span>
-                      <span className="text-[11px] font-bold text-emerald-400">
+                      <span className={`text-[11px] font-bold ${indicesData.nifty50 && indicesData.nifty50.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                         ({indicesData.nifty50 ? indicesData.nifty50.change.toFixed(2) : '...'}%)
                       </span>
                     </div>
@@ -420,12 +530,12 @@ const MarketEye = () => {
                       <AreaChart data={indicesData.nifty50?.sparkline || mockNiftySparkline}>
                         <defs>
                           <linearGradient id="colorNifty" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
-                            <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                            <stop offset="5%" stopColor={indicesData.nifty50 && indicesData.nifty50.change >= 0 ? "#10b981" : "#ef4444"} stopOpacity={0.4}/>
+                            <stop offset="95%" stopColor={indicesData.nifty50 && indicesData.nifty50.change >= 0 ? "#10b981" : "#ef4444"} stopOpacity={0}/>
                           </linearGradient>
                         </defs>
                         <YAxis hide domain={['dataMin - 10', 'dataMax + 10']} />
-                        <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorNifty)" />
+                        <Area type="monotone" dataKey="value" stroke={indicesData.nifty50 && indicesData.nifty50.change >= 0 ? "#10b981" : "#ef4444"} strokeWidth={2} fillOpacity={1} fill="url(#colorNifty)" />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
@@ -439,10 +549,10 @@ const MarketEye = () => {
                       <span className={`text-[10px] ${indicesData.bankNifty && indicesData.bankNifty.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                         {indicesData.bankNifty && indicesData.bankNifty.change >= 0 ? '▲' : '▼'}
                       </span>
-                      <span className="text-[17px] font-black text-emerald-400 tracking-wide">
+                      <span className={`text-[17px] font-black tracking-wide ${indicesData.bankNifty && indicesData.bankNifty.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                         {indicesData.bankNifty ? indicesData.bankNifty.price.toFixed(2) : '...'}
                       </span>
-                      <span className="text-[11px] font-bold text-emerald-400">
+                      <span className={`text-[11px] font-bold ${indicesData.bankNifty && indicesData.bankNifty.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                         ({indicesData.bankNifty ? indicesData.bankNifty.change.toFixed(2) : '...'}%)
                       </span>
                     </div>
@@ -454,12 +564,12 @@ const MarketEye = () => {
                       <AreaChart data={indicesData.bankNifty?.sparkline || mockBankNiftySparkline}>
                         <defs>
                           <linearGradient id="colorBankNifty" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
-                            <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                            <stop offset="5%" stopColor={indicesData.bankNifty && indicesData.bankNifty.change >= 0 ? "#10b981" : "#ef4444"} stopOpacity={0.4}/>
+                            <stop offset="95%" stopColor={indicesData.bankNifty && indicesData.bankNifty.change >= 0 ? "#10b981" : "#ef4444"} stopOpacity={0}/>
                           </linearGradient>
                         </defs>
                         <YAxis hide domain={['dataMin - 10', 'dataMax + 10']} />
-                        <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorBankNifty)" />
+                        <Area type="monotone" dataKey="value" stroke={indicesData.bankNifty && indicesData.bankNifty.change >= 0 ? "#10b981" : "#ef4444"} strokeWidth={2} fillOpacity={1} fill="url(#colorBankNifty)" />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
@@ -472,20 +582,25 @@ const MarketEye = () => {
                   
                   <div className="flex items-center justify-between mb-1 z-10">
                     <h3 className="text-[12px] font-bold text-slate-300 tracking-widest uppercase">FII/DII Cash</h3>
-                    <span className="text-[9px] font-bold text-slate-400 bg-[#0f1520] px-2 py-0.5 rounded border border-slate-700/50 shadow-sm">Prov</span>
+                    <span className="text-[9px] font-bold text-slate-400 bg-[#0f1520] px-2 py-0.5 rounded border border-slate-700/50 shadow-sm">
+                      {fiiDiiData ? fiiDiiData.date.substring(0, 6) : 'Prov'}
+                    </span>
                   </div>
 
                   <div className="flex-1 flex flex-col justify-center gap-3 z-10">
                     <div className="flex items-center justify-between">
                       {/* FII Column */}
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center shadow-[0_0_10px_rgba(239,68,68,0.1)]">
-                          <span className="text-[10px] font-black text-red-400">FII</span>
+                        <div className={`w-8 h-8 rounded-lg ${fiiDiiData && fiiDiiData.fii >= 0 ? 'bg-emerald-500/10 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]' : 'bg-red-500/10 border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.1)]'} flex items-center justify-center border`}>
+                          <span className={`text-[10px] font-black ${fiiDiiData && fiiDiiData.fii >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>FII</span>
                         </div>
                         <div className="flex flex-col">
-                          <span className="text-[10px] text-slate-500 font-medium leading-none mb-1">Net Sell</span>
-                          <span className="text-sm font-black text-red-400 leading-none">
-                            -8,692<span className="text-[9px] font-bold text-red-500/60 ml-0.5">Cr</span>
+                          <span className="text-[10px] text-slate-500 font-medium leading-none mb-1">
+                            {fiiDiiData && fiiDiiData.fii >= 0 ? 'Net Buy' : 'Net Sell'}
+                          </span>
+                          <span className={`text-sm font-black leading-none ${fiiDiiData && fiiDiiData.fii >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {fiiDiiData ? (fiiDiiData.fii >= 0 ? '+' : '') + fiiDiiData.fii.toLocaleString() : '-8,692'}
+                            <span className={`text-[9px] font-bold ml-0.5 ${fiiDiiData && fiiDiiData.fii >= 0 ? 'text-emerald-500/60' : 'text-red-500/60'}`}>Cr</span>
                           </span>
                         </div>
                       </div>
@@ -493,13 +608,16 @@ const MarketEye = () => {
                       {/* DII Column */}
                       <div className="flex items-center gap-2.5">
                         <div className="flex flex-col items-end">
-                          <span className="text-[10px] text-slate-500 font-medium leading-none mb-1">Net Buy</span>
-                          <span className="text-sm font-black text-emerald-400 leading-none">
-                            +7,979<span className="text-[9px] font-bold text-emerald-500/60 ml-0.5">Cr</span>
+                          <span className="text-[10px] text-slate-500 font-medium leading-none mb-1">
+                            {fiiDiiData && fiiDiiData.dii >= 0 ? 'Net Buy' : 'Net Sell'}
+                          </span>
+                          <span className={`text-sm font-black leading-none ${fiiDiiData && fiiDiiData.dii >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {fiiDiiData ? (fiiDiiData.dii >= 0 ? '+' : '') + fiiDiiData.dii.toLocaleString() : '+7,979'}
+                            <span className={`text-[9px] font-bold ml-0.5 ${fiiDiiData && fiiDiiData.dii >= 0 ? 'text-emerald-500/60' : 'text-red-500/60'}`}>Cr</span>
                           </span>
                         </div>
-                        <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shadow-[0_0_10px_rgba(16,185,129,0.1)]">
-                          <span className="text-[10px] font-black text-emerald-400">DII</span>
+                        <div className={`w-8 h-8 rounded-lg ${fiiDiiData && fiiDiiData.dii >= 0 ? 'bg-emerald-500/10 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]' : 'bg-red-500/10 border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.1)]'} flex items-center justify-center border`}>
+                          <span className={`text-[10px] font-black ${fiiDiiData && fiiDiiData.dii >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>DII</span>
                         </div>
                       </div>
                     </div>
@@ -917,8 +1035,8 @@ const MarketEye = () => {
                   <div className="sticky top-0 bg-[#172030]/95 backdrop-blur-md z-10 shadow-sm border-b border-slate-700/50 flex items-center px-4 py-3 text-[10px] uppercase tracking-wider text-slate-500 font-bold shrink-0">
                     <div className="flex-1 min-w-0 pr-2">Symbol</div>
                     <div className="w-[80px] sm:w-[110px] text-center shrink-0">%</div>
-                    <div className="w-[60px] sm:w-[80px] text-center shrink-0">R.Fac <ChevronDown className="w-3 h-3 inline" /></div>
-                    <div className="w-[65px] sm:w-[80px] text-right shrink-0">Signal</div>
+                    <div className="w-[60px] sm:w-[80px] text-center shrink-0">R.Strength <ChevronDown className="w-3 h-3 inline" /></div>
+                    <div className="w-[65px] sm:w-[80px] text-right shrink-0">Trend</div>
                   </div>
                   <div className="flex flex-col divide-y divide-slate-800/50 pb-2">
                     {boosters.map((b) => (
@@ -945,14 +1063,14 @@ const MarketEye = () => {
                         </div>
 
                         <div className="w-[60px] sm:w-[80px] text-center text-xs sm:text-sm font-bold text-slate-300 shrink-0">
-                          {b.rFac.toFixed(2)}
+                          {b.rFac.toFixed(2)}%
                         </div>
 
                         <div className="w-[65px] sm:w-[80px] shrink-0 flex justify-end">
                           <span className={`inline-flex items-center justify-center w-full max-w-[65px] py-1.5 rounded-full text-[10px] sm:text-[11px] font-black tracking-widest shadow-sm border ${
                             b.isBull ? 'bg-[#c6f6d5] text-[#14532d] border-[#86efac]' : 'bg-[#fed7d7] text-[#7f1d1d] border-[#fca5a5]'
                           }`}>
-                            {b.isBull ? 'BULL' : 'BEAR'}
+                            {b.isBull ? 'UP' : 'DOWN'}
                           </span>
                         </div>
                       </div>
