@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { 
   Activity, ArrowDownRight, ArrowUpRight, BarChart2,
-  Zap, ShieldAlert, Crosshair, TrendingUp, AlertTriangle, CheckCircle2, ChevronDown
+  Zap, ShieldAlert, Crosshair, TrendingUp, AlertTriangle, CheckCircle2, ChevronDown, Layers
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
