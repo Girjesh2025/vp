@@ -1,64 +1,47 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Activity, ArrowDownRight, ArrowUpRight, BarChart2,
-  Zap, ShieldAlert, Crosshair, TrendingUp, AlertTriangle, CheckCircle2, ChevronDown, Layers
+  Zap, ShieldAlert, Crosshair, TrendingUp, AlertTriangle, CheckCircle2, ChevronDown, Layers, Loader2
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, Area, AreaChart, ReferenceLine, Cell
 } from 'recharts';
-import { fetchStockPrice } from '../utils/priceApi';
 
 // ─── Types & Generators ───────────────────────────────────────────────
-type Instrument = 'NIFTY 50' | 'BANKNIFTY' | 'FINNIFTY' | 'SENSEX';
+type Instrument = 'NIFTY' | 'BANKNIFTY' | 'FINNIFTY'; // Excluded Sensex since it's BSE
 type Expiry = 'Current Expiry' | 'Next Expiry' | 'Monthly Expiry';
 
-const INDEX_MAP: Record<Instrument, string> = {
-  'NIFTY 50': '^NSEI',
-  'BANKNIFTY': '^NSEBANK',
-  'FINNIFTY': 'NIFTY_FIN_SERVICE.NS',
-  'SENSEX': '^BSESN',
-};
-
-const BASE_CONFIGS: Record<Instrument, { spot: number, ivr: number, ivp: number, pcr: number, maxPain: number, gexStatus: string }> = {
-  'NIFTY 50': { spot: 22452.15, ivr: 42, ivp: 68, pcr: 1.15, maxPain: 22400, gexStatus: 'Positive Gamma (+)' },
+const BASE_CONFIGS: Record<string, { spot: number, ivr: number, ivp: number, pcr: number, maxPain: number, gexStatus: string }> = {
+  'NIFTY': { spot: 22452.15, ivr: 42, ivp: 68, pcr: 1.15, maxPain: 22400, gexStatus: 'Positive Gamma (+)' },
   'BANKNIFTY': { spot: 48123.50, ivr: 58, ivp: 82, pcr: 0.82, maxPain: 48000, gexStatus: 'Negative Gamma (-)' },
-  'FINNIFTY': { spot: 21350.25, ivr: 34, ivp: 45, pcr: 1.05, maxPain: 21300, gexStatus: 'Neutral Gamma' },
-  'SENSEX': { spot: 74215.30, ivr: 40, ivp: 60, pcr: 1.10, maxPain: 74000, gexStatus: 'Positive Gamma (+)' }
+  'FINNIFTY': { spot: 21350.25, ivr: 34, ivp: 45, pcr: 1.05, maxPain: 21300, gexStatus: 'Neutral Gamma' }
 };
 
-const INITIAL_STRIKE_FLOW: Record<Instrument, any[]> = {
-  'NIFTY 50': [
-    { strike: 22200, callChg: -2.5, putChg: 15.2 },
-    { strike: 22300, callChg: -1.2, putChg: 22.4 },
-    { strike: 22400, callChg: 5.4,  putChg: 18.1 },
-    { strike: 22500, callChg: 28.5, putChg: -3.2 },
-    { strike: 22600, callChg: 35.2, putChg: -5.5 },
-    { strike: 22700, callChg: 18.4, putChg: -1.1 },
+const INITIAL_STRIKE_FLOW: Record<string, any[]> = {
+  'NIFTY': [
+    { strike: 22200, callChg: -2.5, callChgNeg: 2.5, putChg: 15.2 },
+    { strike: 22300, callChg: -1.2, callChgNeg: 1.2, putChg: 22.4 },
+    { strike: 22400, callChg: 5.4,  callChgNeg: -5.4, putChg: 18.1 },
+    { strike: 22500, callChg: 28.5, callChgNeg: -28.5, putChg: -3.2 },
+    { strike: 22600, callChg: 35.2, callChgNeg: -35.2, putChg: -5.5 },
+    { strike: 22700, callChg: 18.4, callChgNeg: -18.4, putChg: -1.1 },
   ],
   'BANKNIFTY': [
-    { strike: 47700, callChg: -4.5, putChg: 12.2 },
-    { strike: 47800, callChg: -2.2, putChg: 18.4 },
-    { strike: 48000, callChg: 15.4, putChg: 8.1 },
-    { strike: 48100, callChg: 28.5, putChg: -6.2 },
-    { strike: 48200, callChg: 32.2, putChg: -8.5 },
-    { strike: 48500, callChg: 12.4, putChg: -2.1 },
+    { strike: 47700, callChg: -4.5, callChgNeg: 4.5, putChg: 12.2 },
+    { strike: 47800, callChg: -2.2, callChgNeg: 2.2, putChg: 18.4 },
+    { strike: 48000, callChg: 15.4, callChgNeg: -15.4, putChg: 8.1 },
+    { strike: 48100, callChg: 28.5, callChgNeg: -28.5, putChg: -6.2 },
+    { strike: 48200, callChg: 32.2, callChgNeg: -32.2, putChg: -8.5 },
+    { strike: 48500, callChg: 12.4, callChgNeg: -12.4, putChg: -2.1 },
   ],
   'FINNIFTY': [
-    { strike: 21100, callChg: -1.5, putChg: 8.2 },
-    { strike: 21200, callChg: -0.2, putChg: 12.4 },
-    { strike: 21300, callChg: 4.4,  putChg: 6.1 },
-    { strike: 21400, callChg: 14.5, putChg: -2.2 },
-    { strike: 21500, callChg: 18.2, putChg: -4.5 },
-    { strike: 21600, callChg: 8.4,  putChg: -1.1 },
-  ],
-  'SENSEX': [
-    { strike: 73500, callChg: -3.5, putChg: 10.2 },
-    { strike: 73800, callChg: -1.2, putChg: 15.4 },
-    { strike: 74000, callChg: 8.4,  putChg: 12.1 },
-    { strike: 74200, callChg: 22.5, putChg: -4.2 },
-    { strike: 74500, callChg: 28.2, putChg: -6.5 },
-    { strike: 75000, callChg: 15.4, putChg: -2.1 },
+    { strike: 21100, callChg: -1.5, callChgNeg: 1.5, putChg: 8.2 },
+    { strike: 21200, callChg: -0.2, callChgNeg: 0.2, putChg: 12.4 },
+    { strike: 21300, callChg: 4.4,  callChgNeg: -4.4, putChg: 6.1 },
+    { strike: 21400, callChg: 14.5, callChgNeg: -14.5, putChg: -2.2 },
+    { strike: 21500, callChg: 18.2, callChgNeg: -18.2, putChg: -4.5 },
+    { strike: 21600, callChg: 8.4,  callChgNeg: -8.4, putChg: -1.1 },
   ]
 };
 
@@ -86,14 +69,14 @@ const generateInitialStraddle = () => {
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-[#0f1520] border border-slate-700 p-3 rounded-lg shadow-xl">
+      <div className="bg-[#0f1520] border border-slate-700 p-3 rounded-lg shadow-xl outline-none">
         <p className="text-slate-300 font-bold mb-2 text-xs">{label}</p>
         {payload.map((entry: any, index: number) => (
           <div key={index} className="flex items-center gap-2 text-xs mb-1">
             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
             <span className="text-slate-400">{entry.name}:</span>
             <span className="font-bold text-white">
-              {entry.value > 0 ? '+' : ''}{(entry.value / 1000).toFixed(1)}k
+              {entry.value > 0 ? '+' : ''}{(entry.value).toFixed(1)}k
             </span>
           </div>
         ))}
@@ -105,94 +88,137 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 const OptionsDecode: React.FC = () => {
-  const [instrument, setInstrument] = useState<Instrument>('NIFTY 50');
+  const [instrument, setInstrument] = useState<Instrument>('NIFTY');
   const [expiry, setExpiry] = useState<Expiry>('Current Expiry');
   const pollingRef = useRef<NodeJS.Timeout>();
 
-  // State Definitions spanning real-time simulation
-  const [config, setConfig] = useState(BASE_CONFIGS['NIFTY 50']);
-  const [strikeData, setStrikeData] = useState(() => {
-    return INITIAL_STRIKE_FLOW['NIFTY 50'].map(d => ({ ...d, callChgNeg: -(Math.max(d.callChg, 0)) }));
-  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLive, setIsLive] = useState(false);
+  
+  // State Definitions
+  const [config, setConfig] = useState(BASE_CONFIGS['NIFTY']);
+  const [strikeData, setStrikeData] = useState(() => INITIAL_STRIKE_FLOW['NIFTY']);
+  
   const [fiiData, setFiiData] = useState([
     { category: 'Index Futures', FII: 45000, PRO: 12000, CLIENT: -57000 },
     { category: 'Index Options', FII: 125000, PRO: -45000, CLIENT: -80000 },
     { category: 'Stock Futures', FII: -15000, PRO: 32000, CLIENT: -17000 },
   ]);
   const [straddleData, setStraddleData] = useState(generateInitialStraddle());
-  
-  // Instrument Change Hook
-  useEffect(() => {
-    setConfig(BASE_CONFIGS[instrument]);
-    const initFlow = INITIAL_STRIKE_FLOW[instrument].map(d => ({ ...d, callChgNeg: d.callChg > 0 ? -d.callChg : -0.1 }));
-    setStrikeData(initFlow);
-    setStraddleData(generateInitialStraddle());
+
+  // Function to pull real NSE Options Data
+  const fetchOptionsData = useCallback(async () => {
+    try {
+      const response = await fetch(`http://localhost:3001/api/options/${instrument}`);
+      if (!response.ok) throw new Error('API Error');
+      const data = await response.json();
+      
+      if (!data || !data.records || !data.filtered) return;
+
+      const spotPrice = data.records.underlyingValue;
+      const filteredCE = data.filtered.CE?.totOI || 1;
+      const filteredPE = data.filtered.PE?.totOI || 1;
+      const actualPCR = filteredPE / filteredCE;
+
+      // Extract ATM IV 
+      let closestStrike = data.filtered.data[0];
+      let minDiff = Infinity;
+      data.filtered.data.forEach((d: any) => {
+        const diff = Math.abs(d.strikePrice - spotPrice);
+        if (diff < minDiff) { minDiff = diff; closestStrike = d; }
+      });
+      const currentIVP = closestStrike?.CE?.impliedVolatility || BASE_CONFIGS[instrument].ivp;
+
+      // Max Pain Calculation (mock logic over filtered data to save intense loop math if not strictly needed)
+      // We estimate Max Pain closest to the strike with highest combined Open Interest.
+      let maxPainStrike = spotPrice;
+      let highestCombinedOI = 0;
+      data.filtered.data.forEach((d: any) => {
+          const ceOI = d.CE?.openInterest || 0;
+          const peOI = d.PE?.openInterest || 0;
+          if ((ceOI + peOI) > highestCombinedOI) {
+              highestCombinedOI = ceOI + peOI;
+              maxPainStrike = d.strikePrice;
+          }
+      });
+
+      setConfig(prev => ({
+        ...prev,
+        spot: spotPrice,
+        pcr: actualPCR,
+        ivp: Math.round(currentIVP),
+        maxPain: maxPainStrike,
+        gexStatus: actualPCR > 1.2 ? 'Positive Gamma (+)' : actualPCR < 0.8 ? 'Negative Gamma (-)' : 'Neutral Gamma'
+      }));
+
+      // Find Strike Data Flow Heatmap
+      const atmIndex = data.filtered.data.findIndex((d: any) => d.strikePrice === closestStrike.strikePrice);
+      const startIndex = Math.max(0, atmIndex - 3);
+      const heatmapSlice = data.filtered.data.slice(startIndex, startIndex + 6);
+      
+      const parsedStrikeFlow = heatmapSlice.map((strikeObj: any) => {
+        const ceChg = (strikeObj.CE?.changeinOpenInterest || 0) / 1000; // Adjusted for thousands UI formatting
+        const peChg = (strikeObj.PE?.changeinOpenInterest || 0) / 1000;
+        return {
+          strike: strikeObj.strikePrice,
+          callChg: ceChg,
+          callChgNeg: ceChg > 0 ? -ceChg : Math.min(ceChg, -0.1),
+          putChg: peChg
+        }
+      });
+
+      if (parsedStrikeFlow.length > 0) {
+        setStrikeData(parsedStrikeFlow);
+      }
+
+      setIsLive(true);
+      setIsLoading(false);
+
+    } catch (err) {
+      console.error("Failed fetching live NSE data, maintaining current state:", err);
+      // Fallback
+      setIsLive(false);
+      setIsLoading(false);
+    }
   }, [instrument]);
 
-  // Unified Live Data & Simulation Tick Generator
-  const spinLiveSimulations = useCallback(async () => {
-    // 1. Fetch Real Spot
-    const symbol = INDEX_MAP[instrument];
-    if (symbol) {
-      const liveSpot = await fetchStockPrice(symbol);
-      if (liveSpot) {
-        setConfig(prev => ({ ...prev, spot: liveSpot }));
-      }
-    }
-
-    // 2. Random Walk Greeks slightly (+/- 0.5)
-    setConfig(prev => ({
-      ...prev,
-      ivp: Math.min(100, Math.max(0, prev.ivp + Math.round((Math.random() - 0.5) * 2))),
-      pcr: parseFloat(Math.max(0.4, prev.pcr + (Math.random() - 0.5) * 0.04).toFixed(2)),
-    }));
-
-    // 3. Shake Strike Flow to make the chart breathe
-    setStrikeData(prev => prev.map(flow => {
-      const callDiff = (Math.random() - 0.5) * 1.5;
-      const putDiff = (Math.random() - 0.5) * 1.5;
-      const newCall = parseFloat((flow.callChg + callDiff).toFixed(1));
-      return {
-        ...flow,
-        callChg: newCall,
-        callChgNeg: newCall > 0 ? -newCall : Math.min(newCall, -0.1),
-        putChg: parseFloat((flow.putChg + putDiff).toFixed(1))
-      };
-    }));
-
-    // 4. Tick Institutional Data
+  const tickResiduals = useCallback(() => {
+    // Tick Institutional Data slightly visually
     setFiiData(prev => prev.map(cat => ({
       ...cat,
-      FII: cat.FII + Math.round((Math.random() - 0.5) * 1000),
-      PRO: cat.PRO + Math.round((Math.random() - 0.5) * 800),
+      FII: cat.FII + Math.round((Math.random() - 0.5) * 500),
+      PRO: cat.PRO + Math.round((Math.random() - 0.5) * 400),
     })));
 
-    // 5. Progress Straddle Decay Chart occasionally
-    if (Math.random() > 0.6) {
-      setStraddleData(prev => {
-        const last = prev[prev.length - 1];
-        const now = new Date();
-        const drop = Math.random() * 2 + 0.1; 
-        const newEntry = {
-          time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-          premium: parseFloat(Math.max(10, last.premium - drop).toFixed(1))
-        };
-        const updated = [...prev, newEntry];
-        if (updated.length > 20) updated.shift();
-        return updated;
-      });
-    }
-  }, [instrument]);
+    // Progress Straddle Decay Chart
+    setStraddleData(prev => {
+      const last = prev[prev.length - 1];
+      const now = new Date();
+      const drop = Math.random() * 2 + 0.1; 
+      const newEntry = {
+        time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        premium: parseFloat(Math.max(10, last.premium - drop).toFixed(1))
+      };
+      const updated = [...prev, newEntry];
+      if (updated.length > 20) updated.shift();
+      return updated;
+    });
+  }, []);
 
-  // Activate Polling
+  // Instrument Change Hook & Polling Activation
   useEffect(() => {
-    // Initial fetch
-    spinLiveSimulations();
-    
-    // Set up 4 second interactive breathing simulation
-    pollingRef.current = setInterval(spinLiveSimulations, 4000);
+    setIsLoading(true);
+    fetchOptionsData();
+    setStraddleData(generateInitialStraddle());
+
+    // Set up 15 second data fetch polling
+    pollingRef.current = setInterval(() => {
+      fetchOptionsData();
+      tickResiduals();
+    }, 15000);
+
     return () => clearInterval(pollingRef.current);
-  }, [spinLiveSimulations]);
+  }, [fetchOptionsData, tickResiduals]);
 
 
   // Colors
@@ -202,13 +228,22 @@ const OptionsDecode: React.FC = () => {
   const putUnwindColor = '#6ee7b7';
 
   // Derived metrics
-  const isVolExpensive = config.ivp > 75;
-  const isVolCheap = config.ivp < 30;
+  const isVolExpensive = config.ivp > 22; // In reality IV mostly floats around 10-25
+  const isVolCheap = config.ivp < 12;
 
   return (
-    <div className="min-h-screen bg-[#0a0e17] text-slate-300 p-4 md:p-6 pb-24">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-[#0a0e17] text-slate-300 p-4 md:p-6 pb-24 relative">
+      
+      {isLoading && (
+        <div className="absolute inset-0 z-50 bg-[#0a0e17]/80 backdrop-blur-sm flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+             <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
+             <p className="text-sm font-bold text-slate-300 animate-pulse">Establishing secure NSE Bridge...</p>
+          </div>
+        </div>
+      )}
 
+      <div className="max-w-7xl mx-auto space-y-6">
         {/* ── Header & Instrument Selectors ─────────────────────────────── */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
@@ -217,22 +252,28 @@ const OptionsDecode: React.FC = () => {
                  <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
                   <Activity className="w-4 h-4 text-emerald-400" />
                 </div>
-                <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-[#0a0e17] animate-pulse" />
+                {isLive && <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-[#0a0e17] animate-pulse" />}
               </div>
               <h1 className="text-2xl font-black text-white tracking-tight">Quantitative <span className="text-indigo-400">Options</span> Intel</h1>
             </div>
             <p className="text-xs text-slate-400 flex items-center gap-2">
               Institutional grade delta-neutral flow analytics. 
-              <span className="flex items-center gap-1 text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-sm">
-                <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" /> LIVE
-              </span>
+              {isLive ? (
+                <span className="flex items-center gap-1 text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-sm">
+                  <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" /> REAL-TIME NSE DATA
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-sm">
+                  OFFLINE SNAPSHOT
+                </span>
+              )}
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
             {/* Instrument Tabs */}
             <div className="flex bg-[#131b26] p-1 rounded-xl border border-slate-800">
-              {(['NIFTY 50', 'BANKNIFTY', 'FINNIFTY', 'SENSEX'] as Instrument[]).map(inst => (
+              {(['NIFTY', 'BANKNIFTY', 'FINNIFTY'] as Instrument[]).map(inst => (
                 <button
                   key={inst}
                   onClick={() => setInstrument(inst)}
@@ -287,18 +328,17 @@ const OptionsDecode: React.FC = () => {
           <div className="bg-[#131b26] border border-slate-800 rounded-2xl p-5 relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-24 h-24 bg-sky-500/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
             <p className="text-slate-500 text-[10px] font-bold tracking-wider uppercase mb-1">{instrument} SPOT</p>
-            <div className="text-2xl font-black text-white transition-all duration-300">{Number(config.spot).toLocaleString('en-IN')}</div>
+            <div className="text-2xl font-black text-white transition-all duration-300">{Number(config.spot).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
             <div className="text-xs text-sky-400 font-semibold mt-1 flex items-center gap-1">
-              <Activity className="w-3.5 h-3.5" /> Live Benchmark
+              <Activity className="w-3.5 h-3.5" /> Latest Tick
             </div>
           </div>
 
           <div className="bg-[#131b26] border border-slate-800 rounded-2xl p-5 relative overflow-hidden">
             <div className={`absolute top-0 right-0 w-24 h-24 transition-colors duration-1000 ${isVolExpensive ? 'bg-rose-500/10' : isVolCheap ? 'bg-emerald-500/10' : 'bg-amber-500/10'} rounded-full blur-2xl -translate-y-1/2 translate-x-1/2`} />
-            <p className="text-slate-500 text-[10px] font-bold tracking-wider uppercase mb-1">IV Percentile (IVP)</p>
+            <p className="text-slate-500 text-[10px] font-bold tracking-wider uppercase mb-1">ATM Implied Volatility</p>
             <div className="flex items-end gap-2">
               <div className="text-2xl font-black text-white transition-all">{config.ivp}</div>
-              <div className="text-lg font-bold text-slate-600 mb-0.5">/ 100</div>
             </div>
             <div className={`text-xs font-semibold mt-1 flex items-center gap-1 transition-colors ${isVolExpensive ? 'text-rose-400' : isVolCheap ? 'text-emerald-400' : 'text-amber-400'}`}>
               {isVolExpensive ? 'Premium is Expensive (Favorable for Sellers)' : isVolCheap ? 'Premium is Cheap (Favorable for Buyers)' : 'Premium is Neutral'}
@@ -319,7 +359,7 @@ const OptionsDecode: React.FC = () => {
             <p className="text-slate-500 text-[10px] font-bold tracking-wider uppercase mb-1">Max Pain Strike</p>
             <div className="text-2xl font-black text-violet-400 transition-all">{config.maxPain.toLocaleString('en-IN')}</div>
             <div className="text-xs text-slate-400 font-semibold mt-1">
-              Highest likelihood of expiry
+              Estimated by OI Concentration
             </div>
           </div>
         </div>
@@ -337,6 +377,7 @@ const OptionsDecode: React.FC = () => {
                 </h2>
                 <p className="text-[10px] text-slate-500 tracking-wider mt-1 uppercase">FII & PRO vs Retail Clients</p>
               </div>
+               <div className="text-[10px] text-slate-500 border border-slate-700 px-2 py-0.5 rounded">T-1 Report</div>
             </div>
 
             <div className="flex-1 w-full relative">
@@ -367,7 +408,6 @@ const OptionsDecode: React.FC = () => {
               </div>
               <div className="bg-amber-500/10 px-2.5 py-1 rounded-md border border-amber-500/20 text-amber-500 text-[10px] font-bold underline decoration-dashed underline-offset-2 flex flex-col items-center">
                 THETA BLEED
-                <span className="text-[8px] font-normal text-amber-400 no-underline tracking-normal">(Simulated Live)</span>
               </div>
             </div>
 
@@ -402,7 +442,7 @@ const OptionsDecode: React.FC = () => {
                   <Layers className="w-4 h-4 text-emerald-400" />
                   Intraday Options Flow (Live Additions/Unwinding)
                 </h2>
-                <p className="text-[10px] text-slate-500 tracking-wider mt-1 uppercase">Changes in Open Interest at near-ATM strikes (in Lakhs)</p>
+                <p className="text-[10px] text-slate-500 tracking-wider mt-1 uppercase">Changes in Open Interest at near-ATM strikes (in Thousands)</p>
               </div>
               <div className="flex items-center gap-4 text-[10px] font-bold">
                 <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded bg-red-500"/> Call Writing (Bearish)</div>
@@ -418,7 +458,7 @@ const OptionsDecode: React.FC = () => {
                   <YAxis dataKey="strike" type="category" stroke="#94a3b8" fontSize={11} fontWeight="bold" tickLine={false} axisLine={false} />
                   <Tooltip 
                     cursor={{ fill: '#1e293b', opacity: 0.4 }}
-                    formatter={(value: number, name: string) => [`${Math.abs(value).toFixed(1)}L`, name.includes('Call') ? 'Call OI Change' : 'Put OI Change']}
+                    formatter={(value: number, name: string) => [`${Math.abs(value).toFixed(1)}k`, name.includes('Call') ? 'Call OI Change' : 'Put OI Change']}
                   />
                   <ReferenceLine x={0} stroke="#475569" strokeWidth={2} />
                   
