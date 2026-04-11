@@ -257,7 +257,7 @@ const OptionsPlayer = () => {
   const [niftyData, setNiftyData] = useState<{price: number, pts: number, percent: number} | null>(null);
   const [liveMovers, setLiveMovers] = useState<any[]>([]);
 
-  const [chartConfig, setChartConfig] = useState({ symbol: "NSE:NIFTY", interval: "5" });
+  const [chartConfig, setChartConfig] = useState({ symbol: "NSE:NIFTY1!", interval: "5" });
 
   // NSE symbol → company website for logo fetching
   const STOCK_DOMAINS: Record<string, string> = {
@@ -274,27 +274,43 @@ const OptionsPlayer = () => {
 
   // Initialize TradingView Widget
   useEffect(() => {
+    const scriptId = 'tradingview-widget-script';
     const containerId = 'tradingview_nifty_chart';
     
     // Clear any existing chart
     const container = document.getElementById(containerId);
     if (container) {
       container.innerHTML = '';
-      
-      // Use iframe directly instead of JS widget to bypass intraday symbol restrictions on free tier
-      const iframe = document.createElement('iframe');
-      iframe.style.width = '100%';
-      iframe.style.height = '100%';
-      iframe.style.border = 'none';
-      
-      // Build the TradingView advanced chart URL using their widget embed structure
-      // Note: We use string template instead of URLSearchParams to ensure the symbol colon isn't overly encoded in a way TV rejects
-      const baseUrl = 'https://in.tradingview.com/widgetembed/?frameElementId=tradingview_nifty_chart&symbol=';
-      const encodedSymbol = encodeURIComponent(chartConfig.symbol);
-      const params = `&interval=${chartConfig.interval}&hidesidetoolbar=1&symboledit=0&saveimage=0&toolbarbg=rgba(0,0,0,0)&studies=%5B%5D&theme=dark&style=1&timezone=Asia%2FKolkata&withdateranges=1&showpopupbutton=1`;
-      
-      iframe.src = baseUrl + encodedSymbol + params;
-      container.appendChild(iframe);
+    }
+
+    const initWidget = () => {
+      if (typeof window !== 'undefined' && (window as any).TradingView && document.getElementById(containerId)) {
+        new (window as any).TradingView.widget({
+          "autosize": true,
+          "symbol": chartConfig.symbol,
+          "interval": chartConfig.interval,
+          "timezone": "Asia/Kolkata",
+          "theme": "dark",
+          "style": "1",
+          "locale": "in",
+          "enable_publishing": false,
+          "hide_side_toolbar": true,
+          "allow_symbol_change": false, // Disable manual symbol search to prevent unsupported intraday errors
+          "container_id": containerId,
+          "backgroundColor": "rgba(0, 0, 0, 0)" // Make chart background transparent for glassmorphism
+        });
+      }
+    };
+
+    if (!document.getElementById(scriptId)) {
+      const script = document.createElement('script');
+      script.id = scriptId;
+      script.src = 'https://s3.tradingview.com/tv.js';
+      script.async = true;
+      script.onload = initWidget;
+      document.body.appendChild(script);
+    } else {
+      initWidget();
     }
   }, [chartConfig]);
 
@@ -369,7 +385,7 @@ const OptionsPlayer = () => {
         
         // 3. Fetch Real Options Chain for PCR
         try {
-          const indexSymbol = chartConfig.symbol.replace('NSE:', '').replace('BSE:', '');
+          const indexSymbol = chartConfig.symbol.replace('NSE:', '').replace('BSE:', '').replace('1!', '');
           const optionsResponse = await fetch(`http://localhost:3001/api/options/${indexSymbol}`);
           if (optionsResponse.ok) {
             const optionsData = await optionsResponse.json();
@@ -438,9 +454,9 @@ const OptionsPlayer = () => {
             value={chartConfig.symbol}
             onChange={(e) => setChartConfig(prev => ({ ...prev, symbol: e.target.value }))}
           >
-            <option value="NSE:NIFTY">Index: NIFTY 50</option>
+            <option value="NSE:NIFTY1!">Index: NIFTY 50</option>
             <option value="BSE:SENSEX">Index: SENSEX</option>
-            <option value="NSE:BANKNIFTY">Index: BANK NIFTY</option>
+            <option value="NSE:BANKNIFTY1!">Index: BANK NIFTY</option>
           </select>
           <select
             className="bg-transparent text-sm font-medium text-slate-300 outline-none cursor-pointer hover:text-white transition-colors"
