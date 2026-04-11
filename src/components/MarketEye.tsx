@@ -15,7 +15,7 @@ import {
   PlayCircle,
   X
 } from 'lucide-react';
-import { fetchStockPrice, fetchIntradayPrices } from '../utils/priceApi';
+import { fetchStockPrice, fetchIntradayPrices, fetchHistoricalOHLCV } from '../utils/priceApi';
 import { stockDatabase } from '../stockDatabase';
 import { fetchMarketNews, type NewsItem } from '../utils/newsApi';
 import { TICKER_INDICES } from './MarketTicker';
@@ -47,6 +47,19 @@ interface MarketEyeData {
   time: string;
   rFac: number;
   isBull: boolean;
+}
+
+interface WeeklySignal {
+  symbol: string;
+  price: number;
+  change: number;
+  weekBreakPct: number;
+  proximityPct?: number;
+  isHighVolume?: boolean;
+  volumeRatio?: number;
+  weeklyRsi?: number;
+  momentumTag?: 'FRESH' | 'EXTENDED' | 'NEUTRAL' | 'WEAK';
+  sectorSupport?: boolean;
 }
 
 const generateRandomWalk = (startValue: number, volatility: number, length: number) => {
@@ -124,6 +137,29 @@ const GaugeChart = ({ score, text, color }: { score: number, text: string, color
   );
 };
 
+const calcRsi = (closes: number[], period: number = 14): number | null => {
+  if (closes.length < period + 1) return null;
+  let gains = 0;
+  let losses = 0;
+  for (let i = 1; i <= period; i++) {
+    const diff = closes[i] - closes[i - 1];
+    if (diff >= 0) gains += diff;
+    else losses += Math.abs(diff);
+  }
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
+  for (let i = period + 1; i < closes.length; i++) {
+    const diff = closes[i] - closes[i - 1];
+    const gain = diff > 0 ? diff : 0;
+    const loss = diff < 0 ? Math.abs(diff) : 0;
+    avgGain = (avgGain * (period - 1) + gain) / period;
+    avgLoss = (avgLoss * (period - 1) + loss) / period;
+  }
+  if (avgLoss === 0) return 100;
+  const rs = avgGain / avgLoss;
+  return 100 - 100 / (1 + rs);
+};
+
 const MarketEye = () => {
   const [marketData, setMarketData] = useState<MarketEyeData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -150,6 +186,17 @@ const MarketEye = () => {
   const [boostSearch, setBoostSearch] = useState('');
   const [boostFilter, setBoostFilter] = useState<'All Signals' | 'Bullish' | 'Bearish'>('All Signals');
   const [isBoostFilterOpen, setIsBoostFilterOpen] = useState(false);
+
+  const [weeklyBreakoutSearch, setWeeklyBreakoutSearch] = useState('');
+  const [weeklyBreakdownSearch, setWeeklyBreakdownSearch] = useState('');
+  const [weeklyBreakoutTab, setWeeklyBreakoutTab] = useState<'signals' | 'radar'>('signals');
+  const [weeklyBreakdownTab, setWeeklyBreakdownTab] = useState<'signals' | 'radar'>('signals');
+  const [weeklyMode, setWeeklyMode] = useState<'pro' | 'relaxed'>('pro');
+  const [weeklyBreakouts, setWeeklyBreakouts] = useState<WeeklySignal[]>([]);
+  const [weeklyBreakdowns, setWeeklyBreakdowns] = useState<WeeklySignal[]>([]);
+  const [weeklyRadarBreakouts, setWeeklyRadarBreakouts] = useState<WeeklySignal[]>([]);
+  const [weeklyRadarBreakdowns, setWeeklyRadarBreakdowns] = useState<WeeklySignal[]>([]);
+  const [weeklyLoading, setWeeklyLoading] = useState(false);
 
   const [newsData, setNewsData] = useState<NewsItem[]>([]);
 
@@ -380,6 +427,210 @@ const MarketEye = () => {
     return () => { isMounted = false; };
   }, []);
 
+  useEffect(() => {
+    if (!marketData.length) return;
+    let isMounted = true;
+
+    const loadWeeklySignals = async () => {
+      setWeeklyLoading(true);
+      try {
+        const candidates = [...marketData]
+          .sort((a, b) => Math.abs(b.change) - Math.abs(a.change))
+          .slice(0, 50);
+
+        const breakoutRows: WeeklySignal[] = [];
+        const breakdownRows: WeeklySignal[] = [];
+        const radarUp: WeeklySignal[] = [];
+        const radarDown: WeeklySignal[] = [];
+        const sectorCache = new Map<string, { weeklyChange: number }>();
+
+        const sectorIndexMap: Record<string, string> = {
+          Automobile: '^CNXAUTO',
+          Banking: '^NSEBANK',
+          'IT Services': '^CNXIT',
+          Pharmaceuticals: '^CNXPHARMA',
+          FMCG: '^CNXFMCG',
+          Metals: '^CNXMETAL',
+          Steel: '^CNXMETAL',
+          'Oil & Gas': '^CNXENERGY',
+          Power: '^CNXINFRA',
+          Infrastructure: '^CNXINFRA',
+          NBFC: '^NSEBANK',
+        };
+
+        const volumeMultiplier = weeklyMode === 'pro' ? 1.5 : 1.2;
+        const radarProximity = weeklyMode === 'pro' ? 1 : 2;
+
+        for (let i = 0; i < candidates.length; i += 5) {
+          const batch = candidates.slice(i, i + 5);
+          await Promise.allSettled(
+            batch.map(async (c) => {
+              try {
+                const weeklyBars = await fetchHistoricalOHLCV(`${c.symbol}.NSE`, { range: '1y', interval: '1wk', bars: 60 });
+                if (!isMounted) return;
+                if (!Array.isArray(weeklyBars) || weeklyBars.length < 12) return;
+
+                const current = weeklyBars[weeklyBars.length - 1];
+                const prev = weeklyBars[weeklyBars.length - 2];
+                const lookback = weeklyBars.slice(0, -1).slice(-8);
+                if (lookback.length < 6) return;
+
+                const weeklyCloses = weeklyBars.map(b => b.close).filter(v => typeof v === 'number' && v > 0);
+                const weeklyRsi = calcRsi(weeklyCloses, 14);
+                const momentumTag: WeeklySignal['momentumTag'] =
+                  weeklyRsi !== null && weeklyRsi >= 75 ? 'EXTENDED' :
+                  weeklyRsi !== null && weeklyRsi >= 50 && weeklyRsi <= 65 ? 'FRESH' :
+                  weeklyRsi !== null && weeklyRsi < 40 ? 'WEAK' :
+                  'NEUTRAL';
+
+                const volLookback = weeklyBars.slice(0, -1).slice(-20).map(b => b.volume).filter(v => typeof v === 'number' && v > 0);
+                const avgVol = volLookback.length ? volLookback.reduce((a, v) => a + v, 0) / volLookback.length : 0;
+                const volumeRatio = avgVol > 0 ? current.volume / avgVol : 0;
+                const isHighVolume = volumeRatio > volumeMultiplier;
+
+                let atrSum = 0;
+                for (let k = 0; k < lookback.length; k++) {
+                  const bar = lookback[k];
+                  const prevClose = k === 0 ? weeklyBars[weeklyBars.length - 1 - lookback.length].close : lookback[k - 1].close;
+                  const tr = Math.max(
+                    bar.high - bar.low,
+                    Math.abs(bar.high - prevClose),
+                    Math.abs(bar.low - prevClose)
+                  );
+                  atrSum += tr;
+                }
+                const atr = atrSum / lookback.length;
+
+                const refHigh = Math.max(...lookback.map(b => b.high));
+                const refLow = Math.min(...lookback.map(b => b.low));
+                const closeBuffer = Math.max(refHigh * 0.0015, atr * 0.25);
+                const closeBufferDown = Math.max(refLow * 0.0015, atr * 0.25);
+
+                const nearUpPct = ((refHigh - current.close) / refHigh) * 100;
+                const nearDownPct = ((current.close - refLow) / refLow) * 100;
+
+                const dailyBars = await fetchHistoricalOHLCV(`${c.symbol}.NSE`, { range: '2y', interval: '1d', bars: 260 });
+                if (!isMounted) return;
+                const dailyCloses = dailyBars.map(b => b.close).filter(v => typeof v === 'number' && v > 0);
+                const dma200 = dailyCloses.length >= 200
+                  ? dailyCloses.slice(-200).reduce((a, v) => a + v, 0) / 200
+                  : null;
+
+                const sectorName = stockDatabase.find(s => s.exchange === 'NSE' && s.symbol.toUpperCase() === c.symbol.toUpperCase())?.sector;
+                const sectorIndex = sectorName ? sectorIndexMap[sectorName] : undefined;
+                let sectorWeeklyChange: number | undefined = undefined;
+                if (sectorIndex) {
+                  const cached = sectorCache.get(sectorIndex);
+                  if (cached) {
+                    sectorWeeklyChange = cached.weeklyChange;
+                  } else {
+                    try {
+                      const sectorBars = await fetchHistoricalOHLCV(sectorIndex, { range: '6mo', interval: '1wk', bars: 20 });
+                      const sCur = sectorBars[sectorBars.length - 1];
+                      const sPrev = sectorBars[sectorBars.length - 2];
+                      const weeklyChange = sPrev?.close ? ((sCur.close - sPrev.close) / sPrev.close) * 100 : 0;
+                      sectorCache.set(sectorIndex, { weeklyChange });
+                      sectorWeeklyChange = weeklyChange;
+                    } catch (e) {
+                      sectorCache.set(sectorIndex, { weeklyChange: 0 });
+                      sectorWeeklyChange = undefined;
+                    }
+                  }
+                }
+                const sectorSupportUp = sectorWeeklyChange !== undefined ? sectorWeeklyChange > 0 : undefined;
+                const sectorSupportDown = sectorWeeklyChange !== undefined ? sectorWeeklyChange < 0 : undefined;
+
+                const isAboveDma = dma200 !== null ? current.close > dma200 : false;
+                const isBelowDma = dma200 !== null ? current.close < dma200 : false;
+
+                const allowBreakout = weeklyMode === 'pro' ? isAboveDma : true;
+                const allowBreakdown = weeklyMode === 'pro' ? isBelowDma : true;
+
+                if (current.close > refHigh + closeBuffer && prev.close <= refHigh + closeBuffer && allowBreakout) {
+                  const weekBreakPct = ((current.close - refHigh) / refHigh) * 100;
+                  breakoutRows.push({
+                    symbol: c.symbol,
+                    price: c.price,
+                    change: c.change,
+                    weekBreakPct: Number(weekBreakPct.toFixed(2)),
+                    isHighVolume,
+                    volumeRatio: Number(volumeRatio.toFixed(2)),
+                    weeklyRsi: weeklyRsi !== null ? Number(weeklyRsi.toFixed(1)) : undefined,
+                    momentumTag,
+                    sectorSupport: sectorSupportUp,
+                  });
+                }
+
+                if (current.close < refLow - closeBufferDown && prev.close >= refLow - closeBufferDown && allowBreakdown) {
+                  const weekBreakPct = ((refLow - current.close) / refLow) * 100;
+                  breakdownRows.push({
+                    symbol: c.symbol,
+                    price: c.price,
+                    change: c.change,
+                    weekBreakPct: Number(weekBreakPct.toFixed(2)),
+                    isHighVolume,
+                    volumeRatio: Number(volumeRatio.toFixed(2)),
+                    weeklyRsi: weeklyRsi !== null ? Number(weeklyRsi.toFixed(1)) : undefined,
+                    momentumTag,
+                    sectorSupport: sectorSupportDown,
+                  });
+                }
+
+                const radarUpOk = weeklyMode === 'pro' ? isAboveDma : true;
+                const radarDownOk = weeklyMode === 'pro' ? isBelowDma : true;
+
+                if (nearUpPct >= 0 && nearUpPct <= radarProximity && current.close <= refHigh + closeBuffer && radarUpOk) {
+                  radarUp.push({
+                    symbol: c.symbol,
+                    price: c.price,
+                    change: c.change,
+                    weekBreakPct: 0,
+                    proximityPct: Number(nearUpPct.toFixed(2)),
+                    isHighVolume,
+                    volumeRatio: Number(volumeRatio.toFixed(2)),
+                    weeklyRsi: weeklyRsi !== null ? Number(weeklyRsi.toFixed(1)) : undefined,
+                    momentumTag,
+                    sectorSupport: sectorSupportUp,
+                  });
+                }
+
+                if (nearDownPct >= 0 && nearDownPct <= radarProximity && current.close >= refLow - closeBufferDown && radarDownOk) {
+                  radarDown.push({
+                    symbol: c.symbol,
+                    price: c.price,
+                    change: c.change,
+                    weekBreakPct: 0,
+                    proximityPct: Number(nearDownPct.toFixed(2)),
+                    isHighVolume,
+                    volumeRatio: Number(volumeRatio.toFixed(2)),
+                    weeklyRsi: weeklyRsi !== null ? Number(weeklyRsi.toFixed(1)) : undefined,
+                    momentumTag,
+                    sectorSupport: sectorSupportDown,
+                  });
+                }
+              } catch (e) {}
+            })
+          );
+        }
+
+        if (!isMounted) return;
+        setWeeklyBreakouts(breakoutRows.sort((a, b) => b.weekBreakPct - a.weekBreakPct).slice(0, 8));
+        setWeeklyBreakdowns(breakdownRows.sort((a, b) => b.weekBreakPct - a.weekBreakPct).slice(0, 8));
+        setWeeklyRadarBreakouts(radarUp.sort((a, b) => (a.proximityPct ?? 0) - (b.proximityPct ?? 0)).slice(0, 8));
+        setWeeklyRadarBreakdowns(radarDown.sort((a, b) => (a.proximityPct ?? 0) - (b.proximityPct ?? 0)).slice(0, 8));
+        if (!breakoutRows.length && radarUp.length) setWeeklyBreakoutTab('radar');
+        if (!breakdownRows.length && radarDown.length) setWeeklyBreakdownTab('radar');
+      } finally {
+        if (isMounted) setWeeklyLoading(false);
+      }
+    };
+
+    loadWeeklySignals();
+    return () => {
+      isMounted = false;
+    };
+  }, [marketData, weeklyMode]);
+
   const adMarketData = marketData.filter(d => {
     if (adSelectedIndex === 'NIFTY 50') return NIFTY_50_SYMBOLS.includes(d.symbol);
     if (adSelectedIndex === 'BANK NIFTY') return BANK_NIFTY_SYMBOLS.includes(d.symbol);
@@ -412,6 +663,22 @@ const MarketEye = () => {
       return true; // 'All Signals'
     })
     .sort((a, b) => b.rFac - a.rFac)
+    .slice(0, 8);
+
+  const filteredWeeklyBreakouts = weeklyBreakouts
+    .filter(d => d.symbol.toLowerCase().includes(weeklyBreakoutSearch.toLowerCase()))
+    .slice(0, 8);
+
+  const filteredWeeklyBreakdowns = weeklyBreakdowns
+    .filter(d => d.symbol.toLowerCase().includes(weeklyBreakdownSearch.toLowerCase()))
+    .slice(0, 8);
+
+  const filteredWeeklyRadarBreakouts = weeklyRadarBreakouts
+    .filter(d => d.symbol.toLowerCase().includes(weeklyBreakoutSearch.toLowerCase()))
+    .slice(0, 8);
+
+  const filteredWeeklyRadarBreakdowns = weeklyRadarBreakdowns
+    .filter(d => d.symbol.toLowerCase().includes(weeklyBreakdownSearch.toLowerCase()))
     .slice(0, 8);
 
   // Calculate Advance/Decline strictly for the Advances/Declines card
@@ -1080,6 +1347,325 @@ const MarketEye = () => {
               </div>
             </div>
 
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 w-full min-w-0">
+            <div className="relative bg-gradient-to-br from-[#172030] to-[#131b26] border border-slate-700/50 hover:border-slate-500/80 rounded-2xl overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.5)] flex flex-col transition-all duration-300 group">
+              <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent opacity-50 group-hover:opacity-100 transition-opacity" />
+
+              <div className="p-4 sm:p-5 border-b border-slate-700/50 flex items-center justify-between bg-[#172030]/50 relative overflow-hidden shrink-0">
+                <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none bg-gradient-to-r from-emerald-500 to-transparent blur-2xl" />
+
+                <div className="flex items-center gap-4 sm:gap-5 relative z-10">
+                  <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-b from-[#1e293b] to-[#0f1520] border border-slate-600 shadow-[inset_0_2px_10px_rgba(255,255,255,0.1)] flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:shadow-[0_0_20px_rgba(16,185,129,0.25)] transition-all duration-300">
+                    <div className="scale-125 sm:scale-150">
+                      <span className="text-[10px] font-black text-emerald-400 italic tracking-tighter">WEEK</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-lg sm:text-2xl font-black text-white tracking-widest uppercase drop-shadow-[0_2px_10px_rgba(255,255,255,0.2)]">WEEKLY BREAKOUT</h2>
+                      <Flame className="w-5 h-5 text-emerald-400 fill-emerald-400 drop-shadow-[0_0_12px_rgba(16,185,129,0.6)] animate-pulse" />
+                    </div>
+                    <div className="flex items-center gap-3 mt-2 text-xs sm:text-sm font-bold text-slate-400">
+                      <span className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black shadow-[0_0_10px_rgba(16,185,129,0.15)] uppercase tracking-wider">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_5px_currentColor]" /> SCAN
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="hidden sm:flex items-center gap-2 relative z-10">
+                  <div className="flex items-center bg-[#0f1520] border border-slate-700 rounded-full p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setWeeklyBreakoutTab('signals')}
+                      className={`px-3 py-1 rounded-full text-[11px] font-black tracking-wide transition-colors ${
+                        weeklyBreakoutTab === 'signals' ? 'bg-emerald-500/15 text-emerald-300' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Signals
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setWeeklyBreakoutTab('radar')}
+                      className={`px-3 py-1 rounded-full text-[11px] font-black tracking-wide transition-colors ${
+                        weeklyBreakoutTab === 'radar' ? 'bg-emerald-500/15 text-emerald-300' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Radar
+                    </button>
+                  </div>
+                  <div className="flex items-center bg-[#0f1520] border border-slate-700 rounded-full p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setWeeklyMode('pro')}
+                      className={`px-3 py-1 rounded-full text-[11px] font-black tracking-wide transition-colors ${
+                        weeklyMode === 'pro' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Pro
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setWeeklyMode('relaxed')}
+                      className={`px-3 py-1 rounded-full text-[11px] font-black tracking-wide transition-colors ${
+                        weeklyMode === 'relaxed' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Relaxed
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input 
+                      type="text" 
+                      placeholder="Search..." 
+                      value={weeklyBreakoutSearch}
+                      onChange={(e) => setWeeklyBreakoutSearch(e.target.value.toUpperCase())}
+                      className="bg-[#0f1520] border border-slate-700 text-sm text-white rounded-full pl-9 pr-4 py-1.5 w-40 focus:outline-none focus:border-emerald-500 transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-[#0f1520]/50 relative overflow-x-auto custom-scrollbar">
+                <div className="w-full flex flex-col min-w-[500px]">
+                  <div className="sticky top-0 bg-[#172030]/95 backdrop-blur-md z-10 shadow-sm border-b border-slate-700/50 flex items-center px-4 py-3 text-[10px] uppercase tracking-wider text-slate-500 font-bold shrink-0">
+                    <div className="flex-1 min-w-0 pr-2">Symbol</div>
+                    <div className="w-[80px] sm:w-[110px] text-center shrink-0">%</div>
+                    <div className="w-[80px] sm:w-[110px] text-center shrink-0">
+                      {weeklyBreakoutTab === 'signals' ? 'W.Break ' : 'Near '}
+                      <ChevronDown className="w-3 h-3 inline" />
+                    </div>
+                    <div className="w-[65px] sm:w-[80px] text-right shrink-0">Trend</div>
+                  </div>
+                  <div className="flex flex-col divide-y divide-slate-800/50 pb-2">
+                    {weeklyLoading ? (
+                      <div className="px-4 py-8 text-center text-sm text-slate-400 font-semibold">Scanning weekly levels...</div>
+                    ) : (weeklyBreakoutTab === 'signals' ? filteredWeeklyBreakouts : filteredWeeklyRadarBreakouts).length ? (
+                      (weeklyBreakoutTab === 'signals' ? filteredWeeklyBreakouts : filteredWeeklyRadarBreakouts).map((b) => (
+                        <div 
+                          key={`wbo-${b.symbol}`} 
+                          onClick={() => handleRowClick(b.symbol)}
+                          className="flex items-center px-4 py-3 hover:bg-slate-800/30 transition-all duration-200 group/row cursor-pointer relative"
+                        >
+                          <div className="absolute left-0 top-0 bottom-0 w-1 opacity-0 group-hover/row:opacity-100 transition-opacity bg-emerald-500" />
+                          
+                          <div className="flex-1 min-w-0 flex items-center gap-3 sm:gap-4 pr-2">
+                            <StockLogo symbol={b.symbol} className="w-8 h-8 sm:w-10 sm:h-10 shrink-0" />
+                            <div className="min-w-0">
+                              <div className="text-sm sm:text-base font-bold text-slate-200 group-hover/row:text-white transition-colors group-hover/row:translate-x-1 duration-200 truncate">{b.symbol}</div>
+                              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                {b.isHighVolume && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-300 border border-emerald-500/25">
+                                    High Conviction
+                                  </span>
+                                )}
+                                {b.momentumTag === 'FRESH' && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-500/10 text-blue-300 border border-blue-500/25">
+                                    Fresh Momentum
+                                  </span>
+                                )}
+                                {b.momentumTag === 'EXTENDED' && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-300 border border-amber-500/25">
+                                    Extended
+                                  </span>
+                                )}
+                                {b.sectorSupport && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/5 text-slate-200 border border-white/10">
+                                    Sector Support
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="w-[80px] sm:w-[110px] flex justify-center items-center shrink-0">
+                            <span className={`inline-flex items-center justify-center w-full max-w-[75px] py-1.5 rounded-md text-xs sm:text-sm font-black border ${
+                              b.change >= 0 
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_8px_rgba(16,185,129,0.15)]' 
+                                : 'bg-red-500/10 text-red-400 border-red-500/20 shadow-[0_0_8px_rgba(239,68,68,0.15)]'
+                            }`}>
+                              {b.change >= 0 ? '+' : ''}{b.change.toFixed(2)}%
+                            </span>
+                          </div>
+
+                          <div className="w-[80px] sm:w-[110px] text-center text-xs sm:text-sm font-bold text-emerald-400 shrink-0">
+                            {weeklyBreakoutTab === 'signals' ? `+${b.weekBreakPct.toFixed(2)}%` : `${(b.proximityPct ?? 0).toFixed(2)}%`}
+                          </div>
+
+                          <div className="w-[65px] sm:w-[80px] shrink-0 flex justify-end">
+                            <span className="inline-flex items-center justify-center w-full max-w-[65px] py-1.5 rounded-full text-[10px] sm:text-[11px] font-black tracking-widest shadow-sm border bg-[#c6f6d5] text-[#14532d] border-[#86efac]">
+                              UP
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="px-4 py-8 text-center text-sm text-slate-500 font-semibold">
+                        {weeklyBreakoutTab === 'signals' ? 'No weekly breakouts found. Check Radar.' : 'No near breakouts found.'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="relative bg-gradient-to-br from-[#172030] to-[#131b26] border border-slate-700/50 hover:border-slate-500/80 rounded-2xl overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.5)] flex flex-col transition-all duration-300 group">
+              <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-red-500/50 to-transparent opacity-50 group-hover:opacity-100 transition-opacity" />
+
+              <div className="p-4 sm:p-5 border-b border-slate-700/50 flex items-center justify-between bg-[#172030]/50 relative overflow-hidden shrink-0">
+                <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none bg-gradient-to-r from-red-500 to-transparent blur-2xl" />
+
+                <div className="flex items-center gap-4 sm:gap-5 relative z-10">
+                  <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-b from-[#1e293b] to-[#0f1520] border border-slate-600 shadow-[inset_0_2px_10px_rgba(255,255,255,0.1)] flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:shadow-[0_0_20px_rgba(239,68,68,0.25)] transition-all duration-300">
+                    <div className="scale-125 sm:scale-150">
+                      <span className="text-[10px] font-black text-red-400 italic tracking-tighter">WEEK</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-lg sm:text-2xl font-black text-white tracking-widest uppercase drop-shadow-[0_2px_10px_rgba(255,255,255,0.2)]">WEEKLY BREAKDOWN</h2>
+                      <TrendingDown className="w-5 h-5 text-red-400 drop-shadow-[0_0_12px_rgba(239,68,68,0.6)] animate-pulse" />
+                    </div>
+                    <div className="flex items-center gap-3 mt-2 text-xs sm:text-sm font-bold text-slate-400">
+                      <span className="flex items-center gap-1.5 bg-red-500/10 border border-red-500/30 text-red-400 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black shadow-[0_0_10px_rgba(239,68,68,0.15)] uppercase tracking-wider">
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_5px_currentColor]" /> SCAN
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="hidden sm:flex items-center gap-2 relative z-10">
+                  <div className="flex items-center bg-[#0f1520] border border-slate-700 rounded-full p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setWeeklyBreakdownTab('signals')}
+                      className={`px-3 py-1 rounded-full text-[11px] font-black tracking-wide transition-colors ${
+                        weeklyBreakdownTab === 'signals' ? 'bg-red-500/15 text-red-300' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Signals
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setWeeklyBreakdownTab('radar')}
+                      className={`px-3 py-1 rounded-full text-[11px] font-black tracking-wide transition-colors ${
+                        weeklyBreakdownTab === 'radar' ? 'bg-red-500/15 text-red-300' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Radar
+                    </button>
+                  </div>
+                  <div className="flex items-center bg-[#0f1520] border border-slate-700 rounded-full p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setWeeklyMode('pro')}
+                      className={`px-3 py-1 rounded-full text-[11px] font-black tracking-wide transition-colors ${
+                        weeklyMode === 'pro' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Pro
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setWeeklyMode('relaxed')}
+                      className={`px-3 py-1 rounded-full text-[11px] font-black tracking-wide transition-colors ${
+                        weeklyMode === 'relaxed' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Relaxed
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input 
+                      type="text" 
+                      placeholder="Search..." 
+                      value={weeklyBreakdownSearch}
+                      onChange={(e) => setWeeklyBreakdownSearch(e.target.value.toUpperCase())}
+                      className="bg-[#0f1520] border border-slate-700 text-sm text-white rounded-full pl-9 pr-4 py-1.5 w-40 focus:outline-none focus:border-red-500 transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-[#0f1520]/50 relative overflow-x-auto custom-scrollbar">
+                <div className="w-full flex flex-col min-w-[500px]">
+                  <div className="sticky top-0 bg-[#172030]/95 backdrop-blur-md z-10 shadow-sm border-b border-slate-700/50 flex items-center px-4 py-3 text-[10px] uppercase tracking-wider text-slate-500 font-bold shrink-0">
+                    <div className="flex-1 min-w-0 pr-2">Symbol</div>
+                    <div className="w-[80px] sm:w-[110px] text-center shrink-0">%</div>
+                    <div className="w-[80px] sm:w-[110px] text-center shrink-0">
+                      {weeklyBreakdownTab === 'signals' ? 'W.Break ' : 'Near '}
+                      <ChevronDown className="w-3 h-3 inline" />
+                    </div>
+                    <div className="w-[65px] sm:w-[80px] text-right shrink-0">Trend</div>
+                  </div>
+                  <div className="flex flex-col divide-y divide-slate-800/50 pb-2">
+                    {weeklyLoading ? (
+                      <div className="px-4 py-8 text-center text-sm text-slate-400 font-semibold">Scanning weekly levels...</div>
+                    ) : (weeklyBreakdownTab === 'signals' ? filteredWeeklyBreakdowns : filteredWeeklyRadarBreakdowns).length ? (
+                      (weeklyBreakdownTab === 'signals' ? filteredWeeklyBreakdowns : filteredWeeklyRadarBreakdowns).map((b) => (
+                        <div 
+                          key={`wbd-${b.symbol}`} 
+                          onClick={() => handleRowClick(b.symbol)}
+                          className="flex items-center px-4 py-3 hover:bg-slate-800/30 transition-all duration-200 group/row cursor-pointer relative"
+                        >
+                          <div className="absolute left-0 top-0 bottom-0 w-1 opacity-0 group-hover/row:opacity-100 transition-opacity bg-red-500" />
+                          
+                          <div className="flex-1 min-w-0 flex items-center gap-3 sm:gap-4 pr-2">
+                            <StockLogo symbol={b.symbol} className="w-8 h-8 sm:w-10 sm:h-10 shrink-0" />
+                            <div className="min-w-0">
+                              <div className="text-sm sm:text-base font-bold text-slate-200 group-hover/row:text-white transition-colors group-hover/row:translate-x-1 duration-200 truncate">{b.symbol}</div>
+                              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                {b.isHighVolume && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-500/10 text-red-300 border border-red-500/25">
+                                    High Conviction
+                                  </span>
+                                )}
+                                {typeof b.weeklyRsi === 'number' && b.weeklyRsi <= 25 && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-500/10 text-blue-300 border border-blue-500/25">
+                                    Oversold
+                                  </span>
+                                )}
+                                {b.sectorSupport && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/5 text-slate-200 border border-white/10">
+                                    Sector Support
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="w-[80px] sm:w-[110px] flex justify-center items-center shrink-0">
+                            <span className={`inline-flex items-center justify-center w-full max-w-[75px] py-1.5 rounded-md text-xs sm:text-sm font-black border ${
+                              b.change >= 0 
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_8px_rgba(16,185,129,0.15)]' 
+                                : 'bg-red-500/10 text-red-400 border-red-500/20 shadow-[0_0_8px_rgba(239,68,68,0.15)]'
+                            }`}>
+                              {b.change >= 0 ? '+' : ''}{b.change.toFixed(2)}%
+                            </span>
+                          </div>
+
+                          <div className="w-[80px] sm:w-[110px] text-center text-xs sm:text-sm font-bold text-red-400 shrink-0">
+                            {weeklyBreakdownTab === 'signals' ? `+${b.weekBreakPct.toFixed(2)}%` : `${(b.proximityPct ?? 0).toFixed(2)}%`}
+                          </div>
+
+                          <div className="w-[65px] sm:w-[80px] shrink-0 flex justify-end">
+                            <span className="inline-flex items-center justify-center w-full max-w-[65px] py-1.5 rounded-full text-[10px] sm:text-[11px] font-black tracking-widest shadow-sm border bg-[#fed7d7] text-[#7f1d1d] border-[#fca5a5]">
+                              DOWN
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="px-4 py-8 text-center text-sm text-slate-500 font-semibold">
+                        {weeklyBreakdownTab === 'signals' ? 'No weekly breakdowns found. Check Radar.' : 'No near breakdowns found.'}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </>
       )}

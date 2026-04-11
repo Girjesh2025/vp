@@ -218,6 +218,85 @@ export const fetchHistoricalPrices = async (symbol: string, days: number = 60): 
   throw new Error(`fetchHistoricalPrices: Unable to obtain real historical data for ${symbol}. All proxies failed.`);
 };
 
+export interface YahooOHLCVBar {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export const fetchHistoricalOHLCV = async (
+  symbol: string,
+  opts?: { range?: string; interval?: string; bars?: number }
+): Promise<YahooOHLCVBar[]> => {
+  const range = opts?.range ?? '6mo';
+  const interval = opts?.interval ?? '1d';
+  const bars = opts?.bars;
+
+  const yahooSymbol = symbol.startsWith('^') || symbol.includes('=') ? symbol : toYahooSymbol(symbol);
+  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?range=${encodeURIComponent(range)}&interval=${encodeURIComponent(interval)}`;
+
+  for (const p of PROXY_SERVICES) {
+    try {
+      const queryPart = yahooUrl.includes('?') ? yahooUrl.substring(yahooUrl.indexOf('?')) : '';
+      const targetUrl = p.name === 'vite-proxy'
+        ? `${p.url}${yahooSymbol}${queryPart}`
+        : `${p.url}${encodeURIComponent(yahooUrl)}`;
+
+      const r = await fetch(targetUrl, { method: 'GET' });
+      if (!r.ok) continue;
+      const raw = await r.json();
+      const data = p.transform(raw);
+      const result = data?.chart?.result?.[0];
+      if (!result) continue;
+
+      const timestamps: number[] = result.timestamp ?? [];
+      const quote = result.indicators?.quote?.[0];
+      const opens: Array<number | null> = quote?.open ?? [];
+      const highs: Array<number | null> = quote?.high ?? [];
+      const lows: Array<number | null> = quote?.low ?? [];
+      const closes: Array<number | null> = quote?.close ?? [];
+      const volumes: Array<number | null> = quote?.volume ?? [];
+
+      const out: YahooOHLCVBar[] = [];
+      for (let i = 0; i < timestamps.length; i++) {
+        const open = opens[i];
+        const high = highs[i];
+        const low = lows[i];
+        const close = closes[i];
+        const volume = volumes[i];
+
+        if (
+          typeof open !== 'number' || open <= 0 ||
+          typeof high !== 'number' || high <= 0 ||
+          typeof low !== 'number' || low <= 0 ||
+          typeof close !== 'number' || close <= 0
+        ) continue;
+
+        out.push({
+          timestamp: timestamps[i],
+          open,
+          high,
+          low,
+          close,
+          volume: typeof volume === 'number' && volume >= 0 ? volume : 0,
+        });
+      }
+
+      if (out.length >= 10) {
+        const sliced = typeof bars === 'number' ? out.slice(-bars) : out;
+        return sliced;
+      }
+    } catch (e) {
+      console.warn(`[OHLCV] ${p.name} failed for ${symbol}:`, e);
+    }
+  }
+
+  throw new Error(`fetchHistoricalOHLCV: Unable to obtain OHLCV data for ${symbol}. All proxies failed.`);
+};
+
 /**
  * Fetch real intraday prices for sparklines (1-day range, 5-minute interval).
  * Returns an array of numbers (oldest first, newest last).

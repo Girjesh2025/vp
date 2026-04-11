@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Info, PlayCircle, Edit } from 'lucide-react';
-import { ResponsiveContainer, Treemap, Tooltip } from 'recharts';
-import { fetchStockPrice } from '../utils/priceApi';
+import { ResponsiveContainer, Treemap, Tooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { fetchStockPrice, fetchHistoricalPrices } from '../utils/priceApi';
 
 // Nifty 50 subset for the Money Flux Treemap
 const NIFTY_50_SYMBOLS = [
@@ -258,6 +258,44 @@ const OptionsPlayer = () => {
   const [liveMovers, setLiveMovers] = useState<any[]>([]);
 
   const [chartConfig, setChartConfig] = useState({ symbol: "NSE:NIFTY", interval: "D" });
+  const [chartMode, setChartMode] = useState<'internal' | 'tradingview'>('internal');
+  const [internalSeries, setInternalSeries] = useState<Array<{ i: number; price: number }>>([]);
+  const [internalLoading, setInternalLoading] = useState(false);
+  const [internalError, setInternalError] = useState<string | null>(null);
+
+  const isLocalHost = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return /^localhost$/i.test(window.location.hostname) || /^127\.0\.0\.1$/.test(window.location.hostname);
+  }, []);
+
+  const indexYahooMap = useMemo<Record<string, string>>(() => {
+    return {
+      'NSE:NIFTY': '^NSEI',
+      'NSE:BANKNIFTY': '^NSEBANK',
+      'NSE:FINNIFTY': '^NSEI',
+      'NSE:MIDCPNIFTY': '^NSEI',
+      'BSE:SENSEX': '^BSESN',
+    };
+  }, []);
+
+  const isIndexSymbol = useMemo(() => {
+    return Object.prototype.hasOwnProperty.call(indexYahooMap, chartConfig.symbol);
+  }, [chartConfig.symbol, indexYahooMap]);
+
+  const isTradingViewIndex = useMemo(() => {
+    return chartMode === 'tradingview' && isIndexSymbol;
+  }, [chartMode, isIndexSymbol]);
+
+  useEffect(() => {
+    if (isLocalHost && isIndexSymbol) setChartMode('internal');
+  }, [isIndexSymbol, isLocalHost]);
+
+  useEffect(() => {
+    if (!isTradingViewIndex) return;
+    if (['1', '5', '15', '30', '60'].includes(chartConfig.interval)) {
+      setChartConfig((prev) => ({ ...prev, interval: 'D' }));
+    }
+  }, [chartConfig.interval, isTradingViewIndex]);
 
   // NSE symbol → company website for logo fetching
   const STOCK_DOMAINS: Record<string, string> = {
@@ -274,6 +312,7 @@ const OptionsPlayer = () => {
 
   // Initialize TradingView Widget via official tv.js script
   useEffect(() => {
+    if (chartMode !== 'tradingview') return;
     const scriptId = 'tradingview-widget-script';
     const containerId = 'tradingview_nifty_chart';
     const container = document.getElementById(containerId);
@@ -310,7 +349,37 @@ const OptionsPlayer = () => {
     } else {
       initWidget();
     }
-  }, [chartConfig]);
+  }, [chartConfig, chartMode]);
+
+  useEffect(() => {
+    if (chartMode !== 'internal') return;
+    const yahooSymbol = indexYahooMap[chartConfig.symbol];
+    if (!yahooSymbol) {
+      setInternalSeries([]);
+      setInternalError('Chart not available for this symbol');
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        setInternalLoading(true);
+        setInternalError(null);
+        const prices = await fetchHistoricalPrices(yahooSymbol, 90);
+        if (cancelled) return;
+        const series = prices.map((p, idx) => ({ i: idx + 1, price: p }));
+        setInternalSeries(series);
+      } catch (e: any) {
+        if (cancelled) return;
+        setInternalSeries([]);
+        setInternalError(e?.message || 'Failed to load chart');
+      } finally {
+        if (!cancelled) setInternalLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [chartConfig.symbol, chartMode, indexYahooMap]);
 
   useEffect(() => {
     let isMounted = true;
@@ -463,11 +532,11 @@ const OptionsPlayer = () => {
             value={chartConfig.interval}
             onChange={(e) => setChartConfig(prev => ({ ...prev, interval: e.target.value }))}
           >
-            <option value="1">Time: 1m</option>
-            <option value="5">Time: 5m</option>
-            <option value="15">Time: 15m</option>
-            <option value="30">Time: 30m</option>
-            <option value="60">Time: 1H</option>
+            {!isTradingViewIndex && <option value="1">Time: 1m</option>}
+            {!isTradingViewIndex && <option value="5">Time: 5m</option>}
+            {!isTradingViewIndex && <option value="15">Time: 15m</option>}
+            {!isTradingViewIndex && <option value="30">Time: 30m</option>}
+            {!isTradingViewIndex && <option value="60">Time: 1H</option>}
             <option value="D">Time: 1D</option>
             <option value="W">Time: 1W</option>
             <option value="M">Time: 1M</option>
@@ -553,13 +622,102 @@ const OptionsPlayer = () => {
           {/* Main Layout Grid */}
           <div className="flex-1 grid grid-cols-1 lg:grid-cols-[60%_1fr] gap-6 min-h-[600px]">
             
-            {/* Left Column: TradingView Chart */}
+            {/* Left Column: Chart */}
             <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden flex flex-col shadow-[0_8px_32px_0_rgba(0,0,0,0.36)]">
               <div className="p-4 flex items-center justify-between shrink-0 border-b border-white/5">
                 <h2 className="text-base font-bold text-white tracking-wide">Market Chart</h2>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setChartMode('internal')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${chartMode === 'internal' ? 'bg-white/10 text-white border-white/15' : 'bg-transparent text-slate-300 border-white/10 hover:bg-white/5'}`}
+                  >
+                    Chart
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setChartMode('tradingview')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${chartMode === 'tradingview' ? 'bg-white/10 text-white border-white/15' : 'bg-transparent text-slate-300 border-white/10 hover:bg-white/5'}`}
+                  >
+                    TradingView
+                  </button>
+                  <a
+                    href={`https://in.tradingview.com/chart/?symbol=${encodeURIComponent(chartConfig.symbol)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold border bg-transparent text-slate-300 border-white/10 hover:bg-white/5 transition-colors"
+                  >
+                    Open
+                  </a>
+                </div>
               </div>
-              <div className="flex-1 w-full relative min-h-[400px]" id="tradingview_nifty_chart">
-                {/* TradingView Widget will render here */}
+              <div className="flex-1 w-full relative min-h-[400px]">
+                {chartMode === 'tradingview' ? (
+                  <div className="absolute inset-0" id="tradingview_nifty_chart" />
+                ) : (
+                  <div className="absolute inset-0 p-4">
+                    {internalLoading ? (
+                      <div className="flex items-center justify-center h-full">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                      </div>
+                    ) : internalSeries.length > 0 ? (
+                      <div className="h-full w-full relative">
+                        <div className="absolute top-2 left-2 z-10 bg-black/30 backdrop-blur border border-white/10 rounded-lg px-3 py-2">
+                          <div className="text-[10px] font-bold text-slate-400">Last</div>
+                          <div className="text-sm font-black text-white">
+                            ₹{internalSeries[internalSeries.length - 1].price.toFixed(2)}
+                          </div>
+                        </div>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={internalSeries} margin={{ top: 16, right: 10, left: 10, bottom: 8 }}>
+                          <defs>
+                            <linearGradient id="internalChartGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.35} />
+                              <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
+                          <XAxis
+                            dataKey="i"
+                            tick={{ fill: '#94a3b8', fontSize: 11 }}
+                            tickLine={false}
+                            axisLine={false}
+                            minTickGap={32}
+                          />
+                          <YAxis
+                            tick={{ fill: '#94a3b8', fontSize: 11 }}
+                            tickLine={false}
+                            axisLine={false}
+                            width={56}
+                            domain={['dataMin', 'dataMax']}
+                            tickFormatter={(v) => `₹${Number(v).toFixed(0)}`}
+                          />
+                          <Tooltip
+                            cursor={{ stroke: 'rgba(255,255,255,0.12)' }}
+                            contentStyle={{
+                              background: 'rgba(15, 23, 42, 0.9)',
+                              border: '1px solid rgba(255,255,255,0.12)',
+                              borderRadius: '12px',
+                            }}
+                            labelStyle={{ color: '#94a3b8', fontWeight: 700, fontSize: 12 }}
+                            itemStyle={{ color: '#e2e8f0', fontWeight: 800 }}
+                            formatter={(value: any) => [`₹${Number(value).toFixed(2)}`, 'Price']}
+                            labelFormatter={(label) => `Point ${label}`}
+                          />
+                          <Area type="monotone" dataKey="price" stroke="#60a5fa" strokeWidth={2} fill="url(#internalChartGrad)" />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full text-center">
+                        <div className="text-sm font-bold text-slate-200">Chart unavailable</div>
+                        <div className="mt-1 text-xs text-slate-400 max-w-[360px]">
+                          {internalError || 'Unable to load chart data for this symbol.'}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
