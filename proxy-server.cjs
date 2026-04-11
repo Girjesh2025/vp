@@ -319,67 +319,29 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
+const { NseIndia } = require('stock-nse-india');
+const nseIndia = new NseIndia();
+
 // Fetch Options Chain Data from NSE
 app.get('/api/options/:symbol', async (req, res) => {
   const symbol = req.params.symbol.toUpperCase();
-  const agent = new https.Agent({ keepAlive: true });
-  const options = {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Accept': '*/*',
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Accept-Encoding': 'gzip, deflate, br'
-    },
-    agent
-  };
 
   try {
     console.log(`fetching options data for ${symbol}...`);
-    // 1. Get cookies
-    const cookies = await new Promise((resolve, reject) => {
-      https.get('https://www.nseindia.com/', options, (response) => {
-        const c = response.headers['set-cookie'] ? response.headers['set-cookie'].map(x => x.split(';')[0]).join('; ') : '';
-        resolve(c);
-      }).on('error', reject);
-    });
     
-    // 2. Fetch data
-    const fetchOptions = {
-      ...options,
-      headers: {
-        ...options.headers,
-        'Cookie': cookies,
-        'Referer': 'https://www.nseindia.com/'
-      }
-    };
-    
-    // NSE Options chain API: indices or equities
     const isIndex = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY'].includes(symbol);
-    const apiUrl = isIndex 
-      ? `https://www.nseindia.com/api/option-chain-indices?symbol=${symbol}`
-      : `https://www.nseindia.com/api/option-chain-equities?symbol=${symbol}`;
+    
+    const data = isIndex 
+      ? await nseIndia.getIndexOptionChain(symbol)
+      : await nseIndia.getEquityOptionChain(symbol);
 
-    const dataStr = await new Promise((resolve, reject) => {
-      https.get(apiUrl, fetchOptions, (response) => {
-        const chunks = [];
-        response.on('data', (chunk) => chunks.push(chunk));
-        response.on('end', () => {
-          const buffer = Buffer.concat(chunks);
-          if (response.headers['content-encoding'] === 'gzip') {
-             resolve(zlib.gunzipSync(buffer).toString());
-          } else if (response.headers['content-encoding'] === 'br') {
-             resolve(zlib.brotliDecompressSync(buffer).toString());
-          } else {
-             resolve(buffer.toString());
-          }
-        });
-      }).on('error', reject);
-    });
+    if (!data || !data.records) {
+      throw new Error("Invalid response from NSE API");
+    }
 
-    const data = JSON.parse(dataStr);
     return res.json(data);
   } catch (err) {
-    console.error(`Error fetching Options data for ${symbol}:`, err);
+    console.error(`Error fetching Options data for ${symbol}:`, err.message);
     return res.status(500).json({ error: `Failed to fetch Options data for ${symbol}` });
   }
 });

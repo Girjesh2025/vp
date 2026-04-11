@@ -28,66 +28,52 @@ const BASE_CONFIGS: Record<string, { spot: number, ivr: number, ivp: number, pcr
 
 const INITIAL_STRIKE_FLOW: Record<string, any[]> = {
   'NIFTY': [
-    { strike: 24200, callChg: -2.5, callChgNeg: 2.5, putChg: 15.2 },
-    { strike: 24300, callChg: -1.2, callChgNeg: 1.2, putChg: 22.4 },
-    { strike: 24400, callChg: 5.4,  callChgNeg: -5.4, putChg: 18.1 },
-    { strike: 24500, callChg: 28.5, callChgNeg: -28.5, putChg: -3.2 },
-    { strike: 24600, callChg: 35.2, callChgNeg: -35.2, putChg: -5.5 },
-    { strike: 24700, callChg: 18.4, callChgNeg: -18.4, putChg: -1.1 },
+    { strike: 24200, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
+    { strike: 24300, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
+    { strike: 24400, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
+    { strike: 24500, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
+    { strike: 24600, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
+    { strike: 24700, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
   ],
   'BANKNIFTY': [
-    { strike: 52700, callChg: -4.5, callChgNeg: 4.5, putChg: 12.2 },
-    { strike: 52800, callChg: -2.2, callChgNeg: 2.2, putChg: 18.4 },
-    { strike: 53000, callChg: 15.4, callChgNeg: -15.4, putChg: 8.1 },
-    { strike: 53100, callChg: 28.5, callChgNeg: -28.5, putChg: -6.2 },
-    { strike: 53200, callChg: 32.2, callChgNeg: -32.2, putChg: -8.5 },
-    { strike: 53500, callChg: 12.4, callChgNeg: -12.4, putChg: -2.1 },
+    { strike: 52700, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
+    { strike: 52800, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
+    { strike: 53000, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
+    { strike: 53100, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
+    { strike: 53200, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
+    { strike: 53500, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
   ],
   'FINNIFTY': [
-    { strike: 23100, callChg: -1.5, callChgNeg: 1.5, putChg: 8.2 },
-    { strike: 23200, callChg: -0.2, callChgNeg: 0.2, putChg: 12.4 },
-    { strike: 23300, callChg: 4.4,  callChgNeg: -4.4, putChg: 6.1 },
-    { strike: 23400, callChg: 14.5, callChgNeg: -14.5, putChg: -2.2 },
-    { strike: 23500, callChg: 18.2, callChgNeg: -18.2, putChg: -4.5 },
-    { strike: 23600, callChg: 8.4,  callChgNeg: -8.4, putChg: -1.1 },
+    { strike: 23100, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
+    { strike: 23200, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
+    { strike: 23300, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
+    { strike: 23400, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
+    { strike: 23500, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
+    { strike: 23600, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
   ]
 };
 
-// Generates time series starting from 9:15
-const generateInitialStraddle = () => {
-  const data = [];
-  let basePremium = 450;
-  let timeStr = new Date();
-  timeStr.setHours(9, 15, 0, 0);
-  
-  // Create last 12 ticks
-  for (let i = 0; i < 12; i++) {
-    const decay = Math.random() * 5 + 0.5; // Premium drop
-    basePremium -= decay;
-    data.push({
-      time: timeStr.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-      premium: parseFloat(basePremium.toFixed(1)),
-    });
-    timeStr.setMinutes(timeStr.getMinutes() + 15);
-  }
-  return data;
-};
+// Removed fake initial straddle logic
 
 // ─── Custom Tooltip Components ────────────────────────────────────────────────
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-[#0f1520] border border-slate-700 p-3 rounded-lg shadow-xl outline-none">
-        <p className="text-slate-300 font-bold mb-2 text-xs">{label}</p>
-        {payload.map((entry: any, index: number) => (
-          <div key={index} className="flex items-center gap-2 text-xs mb-1">
-            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-            <span className="text-slate-400">{entry.name}:</span>
-            <span className="font-bold text-white">
-              {entry.value > 0 ? '+' : ''}{(entry.value).toFixed(1)}k
-            </span>
-          </div>
-        ))}
+      <div className="bg-slate-900/90 backdrop-blur-xl border border-white/10 p-4 rounded-xl shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] outline-none min-w-[160px]">
+        <p className="text-white font-black mb-3 text-xs tracking-wider uppercase border-b border-white/10 pb-2">{label}</p>
+        <div className="space-y-2">
+          {payload.map((entry: any, index: number) => (
+            <div key={index} className="flex items-center justify-between gap-4 text-xs">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full shadow-[0_0_8px_currentColor]" style={{ backgroundColor: entry.color, color: entry.color }} />
+                <span className="text-slate-400 font-bold">{entry.name}</span>
+              </div>
+              <span className="font-black text-white drop-shadow-md">
+                {entry.value > 0 ? '+' : ''}{(entry.value).toFixed(1)}k
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -113,7 +99,7 @@ const OptionsDecode: React.FC = () => {
     { category: 'Index Options', FII: 125000, PRO: -45000, CLIENT: -80000 },
     { category: 'Stock Futures', FII: -15000, PRO: 32000, CLIENT: -17000 },
   ]);
-  const [straddleData, setStraddleData] = useState(generateInitialStraddle());
+  const [straddleData, setStraddleData] = useState<{time: string, premium: number}[]>([]);
 
   // Function to pull real NSE Options Data
   const fetchOptionsData = useCallback(async () => {
@@ -167,19 +153,38 @@ const OptionsDecode: React.FC = () => {
       const heatmapSlice = data.filtered.data.slice(startIndex, startIndex + 6);
       
       const parsedStrikeFlow = heatmapSlice.map((strikeObj: any) => {
-        const ceChg = (strikeObj.CE?.changeinOpenInterest || 0) / 1000; // Adjusted for thousands UI formatting
-        const peChg = (strikeObj.PE?.changeinOpenInterest || 0) / 1000;
-        return {
-          strike: strikeObj.strikePrice,
-          callChg: ceChg,
-          callChgNeg: ceChg > 0 ? -ceChg : Math.min(ceChg, -0.1),
-          putChg: peChg
-        }
-      });
+          const ceChg = (strikeObj.CE?.changeinOpenInterest || 0) / 1000; // Adjusted for thousands UI formatting
+          const peChg = (strikeObj.PE?.changeinOpenInterest || 0) / 1000;
+          return {
+            strike: strikeObj.strikePrice,
+            callChg: ceChg,
+            callChgVis: ceChg !== 0 ? -Math.abs(ceChg) : -0.1, // Always negative for visual left side
+            putChg: peChg,
+            putChgVis: peChg !== 0 ? Math.abs(peChg) : 0.1 // Always positive for visual right side
+          }
+        });
 
       if (parsedStrikeFlow.length > 0) {
         setStrikeData(parsedStrikeFlow);
       }
+
+      // Calculate Real ATM Straddle Premium
+      const atmCE = closestStrike?.CE?.lastPrice || 0;
+      const atmPE = closestStrike?.PE?.lastPrice || 0;
+      const realStraddlePremium = parseFloat((atmCE + atmPE).toFixed(1));
+
+      setStraddleData(prev => {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        // Avoid duplicate points for the same minute
+        if (prev.length > 0 && prev[prev.length - 1].time === timeStr) {
+           return prev; 
+        }
+        const newEntry = { time: timeStr, premium: realStraddlePremium };
+        const updated = [...prev, newEntry];
+        if (updated.length > 30) updated.shift();
+        return updated;
+      });
 
       setIsLive(true);
       isLiveRef.current = true;
@@ -191,21 +196,16 @@ const OptionsDecode: React.FC = () => {
       const ticker = INDEX_MAP[instrument];
       if (ticker) {
          try {
-           const liveSpot = await fetchStockPrice(ticker);
-           if (liveSpot) {
+           const liveSpotData = await fetchStockPrice(ticker);
+           if (liveSpotData && liveSpotData.price) {
+             const liveSpot = liveSpotData.price;
              setConfig(prev => ({ ...prev, spot: liveSpot, maxPain: liveSpot - (liveSpot % 100) }));
-             
-             // Regenerate strike array centered on new spot
-             const baseStrike = Math.round(liveSpot / 100) * 100;
-             const steps = [-200,-100,0,100,200,300];
-             const newStrikes = steps.map(s => {
-               const val = INITIAL_STRIKE_FLOW['NIFTY'][Math.floor(Math.random() * 6)];
-               return { ...val, strike: baseStrike + s }
-             });
-             setStrikeData(newStrikes);
+             // No longer simulating fake strike data here
            }
          } catch (e) {
-           console.error("Secondary fallback stock fetch failed");
+           console.error("Secondary fallback stock fetch failed", e);
+           setConfig(BASE_CONFIGS[instrument]);
+           // Fallback to static base data, but no random simulation
          }
       }
       setIsLive(false);
@@ -214,63 +214,19 @@ const OptionsDecode: React.FC = () => {
     }
   }, [instrument]);
 
-  const tickResiduals = useCallback(() => {
-    // Tick Institutional Data slightly visually
-    setFiiData(prev => prev.map(cat => ({
-      ...cat,
-      FII: cat.FII + Math.round((Math.random() - 0.5) * 500),
-      PRO: cat.PRO + Math.round((Math.random() - 0.5) * 400),
-    })));
-
-    // Progress Straddle Decay Chart
-    setStraddleData(prev => {
-      const last = prev[prev.length - 1];
-      const now = new Date();
-      const drop = Math.random() * 2 + 0.1; 
-      const newEntry = {
-        time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-        premium: parseFloat(Math.max(10, last.premium - drop).toFixed(1))
-      };
-      const updated = [...prev, newEntry];
-      if (updated.length > 20) updated.shift();
-      return updated;
-    });
-
-    if (!isLiveRef.current) {
-        setConfig(prev => ({
-          ...prev,
-          ivp: Math.min(100, Math.max(0, prev.ivp + Math.round((Math.random() - 0.5) * 2))),
-          pcr: parseFloat(Math.max(0.4, prev.pcr + (Math.random() - 0.5) * 0.04).toFixed(2)),
-        }));
- 
-        setStrikeData(prev => prev.map(flow => {
-          const callDiff = (Math.random() - 0.5) * 1.5;
-          const putDiff = (Math.random() - 0.5) * 1.5;
-          const newCall = parseFloat((flow.callChg + callDiff).toFixed(1));
-          return {
-            ...flow,
-            callChg: newCall,
-            callChgNeg: newCall > 0 ? -newCall : Math.min(newCall, -0.1),
-            putChg: parseFloat((flow.putChg + putDiff).toFixed(1))
-          };
-        }));
-    }
-  }, []);
-
   // Instrument Change Hook & Polling Activation
   useEffect(() => {
     setIsLoading(true);
     fetchOptionsData();
-    setStraddleData(generateInitialStraddle());
+    setStraddleData([]); // Reset chart on instrument change
 
     // Set up 15 second data fetch polling
     pollingRef.current = setInterval(() => {
       fetchOptionsData();
-      tickResiduals();
     }, 15000);
 
     return () => clearInterval(pollingRef.current);
-  }, [fetchOptionsData, tickResiduals]);
+  }, [fetchOptionsData]);
 
 
   // Colors
@@ -324,28 +280,25 @@ const OptionsDecode: React.FC = () => {
 
           <div className="flex flex-wrap items-center gap-3">
             {/* Instrument Tabs */}
-            <div className="flex bg-[#131b26] p-1 rounded-xl border border-slate-800">
+            <div className="flex bg-white/5 backdrop-blur-md p-1 rounded-xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.36)]">
               {(['NIFTY', 'BANKNIFTY', 'FINNIFTY'] as Instrument[]).map(inst => (
                 <button
                   key={inst}
                   onClick={() => setInstrument(inst)}
-                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                  className={`px-5 py-2 rounded-lg text-xs font-bold transition-all duration-300 ${
                     instrument === inst 
-                      ? 'bg-indigo-500/20 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.15)] relative' 
-                      : 'text-slate-500 hover:text-slate-300 relative'
+                      ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)] relative' 
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
                   }`}
                 >
                   {inst}
-                  {instrument === inst && (
-                     <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-4 h-0.5 bg-indigo-400 rounded-full blur-sm" />
-                  )}
                 </button>
               ))}
             </div>
 
             {/* Expiry Dropdown (Visual only for mock) */}
             <div className="relative group">
-              <button className="flex items-center gap-2 bg-[#131b26] border border-slate-800 px-4 py-2 rounded-xl text-xs font-bold text-slate-300 hover:border-slate-700 transition-colors">
+              <button className="flex items-center gap-2 bg-white/5 backdrop-blur-md border border-white/10 px-5 py-2.5 rounded-xl text-xs font-bold text-slate-300 hover:bg-white/10 hover:border-white/20 transition-all shadow-[0_8px_32px_0_rgba(0,0,0,0.36)]">
                 {expiry} <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
               </button>
             </div>
@@ -353,20 +306,29 @@ const OptionsDecode: React.FC = () => {
         </div>
 
         {/* ── Top GEX Warning Banner ────────────────────────────────────── */}
-        <div className={`rounded-xl border p-4 flex items-center justify-between shadow-lg transition-colors duration-700 ${
+        <div className={`rounded-xl backdrop-blur-md border p-5 flex flex-col md:flex-row items-start md:items-center justify-between shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] transition-all duration-700 relative overflow-hidden group ${
           config.gexStatus.includes('Positive') 
-            ? 'bg-emerald-500/10 border-emerald-500/20 shadow-emerald-500/5' 
+            ? 'bg-emerald-500/10 border-emerald-500/30' 
             : config.gexStatus.includes('Negative')
-            ? 'bg-rose-500/10 border-rose-500/20 shadow-rose-500/5'
-            : 'bg-slate-800/30 border-slate-700/50'
+            ? 'bg-rose-500/10 border-rose-500/30'
+            : 'bg-slate-800/40 border-slate-700/50'
         }`}>
-          <div className="flex items-center gap-3">
-            <ShieldAlert className={`w-5 h-5 ${config.gexStatus.includes('Positive') ? 'text-emerald-400' : 'text-rose-400'}`} />
+          {/* Animated Background Glow */}
+          <div className={`absolute top-1/2 left-10 w-32 h-32 -translate-y-1/2 rounded-full blur-[40px] opacity-40 transition-colors duration-700 ${
+            config.gexStatus.includes('Positive') ? 'bg-emerald-500' : config.gexStatus.includes('Negative') ? 'bg-rose-500' : 'bg-slate-500'
+          }`}></div>
+
+          <div className="flex items-center gap-4 relative z-10">
+            <div className={`p-3 rounded-full shadow-inner flex items-center justify-center shrink-0 ${
+              config.gexStatus.includes('Positive') ? 'bg-emerald-500/20 text-emerald-400 shadow-emerald-500/20' : 'bg-rose-500/20 text-rose-400 shadow-rose-500/20'
+            }`}>
+              <ShieldAlert className="w-6 h-6 animate-pulse" />
+            </div>
             <div>
-              <h3 className={`text-sm font-bold transition-colors ${config.gexStatus.includes('Positive') ? 'text-emerald-400' : 'text-rose-400'}`}>
+              <h3 className={`text-base font-black tracking-wide uppercase drop-shadow-md transition-colors ${config.gexStatus.includes('Positive') ? 'text-emerald-400' : 'text-rose-400'}`}>
                 {config.gexStatus} Environment Detected
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-300 mt-1 font-medium max-w-2xl leading-relaxed">
                 {config.gexStatus.includes('Positive') 
                   ? 'Market Makers are buying dips and selling rips. Expect lower volatility, mean-reversion, and theta decay.' 
                   : 'Market Makers are selling into weakness. Expect high volatility, sudden spikes, and trend continuation.'}
@@ -377,40 +339,44 @@ const OptionsDecode: React.FC = () => {
 
         {/* ── Core KPI Grid ─────────────────────────────────────────────── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-[#131b26] border border-slate-800 rounded-2xl p-5 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-sky-500/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
-            <p className="text-slate-500 text-[10px] font-bold tracking-wider uppercase mb-1">{instrument} SPOT</p>
-            <div className="text-2xl font-black text-white transition-all duration-300">{Number(config.spot).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-            <div className="text-xs text-sky-400 font-semibold mt-1 flex items-center gap-1">
+          {/* SPOT CARD */}
+          <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-5 relative overflow-hidden group shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] hover:bg-white/10 transition-all cursor-default">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-sky-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-sky-500/20 transition-all" />
+            <p className="text-slate-400 text-[10px] font-black tracking-widest uppercase mb-1 drop-shadow-sm">{instrument} SPOT</p>
+            <div className="text-3xl font-black text-white tracking-tight drop-shadow-md transition-all duration-300">{Number(config.spot).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+            <div className="text-[11px] text-sky-400 font-bold mt-2 flex items-center gap-1.5 uppercase tracking-wide bg-sky-500/10 w-fit px-2 py-0.5 rounded border border-sky-500/20">
               <Activity className="w-3.5 h-3.5" /> Latest Tick
             </div>
           </div>
 
-          <div className="bg-[#131b26] border border-slate-800 rounded-2xl p-5 relative overflow-hidden">
-            <div className={`absolute top-0 right-0 w-24 h-24 transition-colors duration-1000 ${isVolExpensive ? 'bg-rose-500/10' : isVolCheap ? 'bg-emerald-500/10' : 'bg-amber-500/10'} rounded-full blur-2xl -translate-y-1/2 translate-x-1/2`} />
-            <p className="text-slate-500 text-[10px] font-bold tracking-wider uppercase mb-1">ATM Implied Volatility</p>
+          {/* IV CARD */}
+          <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-5 relative overflow-hidden group shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] hover:bg-white/10 transition-all cursor-default">
+            <div className={`absolute top-0 right-0 w-32 h-32 transition-colors duration-1000 ${isVolExpensive ? 'bg-rose-500/10 group-hover:bg-rose-500/20' : isVolCheap ? 'bg-emerald-500/10 group-hover:bg-emerald-500/20' : 'bg-amber-500/10 group-hover:bg-amber-500/20'} rounded-full blur-3xl -translate-y-1/2 translate-x-1/2`} />
+            <p className="text-slate-400 text-[10px] font-black tracking-widest uppercase mb-1 drop-shadow-sm">ATM Implied Volatility</p>
             <div className="flex items-end gap-2">
-              <div className="text-2xl font-black text-white transition-all">{config.ivp}</div>
+              <div className={`text-3xl font-black tracking-tight drop-shadow-md transition-all ${isVolExpensive ? 'text-rose-400' : isVolCheap ? 'text-emerald-400' : 'text-amber-400'}`}>{config.ivp}</div>
             </div>
-            <div className={`text-xs font-semibold mt-1 flex items-center gap-1 transition-colors ${isVolExpensive ? 'text-rose-400' : isVolCheap ? 'text-emerald-400' : 'text-amber-400'}`}>
+            <div className={`text-[11px] font-bold mt-2 flex items-center gap-1.5 transition-colors ${isVolExpensive ? 'text-rose-400 bg-rose-500/10 border border-rose-500/20' : isVolCheap ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20' : 'text-amber-400 bg-amber-500/10 border border-amber-500/20'} w-fit px-2 py-0.5 rounded`}>
               {isVolExpensive ? 'Premium is Expensive (Favorable for Sellers)' : isVolCheap ? 'Premium is Cheap (Favorable for Buyers)' : 'Premium is Neutral'}
             </div>
           </div>
 
-          <div className="bg-[#131b26] border border-slate-800 rounded-2xl p-5 relative overflow-hidden">
-            <div className={`absolute top-0 right-0 w-24 h-24 transition-colors duration-1000 ${config.pcr > 1.2 ? 'bg-emerald-500/10' : config.pcr < 0.8 ? 'bg-rose-500/10' : 'bg-slate-500/10'} rounded-full blur-2xl -translate-y-1/2 translate-x-1/2`} />
-            <p className="text-slate-500 text-[10px] font-bold tracking-wider uppercase mb-1">Put-Call Ratio (PCR)</p>
-            <div className="text-2xl font-black text-white transition-all">{config.pcr.toFixed(2)}</div>
-            <div className="text-xs text-slate-400 font-semibold mt-1 transition-colors">
-              {config.pcr > 1.2 ? <span className="text-emerald-400">Oversold / Strong Support</span> : config.pcr < 0.8 ? <span className="text-rose-400">Overbought / Strong Resistance</span> : 'Neutral Territory'}
+          {/* PCR CARD */}
+          <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-5 relative overflow-hidden group shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] hover:bg-white/10 transition-all cursor-default">
+            <div className={`absolute top-0 right-0 w-32 h-32 transition-colors duration-1000 ${config.pcr > 1.2 ? 'bg-emerald-500/10 group-hover:bg-emerald-500/20' : config.pcr < 0.8 ? 'bg-rose-500/10 group-hover:bg-rose-500/20' : 'bg-slate-500/10 group-hover:bg-slate-500/20'} rounded-full blur-3xl -translate-y-1/2 translate-x-1/2`} />
+            <p className="text-slate-400 text-[10px] font-black tracking-widest uppercase mb-1 drop-shadow-sm">Put-Call Ratio (PCR)</p>
+            <div className="text-3xl font-black text-white tracking-tight drop-shadow-md transition-all">{config.pcr.toFixed(2)}</div>
+            <div className={`text-[11px] font-bold mt-2 transition-colors w-fit px-2 py-0.5 rounded border ${config.pcr > 1.2 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : config.pcr < 0.8 ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : 'text-slate-300 bg-slate-700/30 border-slate-600/50'}`}>
+              {config.pcr > 1.2 ? 'Oversold / Strong Support' : config.pcr < 0.8 ? 'Overbought / Strong Resistance' : 'Neutral Territory'}
             </div>
           </div>
 
-          <div className="bg-[#131b26] border border-slate-800 rounded-2xl p-5 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-violet-500/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
-            <p className="text-slate-500 text-[10px] font-bold tracking-wider uppercase mb-1">Max Pain Strike</p>
-            <div className="text-2xl font-black text-violet-400 transition-all">{config.maxPain.toLocaleString('en-IN')}</div>
-            <div className="text-xs text-slate-400 font-semibold mt-1">
+          {/* MAX PAIN CARD */}
+          <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-5 relative overflow-hidden group shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] hover:bg-white/10 transition-all cursor-default">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-violet-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-violet-500/20 transition-all" />
+            <p className="text-slate-400 text-[10px] font-black tracking-widest uppercase mb-1 drop-shadow-sm">Max Pain Strike</p>
+            <div className="text-3xl font-black text-violet-400 tracking-tight drop-shadow-[0_0_8px_rgba(139,92,246,0.5)] transition-all">{config.maxPain.toLocaleString('en-IN')}</div>
+            <div className="text-[11px] text-violet-300 font-bold mt-2 bg-violet-500/10 border border-violet-500/20 w-fit px-2 py-0.5 rounded tracking-wide">
               Estimated by OI Concentration
             </div>
           </div>
@@ -420,45 +386,59 @@ const OptionsDecode: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
           {/* Institutional Footprint (FII/PRO vs Retail) */}
-          <div className="bg-[#131b26] rounded-2xl border border-slate-800 p-5 flex flex-col min-h-[400px]">
+          <div className="bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 p-5 flex flex-col min-h-[400px] shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] group hover:bg-white/10 transition-all">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                <h2 className="text-sm font-bold text-white flex items-center gap-2 tracking-wide">
                   <BarChart2 className="w-4 h-4 text-indigo-400" />
                   Institutional Net Positioning (EOD)
                 </h2>
-                <p className="text-[10px] text-slate-500 tracking-wider mt-1 uppercase">FII & PRO vs Retail Clients</p>
+                <p className="text-[10px] text-slate-400 tracking-wider mt-1 uppercase font-bold">FII & PRO vs Retail Clients</p>
               </div>
-               <div className="text-[10px] text-slate-500 border border-slate-700 px-2 py-0.5 rounded">T-1 Report</div>
+               <div className="text-[10px] font-bold text-slate-300 border border-white/20 bg-white/5 px-2 py-1 rounded shadow-sm">T-1 Report</div>
             </div>
 
             <div className="flex-1 w-full relative">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={fiiData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }} barGap={2} barSize={20}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                  <XAxis dataKey="category" stroke="#475569" fontSize={10} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#475569" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
-                  <Tooltip content={<CustomTooltip />} cursor={{ fill: '#1e293b', opacity: 0.4 }} />
-                  <Bar dataKey="FII" name="Foreign (FII)" fill="#3b82f6" radius={[4,4,0,0]} isAnimationActive={false} />
-                  <Bar dataKey="PRO" name="Proprietary" fill="#8b5cf6" radius={[4,4,0,0]} isAnimationActive={false} />
-                  <Bar dataKey="CLIENT" name="Retail Client" fill="#64748b" radius={[4,4,0,0]} isAnimationActive={false} />
-                  <ReferenceLine y={0} stroke="#475569" strokeWidth={1} />
+                <BarChart data={fiiData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }} barGap={4} barSize={24}>
+                  <defs>
+                    <linearGradient id="fiiGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#3b82f6" />
+                      <stop offset="100%" stopColor="#1d4ed8" />
+                    </linearGradient>
+                    <linearGradient id="proGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#8b5cf6" />
+                      <stop offset="100%" stopColor="#6d28d9" />
+                    </linearGradient>
+                    <linearGradient id="retailGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#64748b" />
+                      <stop offset="100%" stopColor="#334155" />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff" strokeOpacity={0.05} vertical={false} />
+                  <XAxis dataKey="category" stroke="#94a3b8" fontSize={10} fontWeight="bold" tickLine={false} axisLine={false} />
+                  <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: '#ffffff', opacity: 0.05 }} />
+                  <Bar dataKey="FII" name="Foreign (FII)" fill="url(#fiiGradient)" radius={[4,4,0,0]} isAnimationActive={true} />
+                  <Bar dataKey="PRO" name="Proprietary" fill="url(#proGradient)" radius={[4,4,0,0]} isAnimationActive={true} />
+                  <Bar dataKey="CLIENT" name="Retail Client" fill="url(#retailGradient)" radius={[4,4,0,0]} isAnimationActive={true} />
+                  <ReferenceLine y={0} stroke="#ffffff" strokeOpacity={0.2} strokeWidth={1} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
 
           {/* Intraday Theta Decay (Straddle Tracking) */}
-          <div className="bg-[#131b26] rounded-2xl border border-slate-800 p-5 flex flex-col min-h-[400px]">
+          <div className="bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 p-5 flex flex-col min-h-[400px] shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] group hover:bg-white/10 transition-all">
              <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-amber-500" />
+                <h2 className="text-sm font-bold text-white flex items-center gap-2 tracking-wide">
+                  <TrendingUp className="w-4 h-4 text-amber-400" />
                   ATM Straddle Decay Tracker
                 </h2>
-                <p className="text-[10px] text-slate-500 tracking-wider mt-1 uppercase">Combined Call + Put Premium intraday drop</p>
+                <p className="text-[10px] text-slate-400 tracking-wider mt-1 uppercase font-bold">Combined Call + Put Premium intraday drop</p>
               </div>
-              <div className="bg-amber-500/10 px-2.5 py-1 rounded-md border border-amber-500/20 text-amber-500 text-[10px] font-bold underline decoration-dashed underline-offset-2 flex flex-col items-center">
+              <div className="bg-amber-500/10 px-3 py-1 rounded-md border border-amber-500/30 text-amber-400 text-[10px] font-black tracking-widest shadow-[0_0_10px_rgba(245,158,11,0.2)]">
                 THETA BLEED
               </div>
             </div>
@@ -468,72 +448,98 @@ const OptionsDecode: React.FC = () => {
                 <AreaChart data={straddleData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorDecay" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3}/>
+                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.5}/>
                       <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                  <XAxis dataKey="time" stroke="#475569" fontSize={10} tickLine={false} axisLine={false} />
-                  <YAxis stroke="#475569" fontSize={10} tickLine={false} axisLine={false} domain={['dataMin - 10', 'dataMax + 10']} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff" strokeOpacity={0.05} vertical={false} />
+                  <XAxis dataKey="time" stroke="#94a3b8" fontSize={10} fontWeight="bold" tickLine={false} axisLine={false} />
+                  <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} domain={['dataMin - 10', 'dataMax + 10']} />
                   <Tooltip 
-                    contentStyle={{ backgroundColor: '#0f1520', border: '1px solid #334155', borderRadius: '8px' }}
-                    itemStyle={{ color: '#fcfcfc', fontSize: '12px' }}
-                    labelStyle={{ color: '#94a3b8', fontSize: '10px', marginBottom: '4px' }}
+                    contentStyle={{ backgroundColor: 'rgba(15, 21, 32, 0.9)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', boxShadow: '0 8px 32px 0 rgba(0,0,0,0.36)' }}
+                    itemStyle={{ color: '#fcfcfc', fontSize: '13px', fontWeight: 'bold' }}
+                    labelStyle={{ color: '#94a3b8', fontSize: '11px', marginBottom: '6px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}
                   />
-                  <Area type="step" isAnimationActive={true} dataKey="premium" name="Straddle Price (₹)" stroke="#f59e0b" strokeWidth={3} fillOpacity={1} fill="url(#colorDecay)" />
+                  <Area type="step" isAnimationActive={true} dataKey="premium" name="Straddle Price (₹)" stroke="#f59e0b" strokeWidth={3} fillOpacity={1} fill="url(#colorDecay)" style={{ filter: 'drop-shadow(0 0 8px rgba(245,158,11,0.5))' }} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           </div>
 
           {/* Strike-wise OI Flow Heatmap (Bottom Full Width) */}
-          <div className="col-span-1 lg:col-span-2 bg-[#131b26] rounded-2xl border border-slate-800 p-5 flex flex-col min-h-[450px]">
+          <div className="col-span-1 lg:col-span-2 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 p-5 flex flex-col min-h-[450px] shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] group hover:bg-white/10 transition-all">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
               <div>
-                <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                <h2 className="text-sm font-bold text-white flex items-center gap-2 tracking-wide">
                   <Layers className="w-4 h-4 text-emerald-400" />
                   Intraday Options Flow (Live Additions/Unwinding)
                 </h2>
-                <p className="text-[10px] text-slate-500 tracking-wider mt-1 uppercase">Changes in Open Interest at near-ATM strikes (in Thousands)</p>
+                <p className="text-[10px] text-slate-400 tracking-wider mt-1 uppercase font-bold">Changes in Open Interest at near-ATM strikes (in Thousands)</p>
               </div>
-              <div className="flex items-center gap-4 text-[10px] font-bold">
-                <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded bg-red-500"/> Call Writing (Bearish)</div>
-                <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded bg-emerald-500"/> Put Writing (Bullish)</div>
+              <div className="flex flex-wrap items-center justify-end gap-3 text-[10px] sm:text-[11px] font-bold tracking-wide">
+                <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2 py-1 rounded-full shadow-sm"><div className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]"/> Call Writing</div>
+                <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2 py-1 rounded-full shadow-sm"><div className="w-2 h-2 rounded-full bg-rose-300"/> Call Unwind</div>
+                <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2 py-1 rounded-full shadow-sm"><div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"/> Put Writing</div>
+                <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2 py-1 rounded-full shadow-sm"><div className="w-2 h-2 rounded-full bg-emerald-300"/> Put Unwind</div>
               </div>
             </div>
 
             <div className="flex-1 w-full relative">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={strikeData} layout="vertical" margin={{ top: 10, right: 30, left: 30, bottom: 5 }} barSize={16}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
-                  <XAxis type="number" stroke="#475569" fontSize={10} tickLine={false} axisLine={{ stroke: '#334155' }} />
-                  <YAxis dataKey="strike" type="category" stroke="#94a3b8" fontSize={11} fontWeight="bold" tickLine={false} axisLine={false} />
-                  <Tooltip 
-                    cursor={{ fill: '#1e293b', opacity: 0.4 }}
-                    formatter={(value: number, name: string) => [`${Math.abs(value).toFixed(1)}k`, name.includes('Call') ? 'Call OI Change' : 'Put OI Change']}
+                <BarChart data={strikeData} layout="vertical" margin={{ top: 10, right: 30, left: 30, bottom: 5 }} barSize={20}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff" strokeOpacity={0.05} horizontal={false} />
+                  <XAxis 
+                    type="number" 
+                    stroke="#64748b" 
+                    fontSize={10} 
+                    tickLine={false} 
+                    axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} 
+                    tickFormatter={(val) => `${Math.abs(val).toFixed(0)}k`}
+                    domain={([dataMin, dataMax]) => {
+                      const maxAbs = Math.max(Math.abs(dataMin), Math.abs(dataMax));
+                      // Add 10% padding to the max value for better visuals
+                      const paddedMax = Math.ceil(maxAbs * 1.1);
+                      return [-paddedMax, paddedMax];
+                    }}
                   />
-                  <ReferenceLine x={0} stroke="#475569" strokeWidth={2} />
+                  <YAxis dataKey="strike" type="category" stroke="#f8fafc" fontSize={12} fontWeight="900" tickLine={false} axisLine={false} />
+                  <Tooltip 
+                    cursor={{ fill: '#ffffff', opacity: 0.05 }}
+                    contentStyle={{ backgroundColor: 'rgba(15, 21, 32, 0.9)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', boxShadow: '0 8px 32px 0 rgba(0,0,0,0.36)' }}
+                    itemStyle={{ color: '#fcfcfc', fontSize: '13px', fontWeight: 'bold' }}
+                    formatter={(value: number, name: string, props: any) => {
+                      const isCall = name.includes('Call');
+                      const actualValue = isCall ? props.payload.callChg : props.payload.putChg;
+                      const label = isCall 
+                        ? (actualValue > 0 ? 'Call Writing' : 'Call Unwinding') 
+                        : (actualValue > 0 ? 'Put Writing' : 'Put Unwinding');
+                      return [`${Math.abs(actualValue).toFixed(1)}k`, label];
+                    }}
+                  />
+                  <ReferenceLine x={0} stroke="#ffffff" strokeOpacity={0.2} strokeWidth={2} />
                   
-                  {/* Call Bar (Mapping Call Changes to the Left axis side using precalculated negative values) */}
-                  <Bar dataKey="callChgNeg" name="Call Writing (Bearish)" radius={[4,0,0,4]} isAnimationActive={false}>
+                  {/* Call Bar */}
+                  <Bar dataKey="callChgVis" name="Call Writing (Bearish)" radius={[4,0,0,4]} isAnimationActive={true}>
                     {strikeData.map((entry, index) => (
-                      <Cell key={`call-${index}`} fill={entry.callChg > 0 ? callColor : callUnwindColor} />
+                      <Cell key={`call-${index}`} fill={entry.callChg > 0 ? '#f43f5e' : '#fda4af'} style={{ filter: entry.callChg > 0 ? 'drop-shadow(0 0 4px rgba(244,63,94,0.4))' : 'none' }} />
                     ))}
                   </Bar>
                   
-                  <Bar dataKey="putChg" name="Put Writing (Bullish)" radius={[0,4,4,0]} isAnimationActive={false}>
+                  <Bar dataKey="putChgVis" name="Put Writing (Bullish)" radius={[0,4,4,0]} isAnimationActive={true}>
                     {strikeData.map((entry, index) => (
-                      <Cell key={`put-${index}`} fill={entry.putChg > 0 ? putColor : putUnwindColor} />
+                      <Cell key={`put-${index}`} fill={entry.putChg > 0 ? '#10b981' : '#6ee7b7'} style={{ filter: entry.putChg > 0 ? 'drop-shadow(0 0 4px rgba(16,185,129,0.4))' : 'none' }} />
                     ))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
             
-            <div className="mt-4 p-3 rounded-lg bg-slate-800/30 border border-slate-700/50 flex items-start gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              <p className="text-xs text-slate-400">
-                <strong className="text-slate-200">Pro Tip:</strong> When significant <span className="text-emerald-400">Put Writing</span> coincides with <span className="text-rose-300">Call Unwinding</span> at a strike, it transforms into extremely robust support for the intraday session.
+            <div className="mt-4 p-4 rounded-xl bg-white/5 border border-white/10 flex items-start gap-3 shadow-inner">
+              <div className="bg-emerald-500/20 p-1 rounded-full shrink-0">
+                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+              </div>
+              <p className="text-sm text-slate-300 leading-relaxed font-medium">
+                <strong className="text-white tracking-wide uppercase mr-2">Pro Tip:</strong> When significant <span className="text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">Put Writing</span> coincides with <span className="text-rose-400 font-bold bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">Call Unwinding</span> at a strike, it transforms into extremely robust support for the intraday session.
               </p>
             </div>
           </div>

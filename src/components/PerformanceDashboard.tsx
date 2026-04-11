@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -38,6 +38,13 @@ const PerformanceDashboard: React.FC<Props> = ({ stocks, transactions, priceData
   const [activeView, setActiveView] = useState<'overview' | 'risk' | 'attribution' | 'comparison'>('overview');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+
+  useEffect(() => {
+    if (Object.keys(priceData || {}).length > 0) {
+      setLastUpdated(new Date());
+    }
+  }, [priceData]);
 
   // Memoized calculations with error handling
   const { metrics, stockPerformances, hasData } = useMemo(() => {
@@ -486,9 +493,15 @@ const PerformanceDashboard: React.FC<Props> = ({ stocks, transactions, priceData
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-slate-200">Performance Dashboard</h2>
-        <div className="flex space-x-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-200">Performance Dashboard</h2>
+          <div className="flex items-center gap-1.5 mt-1 text-sm font-medium text-slate-400">
+            <Activity className="w-4 h-4 text-indigo-400" />
+            <span>Last Updated: {lastUpdated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+          </div>
+        </div>
+        <div className="flex flex-wrap space-x-2">
           {[
             { key: 'overview', label: 'Overview', icon: BarChart3 },
             { key: 'risk', label: 'Risk', icon: Shield },
