@@ -272,46 +272,22 @@ const OptionsPlayer = () => {
     'M&M': 'mahindra.com', NTPC: 'ntpc.co.in', JSWSTEEL: 'jsw.in',
   };
 
-  // Initialize TradingView Widget
+  // Initialize TradingView Widget via Advanced Chart iframe (most reliable embedding method)
   useEffect(() => {
-    const scriptId = 'tradingview-widget-script';
     const containerId = 'tradingview_nifty_chart';
-    
-    // Clear any existing chart
     const container = document.getElementById(containerId);
-    if (container) {
-      container.innerHTML = '';
-    }
+    if (!container) return;
 
-    const initWidget = () => {
-      if (typeof window !== 'undefined' && (window as any).TradingView && document.getElementById(containerId)) {
-        new (window as any).TradingView.widget({
-          "autosize": true,
-          "symbol": chartConfig.symbol,
-          "interval": chartConfig.interval,
-          "timezone": "Asia/Kolkata",
-          "theme": "dark",
-          "style": "1",
-          "locale": "in",
-          "enable_publishing": false,
-          "hide_side_toolbar": true,
-          "allow_symbol_change": false, // Disable manual symbol search to prevent unsupported intraday errors
-          "container_id": containerId,
-          "backgroundColor": "rgba(0, 0, 0, 0)" // Make chart background transparent for glassmorphism
-        });
-      }
-    };
+    // Clear previous content
+    container.innerHTML = '';
 
-    if (!document.getElementById(scriptId)) {
-      const script = document.createElement('script');
-      script.id = scriptId;
-      script.src = 'https://s3.tradingview.com/tv.js';
-      script.async = true;
-      script.onload = initWidget;
-      document.body.appendChild(script);
-    } else {
-      initWidget();
-    }
+    const iframe = document.createElement('iframe');
+    iframe.src = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${encodeURIComponent(chartConfig.symbol)}&interval=${chartConfig.interval}&hidesidetoolbar=1&hidetoptoolbar=0&symboledit=0&saveimage=0&toolbarbg=0f1520&studies=[]&theme=dark&style=1&timezone=Asia%2FKolkata&withdateranges=1&showpopupbutton=0&locale=in&utm_source=localhost&utm_medium=widget&utm_campaign=chart`;
+    iframe.style.width = '100%';
+    iframe.style.height = '100%';
+    iframe.style.border = 'none';
+    iframe.allowFullscreen = true;
+    container.appendChild(iframe);
   }, [chartConfig]);
 
   useEffect(() => {
@@ -454,15 +430,22 @@ const OptionsPlayer = () => {
             value={chartConfig.symbol}
             onChange={(e) => setChartConfig(prev => ({ ...prev, symbol: e.target.value }))}
           >
-            <option value="NSE:NIFTY1!">Index: NIFTY 50</option>
+            <option value="NSE:NIFTY">Index: NIFTY 50</option>
             <option value="BSE:SENSEX">Index: SENSEX</option>
-            <option value="NSE:BANKNIFTY1!">Index: BANK NIFTY</option>
+            <option value="NSE:BANKNIFTY">Index: BANK NIFTY</option>
+            <option value="NSE:MIDCPNIFTY">Index: MIDCAP NIFTY</option>
+            <option value="NSE:FINNIFTY">Index: FIN NIFTY</option>
           </select>
           <select
             className="bg-transparent text-sm font-medium text-slate-300 outline-none cursor-pointer hover:text-white transition-colors"
             value={chartConfig.interval}
             onChange={(e) => setChartConfig(prev => ({ ...prev, interval: e.target.value }))}
           >
+            <option value="1">Time: 1m</option>
+            <option value="5">Time: 5m</option>
+            <option value="15">Time: 15m</option>
+            <option value="30">Time: 30m</option>
+            <option value="60">Time: 1H</option>
             <option value="D">Time: 1D</option>
             <option value="W">Time: 1W</option>
             <option value="M">Time: 1M</option>
