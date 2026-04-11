@@ -383,13 +383,29 @@ const OptionsPlayer = () => {
         
         setSentimentValue(advanceRatio * 100);
         
-        // Calculate a realistic PCR value (typically 0.6 to 1.5)
-        // High advance ratio (bullish) usually correlates with lower PCR (e.g. 0.8)
-        // Low advance ratio (bearish) usually correlates with higher PCR (e.g. 1.3)
-        const calculatedPcr = 1.5 - (advanceRatio * 0.8);
-        setRawPcr(Number(calculatedPcr.toFixed(2)));
-        // Map PCR to 0-100 gauge (inverse: lower PCR = bullish = higher gauge value)
-        setPcrValue((1.5 - calculatedPcr) / 0.9 * 100);
+        // 3. Fetch Real Options Chain for PCR
+        try {
+          const indexSymbol = chartConfig.symbol.replace('NSE:', '').replace('BSE:', '');
+          const optionsResponse = await fetch(`http://localhost:3001/api/options/${indexSymbol}`);
+          if (optionsResponse.ok) {
+            const optionsData = await optionsResponse.json();
+            if (optionsData && optionsData.filtered) {
+              const ceOI = optionsData.filtered.CE?.totOI || 1;
+              const peOI = optionsData.filtered.PE?.totOI || 1;
+              const realPcr = Number((peOI / ceOI).toFixed(2));
+              setRawPcr(realPcr);
+              
+              // Map real PCR to 0-100 gauge
+              // High PCR (> 1.2) = oversold/bullish bounce expected
+              // Low PCR (< 0.8) = overbought/bearish resistance expected
+              // We want the gauge to show higher values (green) for bullish
+              const normalizedGaugePcr = Math.min(100, Math.max(0, ((realPcr - 0.5) / 1.0) * 100));
+              setPcrValue(normalizedGaugePcr);
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to fetch real Options Chain PCR', e);
+        }
 
         // Top Movers: Sort by absolute change points and take top 10
         const sortedMovers = [...results].sort((a, b) => Math.abs(b.change) - Math.abs(a.change)).slice(0, 10);
@@ -411,8 +427,13 @@ const OptionsPlayer = () => {
     };
     
     loadData();
-    return () => { isMounted = false; };
-  }, []);
+    const interval = setInterval(loadData, 15000); // refresh every 15s
+    
+    return () => { 
+      isMounted = false; 
+      clearInterval(interval);
+    };
+  }, [chartConfig.symbol]);
 
   const topMovers = liveMovers.length > 0 ? liveMovers : [
     { symbol: 'Loading...', pts: 0, icon: 'loading', color: 'text-slate-400', logoColor: 'text-slate-600' }
