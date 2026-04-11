@@ -257,7 +257,7 @@ const OptionsPlayer = () => {
   const [niftyData, setNiftyData] = useState<{price: number, pts: number, percent: number} | null>(null);
   const [liveMovers, setLiveMovers] = useState<any[]>([]);
 
-  const [chartConfig, setChartConfig] = useState({ symbol: "NSE:NIFTY1!", interval: "5" });
+  const [chartConfig, setChartConfig] = useState({ symbol: "BSE:NIFTY50", interval: "5" });
 
   // NSE symbol → company website for logo fetching
   const STOCK_DOMAINS: Record<string, string> = {
@@ -385,7 +385,7 @@ const OptionsPlayer = () => {
         
         // 3. Fetch Real Options Chain for PCR
         try {
-          const indexSymbol = chartConfig.symbol.replace('NSE:', '').replace('BSE:', '').replace('1!', '');
+          const indexSymbol = chartConfig.symbol.replace('NSE:', '').replace('BSE:', '').replace('1!', '').replace('50', '');
           const optionsResponse = await fetch(`http://localhost:3001/api/options/${indexSymbol}`);
           if (optionsResponse.ok) {
             const optionsData = await optionsResponse.json();
@@ -454,9 +454,9 @@ const OptionsPlayer = () => {
             value={chartConfig.symbol}
             onChange={(e) => setChartConfig(prev => ({ ...prev, symbol: e.target.value }))}
           >
-            <option value="NSE:NIFTY1!">Index: NIFTY 50</option>
+            <option value="BSE:NIFTY50">Index: NIFTY 50</option>
             <option value="BSE:SENSEX">Index: SENSEX</option>
-            <option value="NSE:BANKNIFTY1!">Index: BANK NIFTY</option>
+            <option value="BSE:BANKNIFTY">Index: BANK NIFTY</option>
           </select>
           <select
             className="bg-transparent text-sm font-medium text-slate-300 outline-none cursor-pointer hover:text-white transition-colors"
