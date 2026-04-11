@@ -272,22 +272,44 @@ const OptionsPlayer = () => {
     'M&M': 'mahindra.com', NTPC: 'ntpc.co.in', JSWSTEEL: 'jsw.in',
   };
 
-  // Initialize TradingView Widget via Advanced Chart iframe (most reliable embedding method)
+  // Initialize TradingView Widget via official tv.js script
   useEffect(() => {
+    const scriptId = 'tradingview-widget-script';
     const containerId = 'tradingview_nifty_chart';
     const container = document.getElementById(containerId);
+    
     if (!container) return;
-
-    // Clear previous content
     container.innerHTML = '';
 
-    const iframe = document.createElement('iframe');
-    iframe.src = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${encodeURIComponent(chartConfig.symbol)}&interval=${chartConfig.interval}&hidesidetoolbar=1&hidetoptoolbar=0&symboledit=0&saveimage=0&toolbarbg=0f1520&studies=[]&theme=dark&style=1&timezone=Asia%2FKolkata&withdateranges=1&showpopupbutton=0&locale=in&utm_source=localhost&utm_medium=widget&utm_campaign=chart`;
-    iframe.style.width = '100%';
-    iframe.style.height = '100%';
-    iframe.style.border = 'none';
-    iframe.allowFullscreen = true;
-    container.appendChild(iframe);
+    const initWidget = () => {
+      if (typeof window !== 'undefined' && (window as any).TradingView) {
+        new (window as any).TradingView.widget({
+          "autosize": true,
+          "symbol": chartConfig.symbol,
+          "interval": chartConfig.interval,
+          "timezone": "Asia/Kolkata",
+          "theme": "dark",
+          "style": "1",
+          "locale": "in",
+          "enable_publishing": false,
+          "hide_side_toolbar": true,
+          "allow_symbol_change": false,
+          "container_id": containerId,
+          "backgroundColor": "rgba(0, 0, 0, 0)"
+        });
+      }
+    };
+
+    if (!document.getElementById(scriptId)) {
+      const script = document.createElement('script');
+      script.id = scriptId;
+      script.src = 'https://s3.tradingview.com/tv.js';
+      script.async = true;
+      script.onload = initWidget;
+      document.body.appendChild(script);
+    } else {
+      initWidget();
+    }
   }, [chartConfig]);
 
   useEffect(() => {
