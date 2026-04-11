@@ -23,6 +23,7 @@ import OptionsWatch  from './components/OptionsWatch';
 import OptionsDecode from './components/OptionsDecode';
 import StockRecommendations from './components/StockRecommendations';
 import HelpAndSupport from './components/HelpAndSupport';
+import TradingPsychology from './components/TradingPsychology';
 import { MarketTicker } from './components/MarketTicker';
 import { fetchStockPrice } from './utils/priceApi';
 import { 
@@ -1133,6 +1134,9 @@ const StockPortfolioApp: React.FC = () => {
             <ToolsDashboard />
           )}
               {activeTab === 'stock-recommendations' && <StockRecommendations />}
+          {activeTab === 'trading-psychology' && (
+            <TradingPsychology />
+          )}
               {activeTab === 'alerts' && (
                 <AlertsPage 
                   stocks={portfolioStocks}

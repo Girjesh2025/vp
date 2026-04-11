@@ -16,7 +16,8 @@ import {
   Eye,
   Activity,
   ChevronDown,
-  Radar
+  Radar,
+  Sparkles
 } from 'lucide-react';
 
 interface MenuItem {
@@ -53,6 +54,7 @@ const ProfessionalSidebar: React.FC<ProfessionalSidebarProps> = ({
     { id: 'options-watch', label: 'Options Watch', icon: Radar, isNew: true },
     { id: 'options-decode', label: 'Options Decode', icon: Brain },
     { id: 'options-hint', label: 'Options Guide', icon: Brain },
+    { id: 'trading-psychology', label: 'Trading Psychology', icon: Sparkles, isNew: true },
     { id: 'trading-tools', label: 'Trading Tools', icon: Calculator },
     { id: 'analytics', label: 'Analytics', icon: TrendingUp },
     { id: 'alerts', label: 'Alerts', icon: Bell, badge: '3' },
