@@ -257,7 +257,7 @@ const OptionsPlayer = () => {
   const [niftyData, setNiftyData] = useState<{price: number, pts: number, percent: number} | null>(null);
   const [liveMovers, setLiveMovers] = useState<any[]>([]);
 
-  const [chartConfig, setChartConfig] = useState({ symbol: "BSE:NIFTY50", interval: "5" });
+  const [chartConfig, setChartConfig] = useState({ symbol: "NSE:NIFTY", interval: "5" });
 
   // NSE symbol → company website for logo fetching
   const STOCK_DOMAINS: Record<string, string> = {
@@ -274,43 +274,37 @@ const OptionsPlayer = () => {
 
   // Initialize TradingView Widget
   useEffect(() => {
-    const scriptId = 'tradingview-widget-script';
     const containerId = 'tradingview_nifty_chart';
     
     // Clear any existing chart
     const container = document.getElementById(containerId);
     if (container) {
       container.innerHTML = '';
-    }
-
-    const initWidget = () => {
-      if (typeof window !== 'undefined' && (window as any).TradingView && document.getElementById(containerId)) {
-        new (window as any).TradingView.widget({
-          "autosize": true,
-          "symbol": chartConfig.symbol,
-          "interval": chartConfig.interval,
-          "timezone": "Asia/Kolkata",
-          "theme": "dark",
-          "style": "1",
-          "locale": "in",
-          "enable_publishing": false,
-          "hide_side_toolbar": true,
-          "allow_symbol_change": false, // Disable manual symbol search to prevent unsupported intraday errors
-          "container_id": containerId,
-          "backgroundColor": "rgba(0, 0, 0, 0)" // Make chart background transparent for glassmorphism
-        });
-      }
-    };
-
-    if (!document.getElementById(scriptId)) {
-      const script = document.createElement('script');
-      script.id = scriptId;
-      script.src = 'https://s3.tradingview.com/tv.js';
-      script.async = true;
-      script.onload = initWidget;
-      document.body.appendChild(script);
-    } else {
-      initWidget();
+      
+      // Use iframe directly instead of JS widget to bypass intraday symbol restrictions on free tier
+      const iframe = document.createElement('iframe');
+      iframe.style.width = '100%';
+      iframe.style.height = '100%';
+      iframe.style.border = 'none';
+      
+      // Build the TradingView advanced chart URL
+      const tvUrl = new URL('https://in.tradingview.com/widgetembed/');
+      tvUrl.searchParams.append('frameElementId', 'tradingview_nifty_chart');
+      tvUrl.searchParams.append('symbol', chartConfig.symbol);
+      tvUrl.searchParams.append('interval', chartConfig.interval);
+      tvUrl.searchParams.append('hidesidetoolbar', '1');
+      tvUrl.searchParams.append('symboledit', '0');
+      tvUrl.searchParams.append('saveimage', '0');
+      tvUrl.searchParams.append('toolbarbg', 'rgba(0,0,0,0)');
+      tvUrl.searchParams.append('studies', '[]');
+      tvUrl.searchParams.append('theme', 'dark');
+      tvUrl.searchParams.append('style', '1');
+      tvUrl.searchParams.append('timezone', 'Asia/Kolkata');
+      tvUrl.searchParams.append('withdateranges', '1');
+      tvUrl.searchParams.append('showpopupbutton', '1');
+      
+      iframe.src = tvUrl.toString();
+      container.appendChild(iframe);
     }
   }, [chartConfig]);
 
@@ -385,7 +379,7 @@ const OptionsPlayer = () => {
         
         // 3. Fetch Real Options Chain for PCR
         try {
-          const indexSymbol = chartConfig.symbol.replace('NSE:', '').replace('BSE:', '').replace('1!', '').replace('50', '');
+          const indexSymbol = chartConfig.symbol.replace('NSE:', '').replace('BSE:', '');
           const optionsResponse = await fetch(`http://localhost:3001/api/options/${indexSymbol}`);
           if (optionsResponse.ok) {
             const optionsData = await optionsResponse.json();
@@ -454,9 +448,9 @@ const OptionsPlayer = () => {
             value={chartConfig.symbol}
             onChange={(e) => setChartConfig(prev => ({ ...prev, symbol: e.target.value }))}
           >
-            <option value="BSE:NIFTY50">Index: NIFTY 50</option>
+            <option value="NSE:NIFTY">Index: NIFTY 50</option>
             <option value="BSE:SENSEX">Index: SENSEX</option>
-            <option value="BSE:BANKNIFTY">Index: BANK NIFTY</option>
+            <option value="NSE:BANKNIFTY">Index: BANK NIFTY</option>
           </select>
           <select
             className="bg-transparent text-sm font-medium text-slate-300 outline-none cursor-pointer hover:text-white transition-colors"
