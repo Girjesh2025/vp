@@ -287,23 +287,13 @@ const OptionsPlayer = () => {
       iframe.style.height = '100%';
       iframe.style.border = 'none';
       
-      // Build the TradingView advanced chart URL
-      const tvUrl = new URL('https://in.tradingview.com/widgetembed/');
-      tvUrl.searchParams.append('frameElementId', 'tradingview_nifty_chart');
-      tvUrl.searchParams.append('symbol', chartConfig.symbol);
-      tvUrl.searchParams.append('interval', chartConfig.interval);
-      tvUrl.searchParams.append('hidesidetoolbar', '1');
-      tvUrl.searchParams.append('symboledit', '0');
-      tvUrl.searchParams.append('saveimage', '0');
-      tvUrl.searchParams.append('toolbarbg', 'rgba(0,0,0,0)');
-      tvUrl.searchParams.append('studies', '[]');
-      tvUrl.searchParams.append('theme', 'dark');
-      tvUrl.searchParams.append('style', '1');
-      tvUrl.searchParams.append('timezone', 'Asia/Kolkata');
-      tvUrl.searchParams.append('withdateranges', '1');
-      tvUrl.searchParams.append('showpopupbutton', '1');
+      // Build the TradingView advanced chart URL using their widget embed structure
+      // Note: We use string template instead of URLSearchParams to ensure the symbol colon isn't overly encoded in a way TV rejects
+      const baseUrl = 'https://in.tradingview.com/widgetembed/?frameElementId=tradingview_nifty_chart&symbol=';
+      const encodedSymbol = encodeURIComponent(chartConfig.symbol);
+      const params = `&interval=${chartConfig.interval}&hidesidetoolbar=1&symboledit=0&saveimage=0&toolbarbg=rgba(0,0,0,0)&studies=%5B%5D&theme=dark&style=1&timezone=Asia%2FKolkata&withdateranges=1&showpopupbutton=1`;
       
-      iframe.src = tvUrl.toString();
+      iframe.src = baseUrl + encodedSymbol + params;
       container.appendChild(iframe);
     }
   }, [chartConfig]);
