@@ -257,7 +257,7 @@ const OptionsPlayer = () => {
   const [niftyData, setNiftyData] = useState<{price: number, pts: number, percent: number} | null>(null);
   const [liveMovers, setLiveMovers] = useState<any[]>([]);
 
-  const [chartConfig, setChartConfig] = useState({ symbol: "NSE:NIFTY1!", interval: "5" });
+  const [chartConfig, setChartConfig] = useState({ symbol: "NSE:NIFTY", interval: "D" });
 
   // NSE symbol → company website for logo fetching
   const STOCK_DOMAINS: Record<string, string> = {
@@ -463,13 +463,9 @@ const OptionsPlayer = () => {
             value={chartConfig.interval}
             onChange={(e) => setChartConfig(prev => ({ ...prev, interval: e.target.value }))}
           >
-            <option value="1">Time: 1m</option>
-            <option value="5">Time: 5m</option>
-            <option value="15">Time: 15m</option>
-            <option value="30">Time: 30m</option>
-            <option value="60">Time: 1h</option>
             <option value="D">Time: 1D</option>
             <option value="W">Time: 1W</option>
+            <option value="M">Time: 1M</option>
           </select>
           <select className="bg-transparent text-sm font-medium text-slate-300 outline-none cursor-pointer hover:text-white transition-colors">
             {(() => {
