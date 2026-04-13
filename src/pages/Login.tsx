@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { TrendingUp, Mail, Lock, AlertCircle, Shield, Zap } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -9,27 +9,6 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    // If the broker redirects back to /login instead of /app (e.g. Fyers redirect URI mismatch)
-    // we should intercept the auth_code and forward the user to /app to process it.
-    const params = new URLSearchParams(window.location.search);
-    const authCode = params.get('auth_code') || params.get('code') || params.get('request_token');
-    
-    if (authCode) {
-      // Ensure we have the basic broker mode set so ProtectedRoute doesn't block us
-      if (!localStorage.getItem('pp_auth_mode')) {
-        const userId = `broker-${Date.now()}`;
-        localStorage.setItem('pp_auth_mode', 'broker');
-        localStorage.setItem('pp_local_user_id', userId);
-        localStorage.setItem('pp_user_id', userId);
-        localStorage.setItem('pp_data_source', 'broker');
-      }
-      
-      // Forward to app to process the token exchange
-      navigate(`/app${window.location.search}`, { replace: true });
-    }
-  }, [navigate]);
 
   const doLogin = async () => {
     setLoading(true);
@@ -44,49 +23,6 @@ const Login: React.FC = () => {
     if (error) { setError(error.message); setLoading(false); }
     else { 
       navigate('/app');
-    }
-  };
-
-  const startBrokerOnlyLogin = async (broker: 'fyers' | 'zerodha') => {
-    try {
-      setError(null);
-      setLoading(true);
-      const existing = localStorage.getItem('pp_local_user_id');
-      const c: any = (globalThis as any)?.crypto;
-      const userId = existing || (c && typeof c.randomUUID === 'function' ? c.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
-      
-      const envUrl = (import.meta as any)?.env?.VITE_API_URL || (import.meta as any)?.env?.VITE_API_BASE_URL;
-      const isProd = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-      const defaultUrl = isProd ? 'https://first-nivesh.onrender.com' : 'http://localhost:3001';
-      const apiBaseUrl = envUrl && typeof envUrl === 'string' && envUrl.trim() ? envUrl.trim() : defaultUrl;
-      
-      const res = await fetch(`${apiBaseUrl}/api/broker/${broker}/login-url`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId }),
-      });
-      
-      const data = await res.json().catch(() => null);
-      
-      if (!res.ok) {
-        throw new Error(data?.error || `Failed to get ${broker} login URL`);
-      }
-      
-      if (data?.loginUrl) {
-        localStorage.setItem('pp_auth_mode', 'broker');
-        localStorage.setItem('pp_local_user_id', userId);
-        localStorage.setItem('pp_user_id', userId);
-        localStorage.setItem('pp_broker', broker);
-        localStorage.setItem('pp_data_source', 'broker');
-        localStorage.setItem('pp_broker_pending', broker);
-        
-        window.location.href = data.loginUrl;
-      } else {
-        throw new Error('Missing login URL in response');
-      }
-    } catch (e: any) {
-      setError(e.message || 'Unable to start broker login');
-      setLoading(false);
     }
   };
 
@@ -242,76 +178,6 @@ const Login: React.FC = () => {
               {loading ? 'Signing in…' : '🚀  Sign In to PaperProfit'}
             </button>
 
-            <div style={{ display:'flex', alignItems:'center', gap:'10px', marginTop:'0.25rem' }}>
-              <div style={{ height:1, flex:1, background:'rgba(255,255,255,0.08)' }} />
-              <div style={{ color:'rgba(255,255,255,0.35)', fontSize:12, fontWeight:700 }}>or</div>
-              <div style={{ height:1, flex:1, background:'rgba(255,255,255,0.08)' }} />
-            </div>
-
-            <div style={{ textAlign:'center', color:'rgba(255,255,255,0.45)', fontSize:13, fontWeight:700, marginTop:'0.25rem' }}>
-              Sign in with your Broker Account
-            </div>
-
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:'10px' }}>
-              <button
-                type="button"
-                disabled
-                style={{
-                  padding:'12px 10px',
-                  background:'rgba(255,255,255,0.03)',
-                  border:'1px solid rgba(255,255,255,0.08)',
-                  borderRadius:'12px',
-                  color:'rgba(255,255,255,0.45)',
-                  fontWeight:800,
-                  fontSize:13,
-                  cursor:'not-allowed',
-                }}
-              >
-                <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
-                  <img src="https://t3.gstatic.com/favicon?V=2&client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://dhan.co&size=64" alt="Dhan" style={{ width:18, height:18, borderRadius:4 }} />
-                  <span>Dhan</span>
-                </div>
-              </button>
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => startBrokerOnlyLogin('fyers')}
-                style={{
-                  padding:'12px 10px',
-                  background:'rgba(255,255,255,0.04)',
-                  border:'1px solid rgba(16,185,129,0.25)',
-                  borderRadius:'12px',
-                  color:'rgba(255,255,255,0.9)',
-                  fontWeight:900,
-                  fontSize:13,
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                }}
-              >
-                <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
-                  <img src="https://t3.gstatic.com/favicon?V=2&client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://fyers.in&size=64" alt="Fyers" style={{ width:18, height:18, borderRadius:4 }} />
-                  <span>Fyers</span>
-                </div>
-              </button>
-              <button
-                type="button"
-                disabled
-                style={{
-                  padding:'12px 10px',
-                  background:'rgba(255,255,255,0.03)',
-                  border:'1px solid rgba(255,255,255,0.08)',
-                  borderRadius:'12px',
-                  color:'rgba(255,255,255,0.45)',
-                  fontWeight:800,
-                  fontSize:13,
-                  cursor:'not-allowed',
-                }}
-              >
-                <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
-                  <img src="https://t3.gstatic.com/favicon?V=2&client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://angelone.in&size=64" alt="Angel One" style={{ width:18, height:18, borderRadius:4 }} />
-                  <span>AngelOne</span>
-                </div>
-              </button>
-            </div>
           </form>
         </div>
 
