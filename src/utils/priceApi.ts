@@ -67,10 +67,10 @@ const PROXY_SERVICES = [
 
 const resolveBaseUrl = (): string => {
   try {
-    const envBase = (import.meta?.env?.VITE_API_BASE_URL && import.meta.env.VITE_API_BASE_URL.trim())
-      ? import.meta.env.VITE_API_BASE_URL.trim()
-      : '';
-    if (envBase) return envBase;
+    const envUrl = (import.meta as any)?.env?.VITE_API_URL || (import.meta as any)?.env?.VITE_API_BASE_URL;
+    if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '') {
+      return envUrl.trim();
+    }
   } catch (e) {}
   
   // In development, hit the Vite dev server which proxies to 3001

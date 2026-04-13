@@ -55,7 +55,7 @@ const Login: React.FC = () => {
       const c: any = (globalThis as any)?.crypto;
       const userId = existing || (c && typeof c.randomUUID === 'function' ? c.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
       
-      const envUrl = (import.meta as any)?.env?.VITE_API_BASE_URL;
+      const envUrl = (import.meta as any)?.env?.VITE_API_URL || (import.meta as any)?.env?.VITE_API_BASE_URL;
       const apiBaseUrl = envUrl && typeof envUrl === 'string' && envUrl.trim() ? envUrl.trim() : 'http://localhost:3001';
       
       const res = await fetch(`${apiBaseUrl}/api/broker/${broker}/login-url`, {

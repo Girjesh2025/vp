@@ -58,7 +58,7 @@ interface StockWithPrice extends Stock {
 const StockPortfolioApp: React.FC = () => {
   const { user } = useAuth();
   const apiBaseUrl = (() => {
-    const envUrl = (import.meta as any)?.env?.VITE_API_BASE_URL;
+    const envUrl = (import.meta as any)?.env?.VITE_API_URL || (import.meta as any)?.env?.VITE_API_BASE_URL;
     return envUrl && typeof envUrl === 'string' && envUrl.trim() ? envUrl.trim() : 'http://localhost:3001';
   })();
   const { 
