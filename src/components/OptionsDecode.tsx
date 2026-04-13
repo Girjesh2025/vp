@@ -85,6 +85,12 @@ const OptionsDecode: React.FC = () => {
   const [instrument, setInstrument] = useState<Instrument>('NIFTY');
   const [expiry, setExpiry] = useState<Expiry>('Current Expiry');
   const pollingRef = useRef<NodeJS.Timeout>();
+  const apiBaseUrl = (() => {
+    const envUrl = (import.meta as any)?.env?.VITE_API_URL || (import.meta as any)?.env?.VITE_API_BASE_URL;
+    const isProd = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    const defaultUrl = isProd ? 'https://first-nivesh.onrender.com' : 'http://localhost:3001';
+    return envUrl && typeof envUrl === 'string' && envUrl.trim() ? envUrl.trim() : defaultUrl;
+  })();
 
   const [isLoading, setIsLoading] = useState(true);
   const [isLive, setIsLive] = useState(false);
@@ -104,7 +110,7 @@ const OptionsDecode: React.FC = () => {
   // Function to pull real NSE Options Data
   const fetchOptionsData = useCallback(async () => {
     try {
-      const response = await fetch(`http://localhost:3001/api/options/${instrument}`);
+      const response = await fetch(`${apiBaseUrl}/api/options/${instrument}`);
       if (!response.ok) throw new Error('API Error');
       const data = await response.json();
       
@@ -212,7 +218,7 @@ const OptionsDecode: React.FC = () => {
       isLiveRef.current = false;
       setIsLoading(false);
     }
-  }, [instrument]);
+  }, [apiBaseUrl, instrument]);
 
   // Instrument Change Hook & Polling Activation
   useEffect(() => {
