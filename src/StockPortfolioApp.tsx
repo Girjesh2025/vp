@@ -183,6 +183,12 @@ const StockPortfolioApp: React.FC = () => {
 
   // Restore broker connection status on mount
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('auth_code') || params.get('code') || params.get('request_token')) {
+      // We are in the middle of an OAuth redirect. Do not fetch status yet, let the exchange handle it!
+      return;
+    }
+
     if (localStorage.getItem('pp_data_source') === 'broker' || localStorage.getItem('pp_broker')) {
       refreshBrokerStatus();
     }
