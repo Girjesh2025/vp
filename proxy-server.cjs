@@ -564,6 +564,7 @@ app.post('/api/broker/fyers/exchange', async (req, res) => {
         code: authCode
       })
     });
+    console.log(`[broker] Fyers validate-authcode status=${tokenRes.status} ok=${tokenRes.ok}`);
 
     const responseText = await tokenRes.text();
     let response;
@@ -587,8 +588,10 @@ app.post('/api/broker/fyers/exchange', async (req, res) => {
       return res.status(400).json({ error: response.message || 'Fyers token exchange failed', details: response });
     }
     if (!response || response.s !== 'ok' || !response.access_token) {
+      console.error('Fyers token exchange invalid response:', response);
       return res.status(400).json({ error: 'Failed to exchange token', details: response });
     }
+    console.log(`[broker] Fyers token exchange success userId=${userId}`);
     brokerSessions.set(userId, {
       broker: 'fyers',
       accessToken: response.access_token,
@@ -600,9 +603,12 @@ app.post('/api/broker/fyers/exchange', async (req, res) => {
     fyers.setAccessToken(response.access_token);
     let holdings = [];
     try {
+      console.log(`[broker] Attempting immediate holdings fetch for userId=${userId}`);
       const holdingsRes = await fyers.get_holdings();
+      console.log(`[broker] Immediate holdings fetch response keys=${Object.keys(holdingsRes || {}).join(',')}`);
       if (holdingsRes && holdingsRes.holdings) {
         holdings = holdingsRes.holdings;
+        console.log(`[broker] Immediate holdings count=${holdings.length}`);
       }
     } catch (holdingsErr) {
       console.warn('Failed to automatically fetch holdings on login', holdingsErr);
@@ -610,6 +616,7 @@ app.post('/api/broker/fyers/exchange', async (req, res) => {
     
     return res.json({ connected: true, broker: 'fyers', holdings });
   } catch (e) {
+    console.error('Fyers exchange route exception:', e);
     return res.status(400).json({ error: 'Failed to exchange token' });
   }
 });
