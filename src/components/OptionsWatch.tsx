@@ -87,6 +87,7 @@ const INDEX_DATA: Record<IndexName, StrikeData[]> = {
 const OptionsWatch: React.FC = () => {
   const [selectedIndex, setSelectedIndex] = useState<IndexName>('NIFTY 50');
   const [timeProgress, setTimeProgress] = useState<number>(100);
+  const [maxTimeProgress, setMaxTimeProgress] = useState<number>(100);
 
   // Set the slider to reflect the current real-world time between 9:15 AM and 3:30 PM
   useEffect(() => {
@@ -101,16 +102,19 @@ const OptionsWatch: React.FC = () => {
     
     const nowMinutes = currentHours * 60 + currentMinutes;
     
+    let progress = 100;
     if (nowMinutes <= openMinutes) {
-      setTimeProgress(0);
+      progress = 0;
     } else if (nowMinutes >= closeMinutes) {
-      setTimeProgress(100);
+      progress = 100;
     } else {
       const totalMarketMinutes = closeMinutes - openMinutes;
       const elapsedMinutes = nowMinutes - openMinutes;
-      const progress = (elapsedMinutes / totalMarketMinutes) * 100;
-      setTimeProgress(progress);
+      progress = (elapsedMinutes / totalMarketMinutes) * 100;
     }
+    
+    setTimeProgress(progress);
+    setMaxTimeProgress(progress);
   }, []);
 
   // --- Formatters ---
@@ -261,12 +265,23 @@ const OptionsWatch: React.FC = () => {
                type="range" 
                min="0" max="100" 
                value={timeProgress}
-               onChange={(e) => setTimeProgress(Number(e.target.value))}
+               onChange={(e) => {
+                 const val = Number(e.target.value);
+                 if (val <= maxTimeProgress) {
+                   setTimeProgress(val);
+                 }
+               }}
                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30"
             />
 
             {/* Base Track */}
             <div className="absolute w-full h-1.5 bg-[#2a2a2a] rounded-full"></div>
+            
+            {/* Future Track (Disabled portion) */}
+            <div 
+               className="absolute right-0 h-1.5 bg-black/40 rounded-r-full"
+               style={{ width: `${100 - maxTimeProgress}%` }}
+            ></div>
             
             {/* Filled Glow Track */}
             <div 
