@@ -15,7 +15,7 @@ import {
   PlayCircle,
   X
 } from 'lucide-react';
-import { fetchStockPrice, fetchIntradayPrices, fetchHistoricalOHLCV } from '../utils/priceApi';
+import { fetchStockPrice, fetchHistoricalOHLCV, fetchMultipleStockPrices, fetchIntradayPrices } from '../utils/priceApi';
 import { stockDatabase } from '../stockDatabase';
 import { fetchMarketNews, type NewsItem } from '../utils/newsApi';
 import { TICKER_INDICES } from './MarketTicker';
@@ -47,6 +47,8 @@ interface MarketEyeData {
   time: string;
   rFac: number;
   isBull: boolean;
+  high52?: number;
+  low52?: number;
 }
 
 interface WeeklySignal {
@@ -163,7 +165,7 @@ const calcRsi = (closes: number[], period: number = 14): number | null => {
 const MarketEye = () => {
   const [marketData, setMarketData] = useState<MarketEyeData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [viewAllType, setViewAllType] = useState<'gainers' | 'losers' | null>(null);
+  const [viewAllType, setViewAllType] = useState<'gainers' | 'losers' | 'high52' | 'low52' | null>(null);
   
   // Keep indicesData state
   const [indicesData, setIndicesData] = useState<{
@@ -205,8 +207,7 @@ const MarketEye = () => {
     const loadData = async () => {
       setLoading(true);
       const results: MarketEyeData[] = [];
-      
-      const batchSize = 10;
+      const batchSize = 50; // Increased to 50 for Fyers API efficiency
       
       // Fetch Indices and News
       let baselineNiftyChange = 0;
@@ -273,70 +274,67 @@ const MarketEye = () => {
         console.warn("Failed to fetch ticker data", e);
       }
 
-      // Fetch all basic stock prices first
-      for (let i = 0; i < WATCHLIST_SYMBOLS.length; i += batchSize) {
-        const batch = WATCHLIST_SYMBOLS.slice(i, i + batchSize);
-        await Promise.allSettled(
-          batch.map(async (symbol) => {
-            try {
-              const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000));
-              const data = await Promise.race([
-                fetchStockPrice(`${symbol}.NS`),
-                timeoutPromise
-              ]);
+      // Fetch all basic stock prices first using batching if available
+      const symbolsToFetch = WATCHLIST_SYMBOLS.map(s => `${s}.NS`);
+      
+      for (let i = 0; i < symbolsToFetch.length; i += batchSize) {
+        const batch = symbolsToFetch.slice(i, i + batchSize);
+        if (!isMounted) return;
+        
+        try {
+          const batchData = await fetchMultipleStockPrices(batch);
+          
+          for (const [symbolWithSuffix, data] of Object.entries(batchData)) {
+            if (data && isMounted) {
+              const symbol = symbolWithSuffix.replace('.NS', '');
+              const stockChange = data.change || 0;
+              const absChange = Math.abs(stockChange);
+              
+              // Base Signal % is absolute change (fallback)
+              const signalPct = absChange;
+              
+              // Intraday Boost (R.Fac): Relative Strength vs Benchmark
+              const isBank = BANK_NIFTY_SYMBOLS.includes(symbol);
+              const benchmarkChange = isBank ? baselineBankNiftyChange : baselineNiftyChange;
+              const relativeMomentum = stockChange - benchmarkChange;
+              const rFac = Math.abs(relativeMomentum);
+              
+              // Generate a realistic recent breakout time today (between 9:15 AM and 3:30 PM)
+              const now = new Date();
+              let hash = 0;
+              for (let j = 0; j < symbol.length; j++) hash = symbol.charCodeAt(j) + ((hash << 5) - hash);
+              const totalMinsNow = now.getHours() * 60 + now.getMinutes();
+              const startMins = 9 * 60 + 15; // 9:15 AM
+              const endMins = 15 * 60 + 30; // 3:30 PM
+              
+              const currentMarketMins = Math.min(endMins, Math.max(startMins, totalMinsNow));
+              const elapsedMins = currentMarketMins - startMins;
+              const maxElapsedMins = Math.min(375, elapsedMins);
+              
+              const recentOffset = Math.max(0, maxElapsedMins - 120);
+              const randomOffset = recentOffset + (Math.abs(hash) % Math.min(120, Math.max(1, maxElapsedMins)));
+              const eventMinsRaw = startMins + randomOffset;
+              const eventMins = Math.min(15 * 60 + 30, eventMinsRaw); // Hard cap at 3:30 PM
+              const hour = Math.floor(eventMins / 60);
+              const min = eventMins % 60;
+              const time = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
 
-              if (data && isMounted) {
-                const stockChange = data.change || 0;
-                const absChange = Math.abs(stockChange);
-                
-                // Base Signal % is absolute change (fallback)
-                const signalPct = absChange;
-                
-                // Intraday Boost (R.Fac): Relative Strength vs Benchmark
-                const isBank = BANK_NIFTY_SYMBOLS.includes(symbol);
-                const benchmarkChange = isBank ? baselineBankNiftyChange : baselineNiftyChange;
-                const relativeMomentum = stockChange - benchmarkChange;
-                const rFac = Math.abs(relativeMomentum);
-                
-                // Generate a realistic recent breakout time today (between 9:15 AM and 3:30 PM)
-                const now = new Date();
-                let hash = 0;
-                for (let j = 0; j < symbol.length; j++) hash = symbol.charCodeAt(j) + ((hash << 5) - hash);
-                const totalMinsNow = now.getHours() * 60 + now.getMinutes();
-                const startMins = 9 * 60 + 15; // 9:15 AM
-                const endMins = 15 * 60 + 30; // 3:30 PM
-                
-                // If it's before market open, simulate as if it's the end of the previous day
-                // If it's after market close, cap it at market close
-                const currentMarketMins = Math.min(endMins, Math.max(startMins, totalMinsNow));
-                
-                const elapsedMins = currentMarketMins - startMins;
-                const maxElapsedMins = Math.min(375, elapsedMins);
-                
-                // Estimate a breakout time in the last 2 hours (120 mins)
-                const recentOffset = Math.max(0, maxElapsedMins - 120);
-                const randomOffset = recentOffset + (Math.abs(hash) % Math.min(120, Math.max(1, maxElapsedMins)));
-                const eventMinsRaw = startMins + randomOffset;
-                const eventMins = Math.min(15 * 60 + 30, eventMinsRaw); // Hard cap at 3:30 PM
-                const hour = Math.floor(eventMins / 60);
-                const min = eventMins % 60;
-                const time = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
-
-                results.push({
-                  symbol,
-                  price: data.price,
-                  change: stockChange,
-                  signalPct,
-                  time,
-                  rFac,
-                  isBull: relativeMomentum >= 0 // Bullish if outperforming the market
-                });
-              }
-            } catch (e) {
-              console.warn(`Failed to fetch ${symbol}`);
+              results.push({
+                symbol,
+                price: data.price,
+                change: stockChange,
+                signalPct,
+                time,
+                rFac,
+                isBull: relativeMomentum >= 0,
+                high52: data.high52,
+                low52: data.low52
+              });
             }
-          })
-        );
+          }
+        } catch (e) {
+          console.warn(`Failed to fetch batch ${batch.join(',')}`);
+        }
       }
 
       if (!isMounted) return;
@@ -640,6 +638,18 @@ const MarketEye = () => {
   // Use global marketData for cards
   const topGainers = [...marketData].sort((a, b) => b.change - a.change).slice(0, 5);
   const topLosers = [...marketData].sort((a, b) => a.change - b.change).slice(0, 5);
+  
+  // 52-week High/Low calculations
+  // We sort all stocks by proximity to their 52-week high/low and take the top 5.
+  const high52Stocks = [...marketData]
+    .filter(d => d.high52 !== undefined && d.high52 > 0)
+    .sort((a, b) => (b.price / (b.high52 || 1)) - (a.price / (a.high52 || 1)))
+    .slice(0, 5);
+
+  const low52Stocks = [...marketData]
+    .filter(d => d.low52 !== undefined && d.low52 > 0)
+    .sort((a, b) => (a.price / (a.low52 || 1)) - (b.price / (b.low52 || 1)))
+    .slice(0, 5);
   
   // Breakout Beacon prefers high absolute percentage change
   const breakouts = [...marketData]
@@ -1026,33 +1036,34 @@ const MarketEye = () => {
           {/* Top Gainers & Losers row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             {/* Top Gainers */}
-            <div className="bg-[#131b26] border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden">
-              <div className="flex items-center justify-between mb-4 border-b border-slate-800/60 pb-3">
-                <h2 className="text-[15px] font-bold text-blue-400">Top Gainers</h2>
+            <div className="bg-[#131b26]/60 backdrop-blur-xl border border-white/5 rounded-2xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.3)] relative overflow-hidden group">
+              <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-emerald-500/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              <div className="flex items-center justify-between mb-5 border-b border-white/5 pb-3">
+                <h2 className="text-[15px] font-black text-emerald-400 tracking-wide">Top Gainers</h2>
                 <button 
                   onClick={() => setViewAllType('gainers')}
-                  className="text-[13px] font-semibold text-blue-500 hover:text-blue-400 transition-colors"
+                  className="text-[12px] font-bold text-emerald-500 hover:text-emerald-300 transition-colors uppercase tracking-wider"
                 >
                   View All
                 </button>
               </div>
-              <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+              <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2 relative z-10">
                 {topGainers.map(s => {
                   // Max width is 100%, we normalize based on the top gainer's change
                   const maxChange = topGainers[0]?.change || 1;
                   const widthPct = Math.max(10, Math.min(100, (s.change / maxChange) * 100));
                   return (
-                    <div key={s.symbol} onClick={() => handleRowClick(s.symbol)} className="flex items-center gap-3 cursor-pointer group">
+                    <div key={s.symbol} onClick={() => handleRowClick(s.symbol)} className="flex items-center gap-3 cursor-pointer group/row">
                       <div className="w-28 flex items-center gap-2.5 shrink-0">
                          <StockLogo symbol={s.symbol} />
-                         <span className="text-[11px] font-bold text-slate-300 truncate group-hover:text-white transition-colors" title={s.symbol}>{s.symbol}</span>
+                         <span className="text-[11px] font-bold text-slate-300 truncate group-hover/row:text-white transition-colors" title={s.symbol}>{s.symbol}</span>
                       </div>
-                      <div className="flex-1 flex items-center h-6">
+                      <div className="flex-1 flex items-center h-7 bg-black/40 border border-white/5 rounded-lg relative overflow-hidden shadow-inner">
                         <div 
-                          className="h-full bg-emerald-500 flex items-center justify-end px-2 text-[10px] font-bold text-white rounded-r-sm transition-all duration-1000 shadow-[0_0_10px_rgba(16,185,129,0.3)] group-hover:brightness-110"
+                          className="h-full bg-gradient-to-r from-emerald-600/80 to-emerald-400 flex items-center justify-end px-3 text-[10px] font-bold text-white rounded-lg transition-all duration-1000 shadow-[0_0_15px_rgba(16,185,129,0.4)] group-hover/row:brightness-110 min-w-max"
                           style={{ width: `${widthPct}%` }}
                         >
-                          {s.change.toFixed(2)}%
+                          <span className="whitespace-nowrap drop-shadow-md">{s.change.toFixed(2)}%</span>
                         </div>
                       </div>
                     </div>
@@ -1062,37 +1073,113 @@ const MarketEye = () => {
             </div>
 
             {/* Top Losers */}
-            <div className="bg-[#131b26] border border-slate-800 rounded-xl p-4 shadow-lg relative overflow-hidden">
-              <div className="flex items-center justify-between mb-4 border-b border-slate-800/60 pb-3">
-                <h2 className="text-[15px] font-bold text-blue-400">Top Losers</h2>
+            <div className="bg-[#131b26]/60 backdrop-blur-xl border border-white/5 rounded-2xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.3)] relative overflow-hidden group">
+              <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-red-500/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              <div className="flex items-center justify-between mb-5 border-b border-white/5 pb-3">
+                <h2 className="text-[15px] font-black text-red-400 tracking-wide">Top Losers</h2>
                 <button 
                   onClick={() => setViewAllType('losers')}
-                  className="text-[13px] font-semibold text-blue-500 hover:text-blue-400 transition-colors"
+                  className="text-[12px] font-bold text-red-500 hover:text-red-300 transition-colors uppercase tracking-wider"
                 >
                   View All
                 </button>
               </div>
-              <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+              <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2 relative z-10">
                 {topLosers.map(s => {
                   const maxChange = Math.abs(topLosers[0]?.change || 1);
                   const widthPct = Math.max(10, Math.min(100, (Math.abs(s.change) / maxChange) * 100));
                   return (
-                    <div key={s.symbol} onClick={() => handleRowClick(s.symbol)} className="flex items-center gap-3 cursor-pointer group">
+                    <div key={s.symbol} onClick={() => handleRowClick(s.symbol)} className="flex items-center gap-3 cursor-pointer group/row">
                       <div className="w-28 flex items-center gap-2.5 shrink-0">
                          <StockLogo symbol={s.symbol} />
-                         <span className="text-[11px] font-bold text-slate-300 truncate group-hover:text-white transition-colors" title={s.symbol}>{s.symbol}</span>
+                         <span className="text-[11px] font-bold text-slate-300 truncate group-hover/row:text-white transition-colors" title={s.symbol}>{s.symbol}</span>
                       </div>
-                      <div className="flex-1 flex items-center h-6">
+                      <div className="flex-1 flex items-center h-7 bg-black/40 border border-white/5 rounded-lg relative overflow-hidden shadow-inner">
                         <div 
-                          className="h-full bg-red-500 flex items-center justify-end px-2 text-[10px] font-bold text-white rounded-r-sm transition-all duration-1000 shadow-[0_0_10px_rgba(239,68,68,0.3)] group-hover:brightness-110"
+                          className="h-full bg-gradient-to-r from-red-600/80 to-red-400 flex items-center justify-end px-3 text-[10px] font-bold text-white rounded-lg transition-all duration-1000 shadow-[0_0_15px_rgba(239,68,68,0.4)] group-hover/row:brightness-110 min-w-max"
                           style={{ width: `${widthPct}%` }}
                         >
-                          {s.change.toFixed(2)}%
+                          <span className="whitespace-nowrap drop-shadow-md">{s.change.toFixed(2)}%</span>
                         </div>
                       </div>
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          </div>
+
+          {/* 52 Week Highs & Lows row */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            {/* 52 Week Highs */}
+            <div className="bg-[#131b26]/60 backdrop-blur-xl border border-white/5 rounded-2xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.3)] relative overflow-hidden group">
+              <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-emerald-500/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              <div className="flex items-center justify-between mb-5 border-b border-white/5 pb-3">
+                <h2 className="text-[15px] font-black text-emerald-400 tracking-wide">Near 52-Week High</h2>
+                <button 
+                  onClick={() => setViewAllType('high52')}
+                  className="text-[12px] font-bold text-emerald-500 hover:text-emerald-300 transition-colors uppercase tracking-wider"
+                >
+                  View All
+                </button>
+              </div>
+              <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2 relative z-10">
+                {high52Stocks.length > 0 ? high52Stocks.map(s => {
+                  const pctToHigh = s.high52 ? ((s.price / s.high52) * 100) : 100;
+                  const widthPct = Math.max(10, Math.min(100, pctToHigh));
+                  return (
+                    <div key={s.symbol} onClick={() => handleRowClick(s.symbol)} className="flex items-center gap-3 cursor-pointer group/row">
+                      <div className="w-28 flex items-center gap-2.5 shrink-0">
+                         <StockLogo symbol={s.symbol} />
+                         <span className="text-[11px] font-bold text-slate-300 truncate group-hover/row:text-white transition-colors" title={s.symbol}>{s.symbol}</span>
+                      </div>
+                      <div className="flex-1 flex items-center h-7 bg-black/40 border border-white/5 rounded-lg relative overflow-hidden shadow-inner">
+                        <div 
+                          className="h-full bg-gradient-to-r from-emerald-600/80 to-emerald-400 flex items-center justify-end px-3 text-[10px] font-bold text-white rounded-lg transition-all duration-1000 shadow-[0_0_15px_rgba(16,185,129,0.4)] group-hover/row:brightness-110 min-w-max"
+                          style={{ width: `${widthPct}%` }}
+                        >
+                          <span className="whitespace-nowrap drop-shadow-md tracking-wide font-black">{s.price.toFixed(2)} <span className="text-emerald-200/70">/ {s.high52?.toFixed(2) || 'N/A'}</span></span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }) : <div className="text-center text-slate-500 text-sm py-4 font-medium">No stocks near 52W High</div>}
+              </div>
+            </div>
+
+            {/* 52 Week Lows */}
+            <div className="bg-[#131b26]/60 backdrop-blur-xl border border-white/5 rounded-2xl p-5 shadow-[0_8px_32px_rgba(0,0,0,0.3)] relative overflow-hidden group">
+              <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-red-500/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              <div className="flex items-center justify-between mb-5 border-b border-white/5 pb-3">
+                <h2 className="text-[15px] font-black text-red-400 tracking-wide">Near 52-Week Low</h2>
+                <button 
+                  onClick={() => setViewAllType('low52')}
+                  className="text-[12px] font-bold text-red-500 hover:text-red-300 transition-colors uppercase tracking-wider"
+                >
+                  View All
+                </button>
+              </div>
+              <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2 relative z-10">
+                {low52Stocks.length > 0 ? low52Stocks.map(s => {
+                  const pctToLow = s.low52 ? ((s.low52 / s.price) * 100) : 100;
+                  const widthPct = Math.max(10, Math.min(100, pctToLow));
+                  return (
+                    <div key={s.symbol} onClick={() => handleRowClick(s.symbol)} className="flex items-center gap-3 cursor-pointer group/row">
+                      <div className="w-28 flex items-center gap-2.5 shrink-0">
+                         <StockLogo symbol={s.symbol} />
+                         <span className="text-[11px] font-bold text-slate-300 truncate group-hover/row:text-white transition-colors" title={s.symbol}>{s.symbol}</span>
+                      </div>
+                      <div className="flex-1 flex items-center h-7 bg-black/40 border border-white/5 rounded-lg relative overflow-hidden shadow-inner">
+                        <div 
+                          className="h-full bg-gradient-to-r from-red-600/80 to-red-400 flex items-center justify-end px-3 text-[10px] font-bold text-white rounded-lg transition-all duration-1000 shadow-[0_0_15px_rgba(239,68,68,0.4)] group-hover/row:brightness-110 min-w-max"
+                          style={{ width: `${widthPct}%` }}
+                        >
+                          <span className="whitespace-nowrap drop-shadow-md tracking-wide font-black">{s.price.toFixed(2)} <span className="text-red-200/70">/ {s.low52?.toFixed(2) || 'N/A'}</span></span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }) : <div className="text-center text-slate-500 text-sm py-4 font-medium">No stocks near 52W Low</div>}
               </div>
             </div>
           </div>
@@ -1672,55 +1759,93 @@ const MarketEye = () => {
 
       {/* VIEW ALL MODAL */}
       {viewAllType && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#131b26] border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between p-5 border-b border-slate-800/60 bg-[#172030]">
-              <h2 className={`text-xl font-bold ${viewAllType === 'gainers' ? 'text-emerald-400' : 'text-red-400'}`}>
-                {viewAllType === 'gainers' ? 'Top Gainers' : 'Top Losers'}
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="bg-[#131b26]/80 backdrop-blur-2xl border border-white/10 rounded-3xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col shadow-[0_20px_60px_rgba(0,0,0,0.5)] animate-in zoom-in-95 duration-200 relative">
+            <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+            <div className="flex items-center justify-between p-6 border-b border-white/5 bg-white/[0.02]">
+              <h2 className={`text-xl font-black tracking-wide ${
+                viewAllType === 'gainers' ? 'text-emerald-400' : 
+                viewAllType === 'losers' ? 'text-red-400' : 
+                viewAllType === 'high52' ? 'text-emerald-400' : 'text-red-400'
+              }`}>
+                {viewAllType === 'gainers' ? 'Top Gainers' : 
+                 viewAllType === 'losers' ? 'Top Losers' : 
+                 viewAllType === 'high52' ? 'Near 52-Week High' : 'Near 52-Week Low'}
               </h2>
               <button 
                 onClick={() => setViewAllType(null)}
-                className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors"
+                className="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-white/10 transition-colors border border-transparent hover:border-white/10"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="p-6 overflow-y-auto custom-scrollbar">
-              <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+              <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2 relative z-10">
                 {(() => {
-                  const sortedData = viewAllType === 'gainers' 
-                    ? [...marketData].sort((a, b) => b.change - a.change)
-                    : [...marketData].sort((a, b) => a.change - b.change);
+                  let filteredData: MarketEyeData[] = [];
                   
-                  const filteredData = sortedData.filter(s => viewAllType === 'gainers' ? s.change > 0 : s.change < 0).slice(0, 20);
+                  if (viewAllType === 'gainers') {
+                    filteredData = [...marketData].sort((a, b) => b.change - a.change).filter(s => s.change > 0).slice(0, 20);
+                  } else if (viewAllType === 'losers') {
+                    filteredData = [...marketData].sort((a, b) => a.change - b.change).filter(s => s.change < 0).slice(0, 20);
+                  } else if (viewAllType === 'high52') {
+                    filteredData = [...marketData]
+                      .filter(d => d.high52 !== undefined && d.high52 > 0)
+                      .sort((a, b) => (b.price / (b.high52 || 1)) - (a.price / (a.high52 || 1)))
+                      .slice(0, 20);
+                  } else if (viewAllType === 'low52') {
+                    filteredData = [...marketData]
+                      .filter(d => d.low52 !== undefined && d.low52 > 0)
+                      .sort((a, b) => (a.price / (a.low52 || 1)) - (b.price / (b.low52 || 1)))
+                      .slice(0, 20);
+                  }
                   
                   if (filteredData.length === 0) {
-                    return <div className="text-center text-slate-500 py-8">No {viewAllType} found.</div>;
+                    return <div className="text-center text-slate-500 py-8">No stocks found for this category.</div>;
                   }
 
                   const maxChange = Math.abs(filteredData[0]?.change || 1);
 
                   return filteredData.map(s => {
-                    const widthPct = Math.max(10, Math.min(100, (Math.abs(s.change) / maxChange) * 100));
+                    let widthPct = 0;
+                    let displayValue = '';
+                    let barColorClass = '';
+                    
+                    if (viewAllType === 'gainers' || viewAllType === 'losers') {
+                       widthPct = Math.max(10, Math.min(100, (Math.abs(s.change) / maxChange) * 100));
+                       displayValue = `${s.change > 0 ? '+' : ''}${s.change.toFixed(2)}%`;
+                       barColorClass = viewAllType === 'gainers' ? 'bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]';
+                    } else if (viewAllType === 'high52') {
+                       const pctToHigh = s.high52 ? ((s.price / s.high52) * 100) : 100;
+                       widthPct = Math.max(10, Math.min(100, pctToHigh));
+                       displayValue = `${s.price.toFixed(2)} / ${s.high52?.toFixed(2) || 'N/A'}`;
+                       barColorClass = 'bg-gradient-to-r from-emerald-600/80 to-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.4)] text-right';
+                    } else if (viewAllType === 'low52') {
+                       const pctToLow = s.low52 ? ((s.low52 / s.price) * 100) : 100;
+                       widthPct = Math.max(10, Math.min(100, pctToLow));
+                       displayValue = `${s.price.toFixed(2)} / ${s.low52?.toFixed(2) || 'N/A'}`;
+                       barColorClass = 'bg-gradient-to-r from-red-600/80 to-red-400 shadow-[0_0_15px_rgba(239,68,68,0.4)] text-right';
+                    }
+
                     return (
                       <div key={s.symbol} onClick={() => handleRowClick(s.symbol)} className="flex items-center gap-4 cursor-pointer group">
                         <div className="w-32 flex items-center gap-3 shrink-0">
                            <StockLogo symbol={s.symbol} />
                            <span className="text-xs font-bold text-slate-300 truncate group-hover:text-white transition-colors" title={s.symbol}>{s.symbol}</span>
                         </div>
-                        <div className="flex-1 flex items-center h-8 bg-[#0f1520] rounded-r-md">
+                        <div className="flex-1 flex items-center h-8 bg-black/40 border border-white/5 rounded-lg relative overflow-hidden shadow-inner">
                           <div 
-                            className={`h-full flex items-center justify-end px-3 text-xs font-bold text-white rounded-r-md transition-all duration-1000 shadow-lg group-hover:brightness-110 ${
-                              viewAllType === 'gainers' ? 'bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]'
-                            }`}
+                            className={`h-full flex items-center justify-end px-3 text-xs font-bold text-white rounded-lg transition-all duration-1000 shadow-lg group-hover:brightness-110 min-w-max ${barColorClass}`}
                             style={{ width: `${widthPct}%` }}
                           >
-                            {s.change > 0 ? '+' : ''}{s.change.toFixed(2)}%
+                            <span className="whitespace-nowrap drop-shadow-md">{displayValue}</span>
                           </div>
                         </div>
-                        <div className="w-20 text-right text-sm font-bold text-slate-200">
-                          ₹{s.price.toFixed(2)}
-                        </div>
+                        {(viewAllType === 'gainers' || viewAllType === 'losers') && (
+                          <div className="w-20 text-right text-sm font-bold text-slate-200">
+                            ₹{s.price.toFixed(2)}
+                          </div>
+                        )}
                       </div>
                     );
                   });

@@ -24,4 +24,6 @@ export interface PriceData {
   price: number;
   change: number;
   previousClose?: number;
+  high52?: number;
+  low52?: number;
 }

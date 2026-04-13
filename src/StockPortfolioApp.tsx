@@ -26,6 +26,7 @@ import HelpAndSupport from './components/HelpAndSupport';
 import TradingPsychology from './components/TradingPsychology';
 import { MarketTicker } from './components/MarketTicker';
 import { fetchStockPrice } from './utils/priceApi';
+import { useAuth } from './contexts/AuthContext';
 import { 
   getStockBySymbol,
   searchStocksOptimized, 
@@ -55,6 +56,11 @@ interface StockWithPrice extends Stock {
 
 
 const StockPortfolioApp: React.FC = () => {
+  const { user } = useAuth();
+  const apiBaseUrl = (() => {
+    const envUrl = (import.meta as any)?.env?.VITE_API_BASE_URL;
+    return envUrl && typeof envUrl === 'string' && envUrl.trim() ? envUrl.trim() : 'http://localhost:3001';
+  })();
   const { 
     portfolios,
     currentPortfolio,
@@ -71,6 +77,28 @@ const StockPortfolioApp: React.FC = () => {
     switchPortfolio
   } = usePortfolio();
 
+  const [brokerStatus, setBrokerStatus] = useState<{ connected: boolean; broker?: string } | null>(null);
+  const [brokerLoading, setBrokerLoading] = useState(false);
+  const [brokerError, setBrokerError] = useState<string | null>(null);
+  const [useBrokerData, setUseBrokerData] = useState(() => localStorage.getItem('pp_data_source') === 'broker');
+  const [selectedBroker, setSelectedBroker] = useState<'zerodha' | 'fyers'>(() => (localStorage.getItem('pp_broker') === 'fyers' ? 'fyers' : 'zerodha'));
+
+  const [isLoading, setIsLoading] = useState(false);
+  const [priceUpdateTime, setPriceUpdateTime] = useState<Date | null>(null);
+  const [dataError, setDataError] = useState<string | null>(null);
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
+  const [refreshInterval, setRefreshInterval] = useState<NodeJS.Timeout | null>(null);
+  const [apiCallCount, setApiCallCount] = useState(0);
+  const [dailyApiLimit] = useState(100);
+  const [priceAlertsEnabled, setPriceAlertsEnabled] = useState(true);
+  const [portfolioUpdatesEnabled, setPortfolioUpdatesEnabled] = useState(true);
+  const [marketNewsEnabled, setMarketNewsEnabled] = useState(false);
+  const [priceAlerts, setPriceAlerts] = useState<PriceAlert[]>(() => { const saved = localStorage.getItem("priceAlerts"); return saved ? JSON.parse(saved) : []; });
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(getNotificationSettings());
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{isOpen: boolean, stock: Stock | null}>({isOpen: false, stock: null});
+  const [allPortfolioSymbols, setAllPortfolioSymbols] = useState<string[]>([]);
+
   const [stocks, setStocks] = useState<StockWithPrice[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [stockPrices, setStockPrices] = useState<Record<string, PriceData>>({});
@@ -81,14 +109,49 @@ const StockPortfolioApp: React.FC = () => {
   const [transactionModalType, setTransactionModalType] = useState<'buy' | 'sell'>('buy');
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
   
+  // Real Broker Holdings state
+  const [brokerHoldings, setBrokerHoldings] = useState<any[]>([]);
+  const [brokerHoldingsLoading, setBrokerHoldingsLoading] = useState(false);
+
   const location = useLocation();
   const [activeTab, setActiveTab] = useState(() => {
     return (location.state as any)?.activeTab || localStorage.getItem('lastActiveTab') || 'dashboard';
   });
 
+  // Fetch Real Broker Holdings
+  useEffect(() => {
+    if (activeTab !== 'holdings' || !brokerStatus?.connected || brokerStatus.broker !== 'fyers') return;
+    
+    let isMounted = true;
+    const fetchBrokerHoldings = async () => {
+      if (!user?.id) return;
+      try {
+        setBrokerHoldingsLoading(true);
+        const res = await fetch(`${apiBaseUrl}/api/broker/fyers/holdings?userId=${encodeURIComponent(user.id)}`);
+        if (!res.ok) throw new Error('Failed to fetch broker holdings');
+        const data = await res.json();
+        
+        if (isMounted && data && data.holdings && Array.isArray(data.holdings)) {
+          setBrokerHoldings(data.holdings);
+        }
+      } catch (err) {
+        console.warn('Could not fetch broker holdings', err);
+      } finally {
+        if (isMounted) setBrokerHoldingsLoading(false);
+      }
+    };
+    
+    fetchBrokerHoldings();
+    return () => { isMounted = false; };
+  }, [activeTab, brokerStatus?.connected, brokerStatus?.broker, user?.id]);
+
   useEffect(() => {
     localStorage.setItem('lastActiveTab', activeTab);
   }, [activeTab]);
+
+  useEffect(() => {
+    if (user?.id) localStorage.setItem('pp_user_id', user.id);
+  }, [user?.id]);
 
   useEffect(() => {
 
@@ -99,30 +162,216 @@ const StockPortfolioApp: React.FC = () => {
     }
   }, [(location.state as any)?.activeTab]);
 
-  const [isLoading, setIsLoading] = useState(false);
-  const [priceUpdateTime, setPriceUpdateTime] = useState<Date | null>(null);
-  const [dataError, setDataError] = useState<string | null>(null);
-  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
-  const [refreshInterval, setRefreshInterval] = useState<NodeJS.Timeout | null>(null);
-  const [apiCallCount, setApiCallCount] = useState(0);
-  const [dailyApiLimit] = useState(100); // Assuming 100 calls per day for free tier
+  useEffect(() => {
+    const st = location.state as any;
+    if (!st?.openBroker) return;
+    if (!user?.id) return;
+    if (brokerStatus?.connected) return;
+    setTimeout(() => {
+      const preferred = st?.broker === 'fyers' || st?.broker === 'zerodha' ? st.broker : selectedBroker;
+      if (preferred === 'fyers') connectFyers();
+      else connectZerodha();
+    }, 0);
+  }, [brokerStatus?.connected, location.state, selectedBroker, user?.id]);
 
+  const refreshBrokerStatus = async () => {
+    if (!user?.id) return;
+    try {
+      setBrokerLoading(true);
+      setBrokerError(null);
+      const res = await fetch(`${apiBaseUrl}/api/broker/status?userId=${encodeURIComponent(user.id)}`);
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'Failed to load broker status');
+      setBrokerStatus(data);
+      if (data?.connected && (data?.broker === 'fyers' || data?.broker === 'zerodha')) {
+        setSelectedBroker(data.broker);
+        localStorage.setItem('pp_broker', data.broker);
+      }
+    } catch (e: any) {
+      setBrokerStatus({ connected: false });
+      setBrokerError(e?.message || 'Failed to load broker status');
+    } finally {
+      setBrokerLoading(false);
+    }
+  };
+
+  const connectZerodha = async () => {
+    if (!user?.id) return;
+    try {
+      setBrokerLoading(true);
+      setBrokerError(null);
+      localStorage.setItem('pp_broker_pending', 'zerodha');
+      localStorage.setItem('pp_broker', 'zerodha');
+      const res = await fetch(`${apiBaseUrl}/api/broker/zerodha/login-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'Failed to get login URL');
+      if (data?.loginUrl) {
+        window.location.href = data.loginUrl;
+      } else {
+        throw new Error('Missing loginUrl');
+      }
+    } catch (e: any) {
+      setBrokerError(e?.message || 'Broker connect failed');
+    } finally {
+      setBrokerLoading(false);
+    }
+  };
+
+  const connectFyers = async () => {
+    if (!user?.id) return;
+    try {
+      setBrokerLoading(true);
+      setBrokerError(null);
+      localStorage.setItem('pp_broker_pending', 'fyers');
+      localStorage.setItem('pp_broker', 'fyers');
+      const res = await fetch(`${apiBaseUrl}/api/broker/fyers/login-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'Failed to get login URL');
+      if (data?.loginUrl) {
+        window.location.href = data.loginUrl;
+      } else {
+        throw new Error('Missing loginUrl');
+      }
+    } catch (e: any) {
+      setBrokerError(e?.message || 'Broker connect failed');
+    } finally {
+      setBrokerLoading(false);
+    }
+  };
+
+  const disconnectBroker = async () => {
+    if (!user?.id) return;
+    try {
+      setBrokerLoading(true);
+      setBrokerError(null);
+      const res = await fetch(`${apiBaseUrl}/api/broker/disconnect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error || 'Failed to disconnect');
+      setBrokerStatus({ connected: false });
+      localStorage.removeItem('pp_data_source');
+      localStorage.removeItem('pp_broker_pending');
+      setUseBrokerData(false);
+    } catch (e: any) {
+      setBrokerError(e?.message || 'Failed to disconnect broker');
+    } finally {
+      setBrokerLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    refreshBrokerStatus();
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const params = new URLSearchParams(window.location.search);
+    const requestToken = params.get('request_token');
+    const status = params.get('status');
+    const authCode = params.get('auth_code') || params.get('code');
+    const pending = localStorage.getItem('pp_broker_pending');
+    const shouldHandleZerodha = pending === 'zerodha' || (!!requestToken && status === 'success');
+    const shouldHandleFyers = pending === 'fyers' || (!!authCode && !requestToken);
+    if (!shouldHandleZerodha && !shouldHandleFyers) return;
+
+    (async () => {
+      try {
+        setBrokerLoading(true);
+        setBrokerError(null);
+        if (shouldHandleZerodha) {
+          const res = await fetch(`${apiBaseUrl}/api/broker/zerodha/exchange`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: user.id, requestToken }),
+          });
+          const data = await res.json().catch(() => null);
+          if (!res.ok) throw new Error(data?.error || 'Broker connection failed');
+          setBrokerStatus({ connected: true, broker: 'zerodha' });
+          setSelectedBroker('zerodha');
+          localStorage.setItem('pp_broker', 'zerodha');
+          localStorage.setItem('pp_data_source', 'broker');
+          setUseBrokerData(true);
+          params.delete('request_token');
+          params.delete('status');
+        } else if (shouldHandleFyers) {
+          // Decode the Fyers auth_code (JWT) to extract the Client ID
+          try {
+            if (authCode && authCode.includes('.')) {
+              const payloadBase64 = authCode.split('.')[1];
+              const payloadJson = atob(payloadBase64.replace(/-/g, '+').replace(/_/g, '/'));
+              const payload = JSON.parse(payloadJson);
+              if (payload && payload.display_name) {
+                localStorage.setItem('pp_broker_user_id', payload.display_name);
+              }
+            }
+          } catch (decodeErr) {
+            console.warn('Could not decode Fyers auth_code', decodeErr);
+          }
+
+          const res = await fetch(`${apiBaseUrl}/api/broker/fyers/exchange`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: user.id, authCode }),
+          });
+          const data = await res.json().catch(() => null);
+          if (!res.ok) throw new Error(data?.error || 'Broker connection failed');
+          
+          // Instantly populate the holdings from the exchange response
+          if (data && data.holdings && Array.isArray(data.holdings)) {
+            setBrokerHoldings(data.holdings);
+          }
+          
+          setBrokerStatus({ connected: true, broker: 'fyers' });
+          setSelectedBroker('fyers');
+          localStorage.setItem('pp_broker', 'fyers');
+          localStorage.setItem('pp_data_source', 'broker');
+          setUseBrokerData(true);
+          params.delete('auth_code');
+          params.delete('code');
+        }
+        localStorage.removeItem('pp_broker_pending');
+        const newSearch = params.toString();
+        const newUrl = `${window.location.pathname}${newSearch ? `?${newSearch}` : ''}${window.location.hash || ''}`;
+        window.history.replaceState({}, document.title, newUrl);
+        // After successful login, make sure we show the dashboard instead of settings
+        setActiveTab('dashboard');
+      } catch (e: any) {
+        setBrokerError(e?.message || 'Broker connection failed');
+      } finally {
+        setBrokerLoading(false);
+        localStorage.removeItem('pp_broker_pending');
+        params.delete('auth_code');
+        params.delete('code');
+        params.delete('request_token');
+        params.delete('status');
+        const newSearch = params.toString();
+        const newUrl = `${window.location.pathname}${newSearch ? `?${newSearch}` : ''}${window.location.hash || ''}`;
+        window.history.replaceState({}, document.title, newUrl);
+        // Always go to dashboard after login attempt, whether success or fail
+        setActiveTab('dashboard');
+      }
+    })();
+  }, [user?.id]);
   // Use a ref to always have the latest stocks list inside price-fetch without triggering re-renders
   const stocksRef = React.useRef<StockWithPrice[]>([]);
   const stockPricesRef = React.useRef<Record<string, PriceData>>({});
-  const [priceAlertsEnabled, setPriceAlertsEnabled] = useState(true);
-  const [portfolioUpdatesEnabled, setPortfolioUpdatesEnabled] = useState(true);
-  const [marketNewsEnabled, setMarketNewsEnabled] = useState(false);
-  const [priceAlerts, setPriceAlerts] = useState<PriceAlert[]>(() => { const saved = localStorage.getItem("priceAlerts"); return saved ? JSON.parse(saved) : []; });
-  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(getNotificationSettings());
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  
   useEffect(() => { localStorage.setItem("priceAlerts", JSON.stringify(priceAlerts)); }, [priceAlerts]);
-  const [deleteConfirmation, setDeleteConfirmation] = useState<{isOpen: boolean, stock: Stock | null}>({isOpen: false, stock: null});
 
   const memoPortfolioSymbols = useMemo(() => [...new Set(portfolioStocks.map(stock => stock.symbol))], [portfolioStocks]);
 
   // Fetch symbols from ALL portfolios for AI Trading (not just current one)
-  const [allPortfolioSymbols, setAllPortfolioSymbols] = useState<string[]>([]);
   const allPortfoliosRef = useRef<string>('[]');
   useEffect(() => {
     if (!portfolios || portfolios.length === 0) { setAllPortfolioSymbols(memoPortfolioSymbols); return; }
@@ -696,6 +945,7 @@ const StockPortfolioApp: React.FC = () => {
             totalGainLossPercent: stats.totalPnLPercent
           }}
           isLoading={isLoading}
+          brokerStatus={brokerStatus}
           lastUpdated={priceUpdateTime}
           onStockSelect={(stock) => {
             addStock(stock);
@@ -993,6 +1243,179 @@ const StockPortfolioApp: React.FC = () => {
                                     title="Delete stock from portfolio"
                                   >
                                     <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'holdings' && (
+            <div className="space-y-6 max-w-[1400px] mx-auto">
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold text-slate-200">Current Holdings</h2>
+              </div>
+              
+              <div className="bg-[#172030] backdrop-blur rounded-2xl p-6 shadow-xl">
+                {brokerStatus?.connected && brokerStatus.broker === 'fyers' ? (
+                  // REAL BROKER HOLDINGS VIEW
+                  brokerHoldingsLoading ? (
+                    <div className="flex flex-col items-center justify-center py-12">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mb-4"></div>
+                      <h3 className="text-xl font-bold text-white mb-2">Fetching Real Holdings</h3>
+                      <p className="text-slate-400">Syncing with your Fyers account...</p>
+                    </div>
+                  ) : brokerHoldings.length === 0 ? (
+                    <div className="text-center py-12">
+                      <Briefcase className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+                      <h3 className="text-xl font-bold text-slate-300 mb-2">No Holdings Found</h3>
+                      <p className="text-slate-500 max-w-md mx-auto">
+                        Your Fyers broker account does not currently have any active holdings.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-[#1e293b]">
+                            <th className="text-left py-3 px-4 font-semibold text-slate-400">Stock Symbol</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-400">Holding Type</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-400">Quantity</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-400">Cost Price</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-400">LTP</th>
+                            <th className="text-left py-3 px-4 font-semibold text-slate-400">Unrealized P&L</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {brokerHoldings.map((holding, idx) => {
+                            // Extract just the stock name from "NSE:HDFCBANK-EQ"
+                            const cleanSymbol = holding.symbol.replace(/^.*:/, '').replace(/-EQ$/, '');
+                            const pnlPercent = holding.costPrice > 0 ? ((holding.ltp - holding.costPrice) / holding.costPrice) * 100 : 0;
+                            
+                            return (
+                              <tr key={idx} className="border-b border-slate-800/60 hover:bg-[#0f1520]">
+                                <td className="py-4 px-4">
+                                  <div className="font-semibold text-slate-200">{cleanSymbol}</div>
+                                  <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-[0_0_5px_rgba(59,130,246,0.8)]"></span>
+                                    Broker Sync
+                                  </div>
+                                </td>
+                                <td className="py-4 px-4 text-slate-400 font-medium">{holding.holdingType || 'CNC'}</td>
+                                <td className="py-4 px-4 text-slate-300 font-bold">{holding.quantity}</td>
+                                <td className="py-4 px-4 text-slate-300">₹{holding.costPrice.toFixed(2)}</td>
+                                <td className="py-4 px-4 text-slate-300">₹{holding.ltp.toFixed(2)}</td>
+                                <td className="py-4 px-4">
+                                  <div className={`${holding.pl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                    {holding.pl >= 0 ? '+' : '-'}₹{Math.abs(holding.pl).toFixed(2)}
+                                    <div className="text-sm">({pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%)</div>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )
+                ) : (!portfolioStocks || portfolioStocks.length === 0) ? (
+                  // PAPER TRADING HOLDINGS VIEW (Empty)
+                  <div className="text-center py-12">
+                    <Briefcase className="w-16 h-16 text-slate-600 mx-auto mb-4" />
+                    <h3 className="text-xl font-bold text-slate-300 mb-2">No Holdings Found</h3>
+                    <p className="text-slate-500 max-w-md mx-auto">
+                      Your portfolio is currently empty. Add stocks to your portfolio to track your holdings and performance.
+                    </p>
+                    <button
+                      onClick={() => setActiveTab('portfolio')}
+                      className="mt-6 bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-2.5 rounded-lg font-semibold transition-colors"
+                    >
+                      Go to Portfolio
+                    </button>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-[#1e293b]">
+                          <th className="text-left py-3 px-4 font-semibold text-slate-400">Stock</th>
+                          <th className="text-left py-3 px-4 font-semibold text-slate-400">Quantity</th>
+                          <th className="text-left py-3 px-4 font-semibold text-slate-400">Avg Price</th>
+                          <th className="text-left py-3 px-4 font-semibold text-slate-400">Current Price</th>
+                          <th className="text-left py-3 px-4 font-semibold text-slate-400">Market Value</th>
+                          <th className="text-left py-3 px-4 font-semibold text-slate-400">Unrealized P&L</th>
+                          <th className="text-left py-3 px-4 font-semibold text-slate-400">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {stocks.map((stock) => {
+                          const stockTransactions = transactions.filter(t => t.symbol === stock.symbol);
+                          const totalShares = stockTransactions.reduce((sum, t) => 
+                            t.type === 'buy' ? sum + t.quantity : sum - t.quantity, 0
+                          );
+                          
+                          // Hide stocks with 0 shares in the holdings view
+                          if (totalShares === 0) return null;
+                          
+                          // Calculate average buy price
+                          const avgPrice = stockTransactions.reduce((sum, t) => 
+                            t.type === 'buy' ? sum + (t.price * t.quantity) : sum, 0
+                          ) / (stockTransactions.reduce((sum, t) => 
+                            t.type === 'buy' ? sum + t.quantity : sum, 0
+                          ) || 1);
+
+                          const currentPrice = stockPrices[stock.symbol]?.price || 0;
+                          const marketValue = currentPrice * totalShares;
+                          const investedValue = avgPrice * totalShares;
+                          const pnl = marketValue - investedValue;
+                          const pnlPercent = avgPrice > 0 ? ((currentPrice - avgPrice) / avgPrice) * 100 : 0;
+
+                          return (
+                            <tr key={stock.symbol} className="border-b border-slate-800/60 hover:bg-[#0f1520]">
+                              <td className="py-4 px-4">
+                                <div>
+                                  <div className="font-semibold text-slate-200">{stock.symbol}</div>
+                                  <div className="text-sm text-slate-500">{stock.name}</div>
+                                </div>
+                              </td>
+                              <td className="py-4 px-4 text-slate-300">{totalShares}</td>
+                              <td className="py-4 px-4 text-slate-300">₹{avgPrice.toFixed(2)}</td>
+                              <td className="py-4 px-4 text-slate-300">₹{currentPrice.toFixed(2)}</td>
+                              <td className="py-4 px-4 text-slate-300">₹{marketValue.toLocaleString()}</td>
+                              <td className="py-4 px-4">
+                                <div className={`${pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                  {pnl >= 0 ? '+' : '-'}₹{Math.abs(pnl).toFixed(2)}
+                                  <div className="text-sm">({pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%)</div>
+                                </div>
+                              </td>
+                              <td className="py-4 px-4">
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setSelectedStock(stock);
+                                      setTransactionModalType('buy');
+                                      setIsTransactionModalOpen(true);
+                                    }}
+                                    className="px-3 py-1.5 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded font-semibold text-xs transition-colors"
+                                  >
+                                    Buy
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedStock(stock);
+                                      setTransactionModalType('sell');
+                                      setIsTransactionModalOpen(true);
+                                    }}
+                                    className="px-3 py-1.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded font-semibold text-xs transition-colors"
+                                  >
+                                    Sell
                                   </button>
                                 </div>
                               </td>

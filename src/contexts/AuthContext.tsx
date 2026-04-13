@@ -21,20 +21,57 @@ export const useAuth = () => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const initialLocal = (() => {
+    try {
+      if (typeof window === 'undefined') return null;
+      const mode = localStorage.getItem('pp_auth_mode');
+      const localId = localStorage.getItem('pp_local_user_id');
+      if (mode === 'broker' && localId) return { user: { id: localId } as any, session: null as any };
+      return null;
+    } catch (e) {
+      return null;
+    }
+  })();
+
+  const [user, setUser] = useState<User | null>(initialLocal?.user ?? null);
+  const [session, setSession] = useState<Session | null>(initialLocal?.session ?? null);
+  const [loading, setLoading] = useState(initialLocal ? false : true);
 
   useEffect(() => {
-    // Check active sessions and sets the user
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const mode = (() => {
+      try {
+        if (typeof window === 'undefined') return null;
+        return localStorage.getItem('pp_auth_mode');
+      } catch (e) {
+        return null;
+      }
+    })();
+
+    if (mode === 'broker') {
+      try {
+        const localId = localStorage.getItem('pp_local_user_id');
+        if (localId) {
+          setUser({ id: localId } as any);
+          setSession(null);
+        }
+      } catch (e) {}
+      setLoading(false);
+      return;
+    }
+
+    const sb: any = supabase as any;
+    if (!sb || !sb.auth) {
+      setLoading(false);
+      return;
+    }
+
+    sb.auth.getSession().then(({ data: { session } }: any) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    // Listen for changes on auth state (log in, log out, etc.)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
+    const { data: { subscription } } = sb.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
@@ -44,7 +81,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    const mode = (() => {
+      try {
+        if (typeof window === 'undefined') return null;
+        return localStorage.getItem('pp_auth_mode');
+      } catch (e) {
+        return null;
+      }
+    })();
+
+    if (mode === 'broker') {
+      try {
+        localStorage.removeItem('pp_auth_mode');
+        localStorage.removeItem('pp_local_user_id');
+        localStorage.removeItem('pp_user_id');
+        localStorage.removeItem('pp_data_source');
+        localStorage.removeItem('pp_broker');
+        localStorage.removeItem('pp_broker_pending');
+      } catch (e) {}
+      setUser(null);
+      setSession(null);
+      return;
+    }
+
+    const sb: any = supabase as any;
+    if (sb?.auth?.signOut) await sb.auth.signOut();
   };
 
   const value = {

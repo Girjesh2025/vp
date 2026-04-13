@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Activity, PlayCircle, Search, BookmarkPlus, ExternalLink } from 'lucide-react';
-import { fetchStockPrice, fetchHistoricalPrices } from '../utils/priceApi';
+import { fetchHistoricalPrices, fetchMultipleStockPrices } from '../utils/priceApi';
 import StockLogo from './StockLogo';
 
 // Nifty 50 and Bank Nifty symbols for our universe
@@ -182,36 +182,35 @@ const SwingPlayer = () => {
     const loadData = async () => {
       setLoading(true);
       const results: SwingData[] = [];
-      const batchSize = 10;
+      const batchSize = 50; 
       
-      for (let i = 0; i < WATCHLIST_SYMBOLS.length; i += batchSize) {
-        const batch = WATCHLIST_SYMBOLS.slice(i, i + batchSize);
-        await Promise.allSettled(
-          batch.map(async (symbol) => {
-            try {
-              const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000));
-              const data = await Promise.race([
-                fetchStockPrice(`${symbol}.NS`),
-                timeoutPromise
-              ]);
+      // We can scan more symbols now because we use batch API!
+      const scanSymbols = WATCHLIST_SYMBOLS.slice(0, 60).map(s => `${s}.NS`);
+      
+      for (let i = 0; i < scanSymbols.length; i += batchSize) {
+        if (!isMounted) return;
+        const batch = scanSymbols.slice(i, i + batchSize);
+        try {
+          const batchData = await fetchMultipleStockPrices(batch);
+          
+          for (const [symbolWithSuffix, data] of Object.entries(batchData)) {
+            if (data && isMounted) {
+              const symbol = symbolWithSuffix.replace('.NS', '');
+              const now = new Date();
+              const dateStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 
-              if (data && isMounted) {
-                const now = new Date();
-                const dateStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
-
-                results.push({
-                  symbol,
-                  change: data.change || 0,
-                  price: data.price || 0,
-                  date: dateStr,
-                  isBull: (data.change || 0) >= 0
-                });
-              }
-            } catch (e) {
-              console.warn(`Failed to fetch ${symbol}`);
+              results.push({
+                symbol,
+                change: data.change || 0,
+                price: data.price || 0,
+                date: dateStr,
+                isBull: (data.change || 0) >= 0
+              });
             }
-          })
-        );
+          }
+        } catch (e) {
+          console.warn(`Failed to fetch batch`);
+        }
       }
 
       if (!isMounted) return;

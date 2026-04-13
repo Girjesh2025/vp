@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Lightbulb, Info, Target, Zap, TrendingUp, TrendingDown, ShieldAlert, BarChart3, Activity } from 'lucide-react';
 
 type IndexName = 'NIFTY 50' | 'BANK NIFTY' | 'FINNIFTY' | 'SENSEX';
@@ -87,6 +87,31 @@ const INDEX_DATA: Record<IndexName, StrikeData[]> = {
 const OptionsWatch: React.FC = () => {
   const [selectedIndex, setSelectedIndex] = useState<IndexName>('NIFTY 50');
   const [timeProgress, setTimeProgress] = useState<number>(100);
+
+  // Set the slider to reflect the current real-world time between 9:15 AM and 3:30 PM
+  useEffect(() => {
+    const now = new Date();
+    const currentHours = now.getHours();
+    const currentMinutes = now.getMinutes();
+    
+    // Market open: 9:15 AM
+    const openMinutes = 9 * 60 + 15;
+    // Market close: 3:30 PM
+    const closeMinutes = 15 * 60 + 30;
+    
+    const nowMinutes = currentHours * 60 + currentMinutes;
+    
+    if (nowMinutes <= openMinutes) {
+      setTimeProgress(0);
+    } else if (nowMinutes >= closeMinutes) {
+      setTimeProgress(100);
+    } else {
+      const totalMarketMinutes = closeMinutes - openMinutes;
+      const elapsedMinutes = nowMinutes - openMinutes;
+      const progress = (elapsedMinutes / totalMarketMinutes) * 100;
+      setTimeProgress(progress);
+    }
+  }, []);
 
   // --- Formatters ---
   const formatNumber = (num: number) => {

@@ -3,6 +3,9 @@ const cors = require('cors');
 const fetch = require('node-fetch');
 const https = require('https');
 const zlib = require('zlib');
+const crypto = require('crypto');
+require('dotenv').config();
+const { fyersModel } = require('fyers-api-v3');
 
 const app = express();
 const PORT = 3001;
@@ -10,6 +13,47 @@ const PORT = 3001;
 // Enable CORS for all routes
 app.use(cors());
 app.use(express.json());
+
+const brokerSessions = new Map();
+
+const getZerodhaConfig = () => {
+  return {
+    apiKey: process.env.ZERODHA_API_KEY,
+    apiSecret: process.env.ZERODHA_API_SECRET,
+  };
+};
+
+const getFyersConfig = () => {
+  return {
+    clientId: process.env.FYERS_APP_ID,
+    secretKey: process.env.FYERS_SECRET_KEY,
+    redirectUri: process.env.FYERS_REDIRECT_URI,
+  };
+};
+
+const createFyers = () => {
+  const { clientId, redirectUri } = getFyersConfig();
+  const fyers = new fyersModel({ path: process.cwd(), enableLogging: false });
+  fyers.setAppId(clientId);
+  fyers.setRedirectUrl(redirectUri);
+  return fyers;
+};
+
+const requireUserId = (req, res) => {
+  const userId = req.query.userId || (req.body && req.body.userId);
+  if (!userId || typeof userId !== 'string') {
+    res.status(400).json({ error: 'Missing userId' });
+    return null;
+  }
+  return userId;
+};
+
+const getUserBrokerSession = (userId, brokerName) => {
+  const existing = brokerSessions.get(userId);
+  if (!existing) return null;
+  if (brokerName && existing.broker !== brokerName) return null;
+  return existing;
+};
 
 // API Configuration
 const API_SOURCES = {
@@ -78,6 +122,8 @@ async function fetchFromYahoo(symbol) {
     low: result.meta.regularMarketDayLow,
     volume: result.meta.regularMarketVolume,
     previousClose: result.meta.previousClose,
+    high52: result.meta.fiftyTwoWeekHigh,
+    low52: result.meta.fiftyTwoWeekLow,
     source: 'Yahoo Finance'
   };
 }
@@ -268,6 +314,37 @@ app.get('/api/historical/:symbol', async (req, res) => {
   return res.status(200).json(generateSectorMockMonthly(formattedSymbol));
 });
 
+// Yahoo Quote endpoint for multiple symbols
+app.get('/api/yahoo-quotes', async (req, res) => {
+  const symbols = req.query.symbols;
+  if (!symbols || typeof symbols !== 'string') {
+    return res.status(400).json({ error: 'Missing symbols parameter' });
+  }
+
+  const formattedSymbols = symbols.split(',').map(s => {
+    if (s.startsWith('^')) return s;
+    const clean = s.replace(/\.(NS|BO|NSE|BSE)$/i, '');
+    return `${clean}.NS`;
+  }).join(',');
+
+  try {
+    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(formattedSymbols)}`;
+    const fetchResponse = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!fetchResponse.ok) throw new Error(`Yahoo API returned ${fetchResponse.status}`);
+    const data = await fetchResponse.json();
+    return res.status(200).json(data);
+  } catch (error) {
+    console.error('Yahoo Quotes API Error:', error.message);
+    return res.status(500).json({ error: 'Failed to fetch quote data' });
+  }
+});
+
 // Search endpoint using Yahoo Finance
 app.get('/api/search', async (req, res) => {
   const q = req.query.q;
@@ -322,6 +399,45 @@ app.get('/api/search', async (req, res) => {
 const { NseIndia } = require('stock-nse-india');
 const nseIndia = new NseIndia();
 
+let cachedNseHighLow = null;
+let lastNseHighLowFetch = 0;
+
+// Fetch 52-week high/low for top 500 stocks from NSE
+app.get('/api/nse/highlow', async (req, res) => {
+  try {
+    const now = Date.now();
+    // Cache for 15 minutes
+    if (cachedNseHighLow && (now - lastNseHighLowFetch) < 15 * 60 * 1000) {
+      return res.json(cachedNseHighLow);
+    }
+    
+    console.log('Fetching Nifty 500 high/low from NSE...');
+    const data = await nseIndia.getEquityStockIndices('NIFTY 500');
+    
+    if (data && data.data && data.data.length > 0) {
+      const result = {};
+      data.data.forEach(item => {
+        if (item.symbol !== 'NIFTY 500') {
+          result[item.symbol] = {
+            high52: item.yearHigh,
+            low52: item.yearLow
+          };
+        }
+      });
+      
+      cachedNseHighLow = result;
+      lastNseHighLowFetch = now;
+      return res.json(result);
+    } else {
+      throw new Error("Invalid response from NSE API");
+    }
+  } catch (err) {
+    console.error('Error fetching NSE high/low:', err.message);
+    if (cachedNseHighLow) return res.json(cachedNseHighLow); // Return stale cache if error
+    return res.status(500).json({ error: 'Failed to fetch NSE high/low data' });
+  }
+});
+
 // Fetch Options Chain Data from NSE
 app.get('/api/options/:symbol', async (req, res) => {
   const symbol = req.params.symbol.toUpperCase();
@@ -343,6 +459,191 @@ app.get('/api/options/:symbol', async (req, res) => {
   } catch (err) {
     console.error(`Error fetching Options data for ${symbol}:`, err.message);
     return res.status(500).json({ error: `Failed to fetch Options data for ${symbol}` });
+  }
+});
+
+app.get('/api/broker/status', (req, res) => {
+  const userId = requireUserId(req, res);
+  if (!userId) return;
+  const session = brokerSessions.get(userId);
+  if (!session) return res.json({ connected: false });
+  return res.json({
+    connected: true,
+    broker: session.broker,
+    createdAt: session.createdAt,
+  });
+});
+
+app.post('/api/broker/zerodha/login-url', (req, res) => {
+  const userId = requireUserId(req, res);
+  if (!userId) return;
+  const { apiKey } = getZerodhaConfig();
+  if (!apiKey) return res.status(500).json({ error: 'ZERODHA_API_KEY not configured' });
+  const loginUrl = `https://kite.trade/connect/login?api_key=${encodeURIComponent(apiKey)}&v=3`;
+  return res.json({ loginUrl });
+});
+
+app.post('/api/broker/zerodha/exchange', async (req, res) => {
+  const userId = requireUserId(req, res);
+  if (!userId) return;
+  const { requestToken } = req.body || {};
+  if (!requestToken || typeof requestToken !== 'string') return res.status(400).json({ error: 'Missing requestToken' });
+
+  const { apiKey, apiSecret } = getZerodhaConfig();
+  if (!apiKey || !apiSecret) return res.status(500).json({ error: 'Zerodha not configured' });
+
+  const checksum = crypto.createHash('sha256').update(`${apiKey}${requestToken}${apiSecret}`).digest('hex');
+  const form = new URLSearchParams();
+  form.append('api_key', apiKey);
+  form.append('request_token', requestToken);
+  form.append('checksum', checksum);
+
+  const r = await fetch('https://api.kite.trade/session/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-Kite-Version': '3',
+    },
+    body: form.toString(),
+  });
+
+  const data = await r.json().catch(() => null);
+  if (!r.ok || !data || !data.data || !data.data.access_token) {
+    return res.status(400).json({ error: 'Failed to exchange token', details: data });
+  }
+
+  brokerSessions.set(userId, {
+    broker: 'zerodha',
+    accessToken: data.data.access_token,
+    createdAt: new Date().toISOString(),
+    user: data.data.user_id,
+  });
+
+  return res.json({ connected: true, broker: 'zerodha' });
+});
+
+app.post('/api/broker/fyers/login-url', (req, res) => {
+  const userId = requireUserId(req, res);
+  if (!userId) return;
+  const { clientId, redirectUri } = getFyersConfig();
+  if (!clientId || !redirectUri) return res.status(500).json({ error: 'FYERS_APP_ID or FYERS_REDIRECT_URI not configured' });
+  const fyers = createFyers();
+  const loginUrl = fyers.generateAuthCode();
+  return res.json({ loginUrl });
+});
+
+app.post('/api/broker/fyers/exchange', async (req, res) => {
+  const userId = requireUserId(req, res);
+  if (!userId) return;
+  const { authCode } = req.body || {};
+  if (!authCode || typeof authCode !== 'string') return res.status(400).json({ error: 'Missing authCode' });
+
+  const { clientId, secretKey, redirectUri } = getFyersConfig();
+  if (!clientId || !secretKey || !redirectUri) return res.status(500).json({ error: 'Fyers not configured' });
+
+  const fyers = createFyers();
+  try {
+    const response = await fyers.generate_access_token({ client_id: clientId, secret_key: secretKey, auth_code: authCode });
+    if (!response || response.s !== 'ok' || !response.access_token) {
+      return res.status(400).json({ error: 'Failed to exchange token', details: response });
+    }
+    brokerSessions.set(userId, {
+      broker: 'fyers',
+      accessToken: response.access_token,
+      createdAt: new Date().toISOString(),
+      clientId,
+    });
+    
+    // Automatically fetch holdings right after login to make them available immediately
+    fyers.setAccessToken(response.access_token);
+    let holdings = [];
+    try {
+      const holdingsRes = await fyers.get_holdings();
+      if (holdingsRes && holdingsRes.holdings) {
+        holdings = holdingsRes.holdings;
+      }
+    } catch (holdingsErr) {
+      console.warn('Failed to automatically fetch holdings on login', holdingsErr);
+    }
+    
+    return res.json({ connected: true, broker: 'fyers', holdings });
+  } catch (e) {
+    return res.status(400).json({ error: 'Failed to exchange token' });
+  }
+});
+
+app.post('/api/broker/disconnect', (req, res) => {
+  const userId = requireUserId(req, res);
+  if (!userId) return;
+  brokerSessions.delete(userId);
+  return res.json({ connected: false });
+});
+
+app.get('/api/broker/zerodha/ltp', async (req, res) => {
+  const userId = requireUserId(req, res);
+  if (!userId) return;
+  const { instrument } = req.query || {};
+  if (!instrument || typeof instrument !== 'string') return res.status(400).json({ error: 'Missing instrument' });
+  const { apiKey } = getZerodhaConfig();
+  if (!apiKey) return res.status(500).json({ error: 'ZERODHA_API_KEY not configured' });
+  const session = getUserBrokerSession(userId, 'zerodha');
+  if (!session) return res.status(401).json({ error: 'Broker not connected' });
+
+  const url = `https://api.kite.trade/quote/ltp?i=${encodeURIComponent(instrument)}`;
+  const r = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'X-Kite-Version': '3',
+      'Authorization': `token ${apiKey}:${session.accessToken}`,
+      'Accept': 'application/json',
+    },
+  });
+
+  const data = await r.json().catch(() => null);
+  if (!r.ok) return res.status(400).json({ error: 'Failed to fetch quote', details: data });
+  return res.json(data);
+});
+
+app.get('/api/broker/fyers/quotes', async (req, res) => {
+  const userId = requireUserId(req, res);
+  if (!userId) return;
+  const { symbols } = req.query || {};
+  if (!symbols || typeof symbols !== 'string') return res.status(400).json({ error: 'Missing symbols' });
+  const session = getUserBrokerSession(userId, 'fyers');
+  if (!session) return res.status(401).json({ error: 'Broker not connected' });
+
+  const { clientId, redirectUri } = getFyersConfig();
+  if (!clientId || !redirectUri) return res.status(500).json({ error: 'Fyers not configured' });
+
+  const fyers = createFyers();
+  fyers.setAccessToken(session.accessToken);
+
+  const list = symbols.split(',').map(s => s.trim()).filter(Boolean);
+  try {
+    const out = await fyers.getQuotes(list);
+    return res.json(out);
+  } catch (e) {
+    return res.status(400).json({ error: 'Failed to fetch quotes' });
+  }
+});
+
+app.get('/api/broker/fyers/holdings', async (req, res) => {
+  const userId = requireUserId(req, res);
+  if (!userId) return;
+  const session = getUserBrokerSession(userId, 'fyers');
+  if (!session) return res.status(401).json({ error: 'Broker not connected' });
+
+  const { clientId, redirectUri } = getFyersConfig();
+  if (!clientId || !redirectUri) return res.status(500).json({ error: 'Fyers not configured' });
+
+  const fyers = createFyers();
+  fyers.setAccessToken(session.accessToken);
+
+  try {
+    const out = await fyers.get_holdings();
+    return res.json(out);
+  } catch (e) {
+    return res.status(400).json({ error: 'Failed to fetch holdings', message: e.message });
   }
 });
 
