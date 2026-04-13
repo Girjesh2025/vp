@@ -545,7 +545,7 @@ app.post('/api/broker/fyers/exchange', async (req, res) => {
   try {
     console.log(`Attempting Fyers token exchange for App ID: ${clientId} with Redirect URI: ${redirectUri}`);
     
-    // We will bypass the SDK and use a direct fetch with browser-like headers to avoid Cloudflare blocks
+    // Bypass the SDK and use a direct fetch with browser-like headers to avoid Cloudflare blocks
     const appIdHash = crypto.createHash('sha256').update(`${clientId}:${secretKey}`).digest('hex');
     
     const tokenRes = await fetch('https://api-t1.fyers.in/api/v3/validate-authcode', {
