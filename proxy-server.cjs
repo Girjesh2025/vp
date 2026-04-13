@@ -544,7 +544,40 @@ app.post('/api/broker/fyers/exchange', async (req, res) => {
   const fyers = createFyers();
   try {
     console.log(`Attempting Fyers token exchange for App ID: ${clientId} with Redirect URI: ${redirectUri}`);
-    const response = await fyers.generate_access_token({ client_id: clientId, secret_key: secretKey, auth_code: authCode });
+    
+    // We will bypass the SDK and use a direct fetch with browser-like headers to avoid Cloudflare blocks
+    const appIdHash = crypto.createHash('sha256').update(`${clientId}:${secretKey}`).digest('hex');
+    
+    const tokenRes = await fetch('https://api-t1.fyers.in/api/v3/validate-authcode', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        grant_type: 'authorization_code',
+        appIdHash: appIdHash,
+        code: authCode
+      })
+    });
+
+    const responseText = await tokenRes.text();
+    let response;
+    try {
+      response = JSON.parse(responseText);
+    } catch (e) {
+      response = responseText;
+    }
+    
+    // Check if response is a Cloudflare HTML page instead of JSON
+    if (typeof response === 'string' && response.includes('<html')) {
+      console.error('Fyers API returned an HTML page (likely Cloudflare block):', response.substring(0, 200) + '...');
+      return res.status(400).json({ 
+        error: 'Fyers API blocked the request (Cloudflare/WAF issue).', 
+        details: response.substring(0, 500) 
+      });
+    }
     
     if (response.s === 'error') {
       console.error('Fyers token exchange error:', response);
