@@ -290,7 +290,8 @@ const StockPortfolioApp: React.FC = () => {
   }, [user?.id]);
 
   useEffect(() => {
-    if (!user?.id) return;
+    const userId = user?.id || localStorage.getItem('pp_user_id');
+    if (!userId) return;
     const params = new URLSearchParams(window.location.search);
     const requestToken = params.get('request_token');
     const status = params.get('status');
@@ -340,7 +341,10 @@ const StockPortfolioApp: React.FC = () => {
             body: JSON.stringify({ userId: user?.id || localStorage.getItem('pp_user_id'), authCode }),
           });
           const data = await res.json().catch(() => null);
-          if (!res.ok) throw new Error(data?.error || 'Broker connection failed');
+          if (!res.ok) {
+            alert(`Fyers Login Failed!\nReason: ${data?.error || 'Unknown Error'}\nDetails: ${JSON.stringify(data?.details || {})}`);
+            throw new Error(data?.error || 'Broker connection failed');
+          }
           
           // Instantly populate the holdings from the exchange response
           if (data && data.holdings && Array.isArray(data.holdings)) {
@@ -965,6 +969,9 @@ const StockPortfolioApp: React.FC = () => {
           onStockSelect={(stock) => {
             addStock(stock);
           }}
+          onNotificationClick={() => {}}
+          onSettingsClick={() => {}}
+          onProfileClick={() => {}}
         />
 
         {/* Main Content Area */}

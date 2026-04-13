@@ -47,7 +47,7 @@ const ProfessionalHeader: React.FC<ProfessionalHeaderProps> = ({
     if (query.trim().length >= 2) {
       try {
         const results = await searchStocksOptimized(query.trim(), 10);
-        setSearchResults(results);
+        setSearchResults(results as any[]);
         setShowResults(true);
       } catch (error) {
         console.error('Search error:', error);
@@ -60,7 +60,7 @@ const ProfessionalHeader: React.FC<ProfessionalHeaderProps> = ({
   };
 
   // Handle stock selection
-  const handleStockSelect = (stock: Stock) => {
+  const handleStockSelect = (stock: any) => {
     setSearchQuery('');
     setSearchResults([]);
     setShowResults(false);
