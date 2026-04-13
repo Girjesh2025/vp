@@ -16,6 +16,9 @@ interface GlobalIndex {
   changePercent: number;
   status: 'open' | 'closed';
   lastUpdate: string;
+  link?: string;
+  sourceNote?: string;
+  isEstimated?: boolean;
 }
 
 const GlobalMarket: React.FC = () => {
@@ -90,99 +93,73 @@ const GlobalMarket: React.FC = () => {
             try {
               // Special case for GIFT Nifty since Yahoo Finance lacks a reliable free public symbol for it
               if (idx.symbol === 'GIFT_NIFTY_MOCK') {
-                // Check if we can fetch real data from Investing.com via our proxy, otherwise fallback to mock
-                let realPrice = 0;
-                let realChange = 0;
-                let realChangePercent = 0;
-                let useRealData = false;
-                
                 try {
-                  // Attempting to scrape the real-time value from investing.com using a CORS proxy
+                  const giftRes = await fetch('/api/global/gift-nifty');
+                  if (giftRes.ok) {
+                    const giftData = await giftRes.json();
+                    if (giftData && typeof giftData.price === 'number' && giftData.price > 0) {
+                      return {
+                        ...idx,
+                        price: giftData.price,
+                        change: giftData.change || 0,
+                        changePercent: giftData.changePercent || 0,
+                        status: getMarketStatus(idx.region, idx.symbol),
+                        lastUpdate: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                        sourceNote: `${giftData.source || 'Live source'}${giftData.symbol ? ` · ${giftData.symbol}` : ''}`,
+                        isEstimated: false
+                      };
+                    }
+                  }
+                } catch (e) {
+                  console.log('Failed to fetch GIFT Nifty from EODHD endpoint');
+                }
+
+                try {
+                  // Fallback to external scrape only when EODHD symbol is not configured or unavailable.
                   const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent('https://in.investing.com/indices/gift-nifty-50-c1-futures')}`);
                   const htmlData = await response.json();
                   
                   if (htmlData && htmlData.contents) {
-                    // Try to match standard investing.com data-test attributes
                     let priceMatch = htmlData.contents.match(/data-test="instrument-price-last"[^>]*>([\d,.]+)<\/div>/);
                     let changeMatch = htmlData.contents.match(/data-test="instrument-price-change"[^>]*>([+-]?[\d,.]+)<\/div>/);
                     let changePctMatch = htmlData.contents.match(/data-test="instrument-price-change-percent"[^>]*>\(([+-]?[\d,.]+)%\)<\/div>/);
-                    
-                    // Fallback regex for different investing.com layouts
                     if (!priceMatch) priceMatch = htmlData.contents.match(/class="text-5xl[^>]*>([\d,.]+)<\/div>/);
-                    
-                    if (priceMatch && priceMatch[1]) {
-                      realPrice = parseFloat(priceMatch[1].replace(/,/g, ''));
-                      if (!isNaN(realPrice) && realPrice > 0) {
-                        useRealData = true;
-                        
-                        if (!changeMatch) changeMatch = htmlData.contents.match(/data-test="instrument-price-change"[^>]*>([^<]+)<\/span>/);
-                        if (!changePctMatch) changePctMatch = htmlData.contents.match(/data-test="instrument-price-change-percent"[^>]*>\(([^<]+)%\)<\/span>/);
 
-                        if (changeMatch && changeMatch[1]) {
-                          realChange = parseFloat(changeMatch[1].replace(/,/g, '').replace('+', ''));
-                        }
-                        
-                        if (changePctMatch && changePctMatch[1]) {
-                          realChangePercent = parseFloat(changePctMatch[1].replace(/,/g, '').replace('+', ''));
-                        }
-                      }
+                    const scrapedPrice = priceMatch?.[1] ? parseFloat(priceMatch[1].replace(/,/g, '')) : 0;
+                    const scrapedChange = changeMatch?.[1] ? parseFloat(changeMatch[1].replace(/,/g, '').replace('+', '')) : 0;
+                    const scrapedChangePercent = changePctMatch?.[1] ? parseFloat(changePctMatch[1].replace(/,/g, '').replace('+', '')) : 0;
+
+                    if (!isNaN(scrapedPrice) && scrapedPrice > 0) {
+                      return {
+                        ...idx,
+                        price: scrapedPrice,
+                        change: scrapedChange,
+                        changePercent: scrapedChangePercent,
+                        status: getMarketStatus(idx.region, idx.symbol),
+                        lastUpdate: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                        link: 'https://in.investing.com/indices/gift-nifty-50-c1-futures',
+                        sourceNote: 'External live source',
+                        isEstimated: false
+                      };
                     }
                   }
                 } catch (e) {
-                  console.log("Failed to scrape Investing.com for GIFT Nifty, falling back to algorithmic proxy");
+                  console.log('Failed to scrape Investing.com for GIFT Nifty');
                 }
 
-                if (useRealData) {
+                {
                   return {
                     ...idx,
-                    price: realPrice,
-                    change: realChange,
-                    changePercent: realChangePercent,
-                    status: getMarketStatus(idx.region, idx.symbol),
-                    lastUpdate: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                    link: 'https://in.investing.com/indices/gift-nifty-50-c1-futures'
+                    price: 0,
+                    change: 0,
+                    changePercent: 0,
+                    status: 'closed' as const,
+                    lastUpdate: 'Live source unavailable',
+                    link: 'https://in.investing.com/indices/gift-nifty-50-c1-futures',
+                    sourceNote: 'EODHD symbol not configured',
+                    isEstimated: false
                   };
                 }
-
-                // --- FALLBACK PROXY ALGORITHM ---
-                const niftyData = await fetchStockPrice('^NSEI');
-                if (!niftyData) throw new Error("Nifty data unavailable");
-                // GIFT Nifty usually trades at a slight premium/discount to Nifty 50 (+20 to +50 points)
-                // GIFT Nifty usually trades at a slight premium to Nifty 50.
-                // To keep it stable and realistic, we use a fixed premium for today's price and yesterday's close.
-                // We base the variance on the current date so it stays constant throughout the day and doesn't flicker.
-                const todayStr = new Date().toDateString();
-                let seed = 0;
-                for (let i = 0; i < todayStr.length; i++) seed += todayStr.charCodeAt(i);
-                
-                // Current premium between +30 and +80 with a unique decimal
-                const currentPremium = 30 + (seed % 50) + ((seed % 100) / 100); 
-                // Yesterday's premium was slightly different
-                const prevPremium = 20 + ((seed * 2) % 40) + (((seed * 3) % 100) / 100); 
-                
-                // Add tiny intraday live volatility if the market is open so it ticks every minute
-                const status = getMarketStatus(idx.region, idx.symbol);
-                let liveJitter = 0;
-                if (status === 'open') {
-                  const minutes = new Date().getMinutes();
-                  // A small pseudo-random walk of -3 to +3 points that changes every minute
-                  liveJitter = Math.sin(minutes * seed) * 3;
-                }
-                
-                const mockPrice = Number((niftyData.price + currentPremium + liveJitter).toFixed(2));
-                const mockPrevClose = Number(((niftyData.previousClose || niftyData.price) + prevPremium).toFixed(2));
-                const mockChange = mockPrice - mockPrevClose;
-                const mockChangePercent = (mockChange / mockPrevClose) * 100;
-                
-                return {
-                  ...idx,
-                  price: mockPrice,
-                  change: mockChange,
-                  changePercent: mockChangePercent,
-                  status: getMarketStatus(idx.region, idx.symbol),
-                  lastUpdate: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                  link: 'https://in.investing.com/indices/gift-nifty-50-c1-futures'
-                };
               }
 
               const data = await fetchStockPrice(idx.symbol);
@@ -229,8 +206,6 @@ const GlobalMarket: React.FC = () => {
       clearInterval(interval);
     };
   }, []);
-
-  const regions = ['US', 'Europe', 'Asia', 'India', 'Australia'];
 
   return (
     <div className="flex h-screen bg-[#0f1520] overflow-hidden text-slate-300">
@@ -392,17 +367,22 @@ const GlobalMarket: React.FC = () => {
                   
                   <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                     {indices.map((index) => {
+                      const isUnavailable = index.price <= 0;
                       const isPositive = index.change >= 0;
                       return (
                         <div 
                           key={index.symbol} 
                           className={`relative overflow-hidden bg-gradient-to-br from-[#111827] to-[#0f1520] border rounded-2xl p-5 cursor-pointer group transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl flex flex-col justify-between h-36 ${
-                            isPositive ? 'border-emerald-900/30 hover:border-emerald-500/50 hover:shadow-emerald-500/10' : 'border-red-900/30 hover:border-red-500/50 hover:shadow-red-500/10'
+                            isUnavailable
+                              ? 'border-slate-800 hover:border-slate-600/60'
+                              : isPositive
+                                ? 'border-emerald-900/30 hover:border-emerald-500/50 hover:shadow-emerald-500/10'
+                                : 'border-red-900/30 hover:border-red-500/50 hover:shadow-red-500/10'
                           }`}
                         >
                           {/* Background Glow */}
                           <div className={`absolute top-0 right-0 w-24 h-24 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 opacity-20 group-hover:opacity-40 transition-opacity ${
-                            isPositive ? 'bg-emerald-500' : 'bg-red-500'
+                            isUnavailable ? 'bg-slate-500' : isPositive ? 'bg-emerald-500' : 'bg-red-500'
                           }`} />
 
                           {/* Decorative Chart Line (Abstract Background) */}
@@ -446,23 +426,38 @@ const GlobalMarket: React.FC = () => {
                             </div>
                             
                             <div className={`px-2.5 py-1 rounded-lg text-[11px] font-black border flex items-center gap-1 whitespace-nowrap shrink-0 ${
-                              isPositive 
-                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                                : 'bg-red-500/10 text-red-400 border-red-500/20'
+                              isUnavailable
+                                ? 'bg-slate-800/70 text-slate-400 border-slate-700'
+                                : isPositive 
+                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                                  : 'bg-red-500/10 text-red-400 border-red-500/20'
                             }`}>
-                              {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                              {isPositive ? '+' : ''}{index.changePercent.toFixed(2)}%
+                              {isUnavailable ? (
+                                'Source Off'
+                              ) : (
+                                <>
+                                  {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                                  {isPositive ? '+' : ''}{index.changePercent.toFixed(2)}%
+                                </>
+                              )}
                             </div>
                           </div>
 
                           <div className="flex items-end justify-between mt-auto relative z-10">
                             <div className="text-2xl font-black text-white tracking-tight tabular-nums">
-                              {index.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              {isUnavailable
+                                ? '--'
+                                : index.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </div>
                             <div className={`text-[12px] font-bold tabular-nums ${isPositive ? 'text-emerald-500' : 'text-red-500'}`}>
-                              {isPositive ? '+' : ''}{index.change.toFixed(2)}
+                              {isUnavailable ? '--' : `${isPositive ? '+' : ''}${index.change.toFixed(2)}`}
                             </div>
                           </div>
+                          {index.sourceNote && (
+                            <div className="mt-1 text-[10px] font-medium text-slate-500 relative z-10">
+                              {index.sourceNote}
+                            </div>
+                          )}
                         </div>
                       );
                     })}

@@ -70,6 +70,13 @@ const API_KEYS = {
   EODHD: '68ded7adeebd01.04469623'
 };
 
+const GIFT_NIFTY_CONFIG = {
+  cacheMs: 5 * 60 * 1000,
+};
+
+let cachedGiftNifty = null;
+let lastGiftNiftyFetch = 0;
+
 // Convert symbol format for different APIs
 function formatSymbolForAPI(symbol, apiSource) {
   // Remove .NSE, .BSE suffixes for most APIs
@@ -695,6 +702,75 @@ app.get('/api/broker/fyers/holdings', async (req, res) => {
     return res.json(out);
   } catch (e) {
     return res.status(400).json({ error: 'Failed to fetch holdings', message: e.message });
+  }
+});
+
+app.get('/api/global/gift-nifty', async (req, res) => {
+  const now = Date.now();
+  if (cachedGiftNifty && (now - lastGiftNiftyFetch) < GIFT_NIFTY_CONFIG.cacheMs) {
+    return res.json(cachedGiftNifty);
+  }
+
+  const url = 'https://dhan.co/indices/gift-nifty-share-price/';
+  console.log('[global] GET /api/global/gift-nifty source=dhan');
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+      }
+    });
+
+    const html = await response.text();
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        error: `Dhan responded with status ${response.status}`,
+        details: html.slice(0, 300),
+        source: 'Dhan',
+      });
+    }
+
+    const priceMatch = html.match(/text-\[28px\][^>]*>([\d,]+\.\d+)<\/p>/);
+    const changeBlockMatch = html.match(/text-lg font-CircularBook[^>]*text-\[#(?:E15858|16A34A)\]">([+-]?[\d,]+\.\d+).*?\(([+-]?[\d.]+)\s*%\)/);
+    const updatedMatch = html.match(/Last Updated on.*?(\d{1,2}\s+\w+\s+\d{4}).*?at\s+(\d{1,2}:\d{2})/);
+    const openMatch = html.match(/Open at<\/p><p[^>]*>([\d,]+\.\d+)<\/p>/);
+
+    const price = priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : NaN;
+    const change = changeBlockMatch ? parseFloat(changeBlockMatch[1].replace(/,/g, '')) : NaN;
+    const changePercent = changeBlockMatch ? parseFloat(changeBlockMatch[2].replace(/,/g, '')) : NaN;
+    const open = openMatch ? parseFloat(openMatch[1].replace(/,/g, '')) : undefined;
+
+    if (!Number.isFinite(price) || price <= 0) {
+      return res.status(502).json({
+        error: 'Invalid data from Dhan for GIFT NIFTY',
+        details: html.slice(0, 300),
+        source: 'Dhan',
+      });
+    }
+    const safeChange = Number.isFinite(change) ? change : 0;
+    const safeChangePercent = Number.isFinite(changePercent) ? changePercent : 0;
+
+    cachedGiftNifty = {
+      price: Number(price.toFixed(2)),
+      change: Number(safeChange.toFixed(2)),
+      changePercent: Number(safeChangePercent.toFixed(2)),
+      previousClose: typeof open === 'number' ? open : undefined,
+      source: 'Dhan',
+      symbol: 'GIFTNIFTY',
+      fetchedAt: updatedMatch ? `${updatedMatch[1]} ${updatedMatch[2]}` : new Date().toISOString(),
+      link: 'https://dhan.co/indices/gift-nifty-share-price/',
+    };
+    lastGiftNiftyFetch = now;
+
+    return res.json(cachedGiftNifty);
+  } catch (error) {
+    return res.status(500).json({
+      error: 'Failed to fetch GIFT NIFTY from Dhan',
+      details: error.message,
+      source: 'Dhan',
+    });
   }
 });
 
