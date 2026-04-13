@@ -465,6 +465,7 @@ app.get('/api/options/:symbol', async (req, res) => {
 app.get('/api/broker/status', (req, res) => {
   const userId = requireUserId(req, res);
   if (!userId) return;
+  console.log(`[broker] GET /api/broker/status userId=${userId}`);
   const session = brokerSessions.get(userId);
   if (!session) return res.json({ connected: false });
   return res.json({
@@ -525,6 +526,7 @@ app.post('/api/broker/zerodha/exchange', async (req, res) => {
 app.post('/api/broker/fyers/login-url', (req, res) => {
   const userId = requireUserId(req, res);
   if (!userId) return;
+  console.log(`[broker] POST /api/broker/fyers/login-url userId=${userId}`);
   const { clientId, redirectUri } = getFyersConfig();
   if (!clientId || !redirectUri) return res.status(500).json({ error: 'FYERS_APP_ID or FYERS_REDIRECT_URI not configured' });
   const fyers = createFyers();
@@ -537,6 +539,7 @@ app.post('/api/broker/fyers/exchange', async (req, res) => {
   if (!userId) return;
   const { authCode } = req.body || {};
   if (!authCode || typeof authCode !== 'string') return res.status(400).json({ error: 'Missing authCode' });
+  console.log(`[broker] POST /api/broker/fyers/exchange userId=${userId} authCodePresent=${Boolean(authCode)}`);
 
   const { clientId, secretKey, redirectUri } = getFyersConfig();
   if (!clientId || !secretKey || !redirectUri) return res.status(500).json({ error: 'Fyers not configured' });
@@ -648,6 +651,7 @@ app.get('/api/broker/fyers/quotes', async (req, res) => {
   if (!userId) return;
   const { symbols } = req.query || {};
   if (!symbols || typeof symbols !== 'string') return res.status(400).json({ error: 'Missing symbols' });
+  console.log(`[broker] GET /api/broker/fyers/quotes userId=${userId} symbols=${symbols}`);
   const session = getUserBrokerSession(userId, 'fyers');
   if (!session) return res.status(401).json({ error: 'Broker not connected' });
 
@@ -669,6 +673,7 @@ app.get('/api/broker/fyers/quotes', async (req, res) => {
 app.get('/api/broker/fyers/holdings', async (req, res) => {
   const userId = requireUserId(req, res);
   if (!userId) return;
+  console.log(`[broker] GET /api/broker/fyers/holdings userId=${userId}`);
   const session = getUserBrokerSession(userId, 'fyers');
   if (!session) return res.status(401).json({ error: 'Broker not connected' });
 
