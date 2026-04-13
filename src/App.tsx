@@ -1,5 +1,5 @@
-import { Routes, Route } from 'react-router-dom'
-import { useNavigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import LandingPage from './LandingPage'
 import StockPortfolioApp from './StockPortfolioApp'
 import Login from './pages/Login'
@@ -15,6 +15,26 @@ import './App.css'
 
 function AppRoutes() {
   const navigate = useNavigate()
+  const location = useLocation()
+
+  // Global handler for Fyers/Broker OAuth redirects
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const authCode = params.get('auth_code') || params.get('code') || params.get('request_token');
+    
+    // If we receive an auth_code but we're NOT on /app, redirect to /app so it can process it
+    if (authCode && !location.pathname.startsWith('/app')) {
+      // Ensure broker mode is active
+      if (!localStorage.getItem('pp_auth_mode')) {
+        const userId = `broker-${Date.now()}`;
+        localStorage.setItem('pp_auth_mode', 'broker');
+        localStorage.setItem('pp_local_user_id', userId);
+        localStorage.setItem('pp_user_id', userId);
+        localStorage.setItem('pp_data_source', 'broker');
+      }
+      navigate(`/app${location.search}`, { replace: true });
+    }
+  }, [location, navigate]);
 
   return (
     <Routes>
