@@ -122,14 +122,19 @@ const StockPortfolioApp: React.FC = () => {
 
   // Fetch Real Broker Holdings
   useEffect(() => {
-    if (activeTab !== 'holdings' || !brokerStatus?.connected || brokerStatus.broker !== 'fyers') return;
+    // We want to fetch broker holdings anytime brokerStatus is connected, 
+    // regardless of the active tab, so it's ready when the user navigates.
+    if (!brokerStatus?.connected || brokerStatus.broker !== 'fyers') return;
     
     let isMounted = true;
     const fetchBrokerHoldings = async () => {
-      if (!user?.id) return;
+      // If we don't have a user ID but we are in broker mode, use local storage fallback
+      const userId = user?.id || localStorage.getItem('pp_user_id');
+      if (!userId) return;
+      
       try {
         setBrokerHoldingsLoading(true);
-        const res = await fetch(`${apiBaseUrl}/api/broker/fyers/holdings?userId=${encodeURIComponent(user.id)}`);
+        const res = await fetch(`${apiBaseUrl}/api/broker/fyers/holdings?userId=${encodeURIComponent(userId)}`);
         if (!res.ok) throw new Error('Failed to fetch broker holdings');
         const data = await res.json();
         
@@ -145,7 +150,7 @@ const StockPortfolioApp: React.FC = () => {
     
     fetchBrokerHoldings();
     return () => { isMounted = false; };
-  }, [activeTab, brokerStatus?.connected, brokerStatus?.broker, user?.id]);
+  }, [brokerStatus?.connected, brokerStatus?.broker, user?.id]);
 
   useEffect(() => {
     localStorage.setItem('lastActiveTab', activeTab);
@@ -324,7 +329,7 @@ const StockPortfolioApp: React.FC = () => {
           const res = await fetch(`${apiBaseUrl}/api/broker/fyers/exchange`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: user.id, authCode }),
+            body: JSON.stringify({ userId: user?.id || localStorage.getItem('pp_user_id'), authCode }),
           });
           const data = await res.json().catch(() => null);
           if (!res.ok) throw new Error(data?.error || 'Broker connection failed');
