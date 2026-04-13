@@ -128,6 +128,21 @@ const OptionsWatch: React.FC = () => {
     return new Intl.NumberFormat('en-IN').format(num);
   };
 
+  const getTimeStringFromProgress = (progress: number) => {
+    const openMinutes = 9 * 60 + 15;
+    const totalMarketMinutes = (15 * 60 + 30) - openMinutes; // 375 mins
+    const currentTotalMinutes = openMinutes + (progress / 100) * totalMarketMinutes;
+    
+    const hours = Math.floor(currentTotalMinutes / 60);
+    const minutes = Math.floor(currentTotalMinutes % 60);
+    
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours > 12 ? (hours === 12 ? 12 : hours - 12) : hours;
+    const displayMinutes = minutes < 10 ? `0${minutes}` : minutes;
+    
+    return `${displayHours}:${displayMinutes} ${ampm}`;
+  };
+
   // --- Data Crunching ---
   const rawData = INDEX_DATA[selectedIndex];
   
@@ -302,6 +317,13 @@ const OptionsWatch: React.FC = () => {
                style={{ left: `calc(${timeProgress}% - 12px)` }}
             >
                <div className="w-1.5 h-1.5 bg-sky-400 rounded-full animate-pulse shadow-[0_0_8px_rgba(56,189,248,1)]"></div>
+               
+               {/* Time Tooltip Bubble (always visible on hover, or strictly floating above) */}
+               <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-[#1a1a1a] border border-sky-500/50 text-sky-400 text-[10px] font-bold px-2.5 py-1 rounded-md shadow-xl whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
+                  {getTimeStringFromProgress(timeProgress)}
+                  {/* Tooltip triangle pointer */}
+                  <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 border-l-[6px] border-r-[6px] border-t-[6px] border-transparent border-t-[#1a1a1a]"></div>
+               </div>
             </div>
           </div>
           
