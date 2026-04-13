@@ -543,7 +543,13 @@ app.post('/api/broker/fyers/exchange', async (req, res) => {
 
   const fyers = createFyers();
   try {
+    console.log(`Attempting Fyers token exchange for App ID: ${clientId} with Redirect URI: ${redirectUri}`);
     const response = await fyers.generate_access_token({ client_id: clientId, secret_key: secretKey, auth_code: authCode });
+    
+    if (response.s === 'error') {
+      console.error('Fyers token exchange error:', response);
+      return res.status(400).json({ error: response.message || 'Fyers token exchange failed', details: response });
+    }
     if (!response || response.s !== 'ok' || !response.access_token) {
       return res.status(400).json({ error: 'Failed to exchange token', details: response });
     }
