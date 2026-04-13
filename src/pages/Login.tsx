@@ -56,7 +56,9 @@ const Login: React.FC = () => {
       const userId = existing || (c && typeof c.randomUUID === 'function' ? c.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
       
       const envUrl = (import.meta as any)?.env?.VITE_API_URL || (import.meta as any)?.env?.VITE_API_BASE_URL;
-      const apiBaseUrl = envUrl && typeof envUrl === 'string' && envUrl.trim() ? envUrl.trim() : 'http://localhost:3001';
+      const isProd = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      const defaultUrl = isProd ? 'https://first-nivesh.onrender.com' : 'http://localhost:3001';
+      const apiBaseUrl = envUrl && typeof envUrl === 'string' && envUrl.trim() ? envUrl.trim() : defaultUrl;
       
       const res = await fetch(`${apiBaseUrl}/api/broker/${broker}/login-url`, {
         method: 'POST',

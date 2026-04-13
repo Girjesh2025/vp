@@ -14,12 +14,10 @@ interface StockCache {
 }
 
 const resolveBaseUrl = (): string => {
-  const envBase = (import.meta.env.VITE_API_BASE_URL && import.meta.env.VITE_API_BASE_URL.trim())
-    ? import.meta.env.VITE_API_BASE_URL.trim()
-    : '';
-  if (envBase) return envBase;
-  const isLocalHost = typeof window !== 'undefined' && (/^localhost$/i.test(window.location.hostname) || /^127\.0\.0\.1$/.test(window.location.hostname));
-  return isLocalHost ? 'http://localhost:3001' : '';
+  const envBase = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL) as string;
+  if (envBase && envBase.trim()) return envBase.trim();
+  const isProd = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+  return isProd ? 'https://first-nivesh.onrender.com' : 'http://localhost:3001';
 };
 
 const stockCache: StockCache = {

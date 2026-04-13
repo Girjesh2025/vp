@@ -73,11 +73,8 @@ const resolveBaseUrl = (): string => {
     }
   } catch (e) {}
   
-  // In development, hit the Vite dev server which proxies to 3001
-  const isLocalHost = typeof window !== 'undefined' && (/^localhost$/i.test(window.location.hostname) || /^127\.0\.0\.1$/.test(window.location.hostname));
-  if (isLocalHost) return ''; // Empty string means it will hit the current origin (Vite dev server)
-  
-  return '';
+  const isProd = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+  return isProd ? 'https://first-nivesh.onrender.com' : 'http://localhost:3001';
 };
 
 const getBrokerPreference = () => {
