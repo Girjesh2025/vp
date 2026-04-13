@@ -181,12 +181,20 @@ const StockPortfolioApp: React.FC = () => {
     }, 0);
   }, [brokerStatus?.connected, location.state, selectedBroker, user?.id]);
 
+  // Restore broker connection status on mount
+  useEffect(() => {
+    if (localStorage.getItem('pp_data_source') === 'broker' || localStorage.getItem('pp_broker')) {
+      refreshBrokerStatus();
+    }
+  }, [user?.id]);
+
   const refreshBrokerStatus = async () => {
-    if (!user?.id) return;
+    const userId = user?.id || localStorage.getItem('pp_user_id');
+    if (!userId) return;
     try {
       setBrokerLoading(true);
       setBrokerError(null);
-      const res = await fetch(`${apiBaseUrl}/api/broker/status?userId=${encodeURIComponent(user.id)}`);
+      const res = await fetch(`${apiBaseUrl}/api/broker/status?userId=${encodeURIComponent(userId)}`);
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || 'Failed to load broker status');
       setBrokerStatus(data);

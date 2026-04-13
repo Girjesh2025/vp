@@ -15,7 +15,8 @@ interface ProfessionalHeaderProps {
   };
   isLoading?: boolean;
   brokerStatus?: { connected: boolean; broker?: string } | null;
-  onStockSelect?: (stock: Stock) => void;
+  lastUpdated?: Date | null;
+  onStockSelect?: (stock: any) => void;
   onNotificationClick?: () => void;
   onSettingsClick?: () => void;
   onProfileClick?: () => void;
@@ -34,7 +35,7 @@ const ProfessionalHeader: React.FC<ProfessionalHeaderProps> = ({
 }) => {
   const { user, signOut } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<Stock[]>([]);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showResults, setShowResults] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 

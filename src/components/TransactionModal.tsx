@@ -8,10 +8,12 @@ interface Props {
   onClose: () => void;
   onAdd: (transaction: Transaction) => void;
   stock: Stock | null;
+  initialType?: 'buy' | 'sell';
+  currentQuantity?: number;
 }
 
-const TransactionModal: React.FC<Props> = ({ isOpen, onClose, onAdd, stock }) => {
-  const [type, setType] = useState<'buy' | 'sell'>('buy');
+const TransactionModal: React.FC<Props> = ({ isOpen, onClose, onAdd, stock, initialType = 'buy', currentQuantity = 0 }) => {
+  const [type, setType] = useState<'buy' | 'sell'>(initialType);
   const [quantity, setQuantity] = useState('');
   const [price, setPrice] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -20,10 +22,11 @@ const TransactionModal: React.FC<Props> = ({ isOpen, onClose, onAdd, stock }) =>
 
   // Fetch current market price when modal opens
   useEffect(() => {
-    if (isOpen && stock) {
-      fetchCurrentPrice();
+    if (isOpen) {
+      setType(initialType);
+      if (stock) fetchCurrentPrice();
     }
-  }, [isOpen, stock]);
+  }, [isOpen, stock, initialType]);
 
   const fetchCurrentPrice = async () => {
     if (!stock) return;
