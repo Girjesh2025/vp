@@ -483,23 +483,23 @@ const OptionsWatch: React.FC = () => {
                     
                     {/* Bulls Bar */}
                     <div className="w-16 flex flex-col items-center group z-10 h-full justify-end relative cursor-crosshair">
-                      <div className="absolute -top-6 bg-black/80 border border-emerald-500/30 text-emerald-400 font-mono text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
+                      <div className="absolute -top-8 bg-black/80 border border-emerald-500/30 text-emerald-400 font-mono text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
                          {formatRaw(totalBulls)}
                       </div>
                       <div 
                         className="w-full bg-gradient-to-t from-emerald-600 to-emerald-400 opacity-90 rounded-t shadow-[0_0_20px_rgba(52,211,153,0.2)] group-hover:opacity-100 group-hover:shadow-[0_0_30px_rgba(52,211,153,0.4)] transition-all origin-bottom border-t-2 border-emerald-300"
-                        style={{ height: `${(totalBulls / totalNet) * 95}%` }}
+                        style={{ height: `${Math.max(2, (totalBulls / totalNet) * 100)}%` }}
                       />
                     </div>
                     
                     {/* Bears Bar */}
                     <div className="w-16 flex flex-col items-center group z-10 h-full justify-end relative cursor-crosshair">
-                      <div className="absolute -top-6 bg-black/80 border border-rose-500/30 text-rose-400 font-mono text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
+                      <div className="absolute -top-8 bg-black/80 border border-rose-500/30 text-rose-400 font-mono text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
                          {formatRaw(totalBears)}
                       </div>
                       <div 
                         className="w-full bg-gradient-to-t from-red-600 to-rose-400 opacity-80 rounded-t shadow-[0_0_20px_rgba(244,63,94,0.15)] group-hover:opacity-100 group-hover:shadow-[0_0_30px_rgba(244,63,94,0.3)] transition-all origin-bottom border-t-2 border-rose-300"
-                        style={{ height: `${(totalBears / totalNet) * 95}%` }}
+                        style={{ height: `${Math.max(2, (totalBears / totalNet) * 100)}%` }}
                       />
                     </div>
                   </div>
