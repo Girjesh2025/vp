@@ -1298,7 +1298,7 @@ const StockPortfolioApp: React.FC = () => {
                         <tbody>
                           {brokerHoldings.map((holding, idx) => {
                             // Extract just the stock name from "NSE:HDFCBANK-EQ"
-                            const cleanSymbol = holding.symbol.replace(/^.*:/, '').replace(/-EQ$/, '');
+                            const cleanSymbol = holding.symbol ? holding.symbol.replace(/^.*:/, '').replace(/-EQ$/, '') : 'UNKNOWN';
                             const pnlPercent = holding.costPrice > 0 ? ((holding.ltp - holding.costPrice) / holding.costPrice) * 100 : 0;
                             
                             return (
@@ -1312,11 +1312,11 @@ const StockPortfolioApp: React.FC = () => {
                                 </td>
                                 <td className="py-4 px-4 text-slate-400 font-medium">{holding.holdingType || 'CNC'}</td>
                                 <td className="py-4 px-4 text-slate-300 font-bold">{holding.quantity}</td>
-                                <td className="py-4 px-4 text-slate-300">₹{holding.costPrice.toFixed(2)}</td>
-                                <td className="py-4 px-4 text-slate-300">₹{holding.ltp.toFixed(2)}</td>
+                                <td className="py-4 px-4 text-slate-300">₹{(holding.costPrice || 0).toFixed(2)}</td>
+                                <td className="py-4 px-4 text-slate-300">₹{(holding.ltp || 0).toFixed(2)}</td>
                                 <td className="py-4 px-4">
-                                  <div className={`${holding.pl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                    {holding.pl >= 0 ? '+' : '-'}₹{Math.abs(holding.pl).toFixed(2)}
+                                  <div className={`${(holding.pl || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                    {(holding.pl || 0) >= 0 ? '+' : '-'}₹{Math.abs(holding.pl || 0).toFixed(2)}
                                     <div className="text-sm">({pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%)</div>
                                   </div>
                                 </td>
@@ -1327,7 +1327,7 @@ const StockPortfolioApp: React.FC = () => {
                       </table>
                     </div>
                   )
-                ) : (!portfolioStocks || portfolioStocks.length === 0) ? (
+                ) : (!stocks || stocks.length === 0) ? (
                   // PAPER TRADING HOLDINGS VIEW (Empty)
                   <div className="text-center py-12">
                     <Briefcase className="w-16 h-16 text-slate-600 mx-auto mb-4" />
