@@ -109,34 +109,34 @@ const SwingCard = ({
 
       {/* Table Content */}
       <div className="bg-[#0f1520]/50 relative overflow-x-auto custom-scrollbar">
-        <div className="w-full flex flex-col min-w-[700px]">
-          <div className="sticky top-0 bg-[#172030]/95 backdrop-blur-md z-10 shadow-sm border-b border-slate-700/50 flex items-center px-4 py-3 text-[10px] uppercase tracking-wider text-slate-500 font-bold shrink-0">
+        <div className="w-full flex flex-col min-w-[480px]">
+          <div className="sticky top-0 bg-[#172030]/95 backdrop-blur-md z-10 shadow-sm border-b border-slate-700/50 flex items-center px-2 sm:px-4 py-3 text-[9px] sm:text-[10px] uppercase tracking-wider text-slate-500 font-bold shrink-0">
             <div className="flex-1 min-w-0 pr-2">Symbol & Price</div>
-            <div className="w-[100px] text-center shrink-0 flex items-center justify-center gap-1"><BrainCircuit className="w-3 h-3 text-purple-400" /> AI Score</div>
-            <div className="w-[80px] text-center shrink-0 flex items-center justify-center gap-1"><Zap className="w-3 h-3 text-yellow-400" /> Vol</div>
-            <div className="w-[140px] text-center shrink-0 flex items-center justify-center gap-1"><Crosshair className="w-3 h-3 text-blue-400" /> Setup</div>
-            <div className="w-[70px] text-right shrink-0">Signal</div>
+            <div className="w-[60px] sm:w-[70px] text-center shrink-0 flex items-center justify-center gap-1" title="AI Score"><BrainCircuit className="w-3 h-3 text-purple-400 hidden sm:block" /> AI</div>
+            <div className="w-[50px] sm:w-[60px] text-center shrink-0 flex items-center justify-center gap-1" title="Volume Spike"><Zap className="w-3 h-3 text-yellow-400 hidden sm:block" /> Vol</div>
+            <div className="w-[90px] sm:w-[110px] text-center shrink-0 flex items-center justify-center gap-1"><Crosshair className="w-3 h-3 text-blue-400 hidden sm:block" /> Setup</div>
+            <div className="w-[50px] sm:w-[60px] text-right shrink-0">Signal</div>
           </div>
           <div className="flex flex-col divide-y divide-slate-800/50 pb-2">
             {filteredData.length > 0 ? filteredData.map((row, idx) => (
               <div 
                 key={idx} 
                 onClick={() => handleRowClick(row.symbol)}
-                className="flex items-center px-4 py-3 hover:bg-slate-800/30 transition-all duration-200 group/row cursor-pointer relative"
+                className="flex items-center px-2 sm:px-4 py-2 sm:py-3 hover:bg-slate-800/30 transition-all duration-200 group/row cursor-pointer relative"
               >
                 {/* Subtle row highlight indicator */}
                 <div className={`absolute left-0 top-0 bottom-0 w-1 opacity-0 group-hover/row:opacity-100 transition-opacity ${row.isBull ? 'bg-emerald-500' : 'bg-red-500'}`} />
                 
                 {/* Symbol & Price Column */}
-                <div className="flex-1 min-w-0 flex items-center gap-3 pr-2">
-                  <StockLogo symbol={row.symbol} className="w-10 h-10 shrink-0 shadow-[0_0_10px_rgba(255,255,255,0.05)] border border-slate-700/50" />
+                <div className="flex-1 min-w-0 flex items-center gap-2 sm:gap-3 pr-1 sm:pr-2">
+                  <StockLogo symbol={row.symbol} className="w-8 h-8 sm:w-10 sm:h-10 shrink-0 shadow-[0_0_10px_rgba(255,255,255,0.05)] border border-slate-700/50" />
                   <div className="flex flex-col min-w-0">
-                    <span className="text-sm font-bold text-slate-200 group-hover/row:text-white transition-colors truncate">
+                    <span className="text-xs sm:text-sm font-bold text-slate-200 group-hover/row:text-white transition-colors truncate">
                       {row.symbol}
                     </span>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-xs font-semibold text-slate-400">₹{row.price.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
-                      <span className={`text-[10px] font-bold px-1.5 rounded-sm ${
+                    <div className="flex items-center gap-1 sm:gap-2 mt-0.5">
+                      <span className="text-[10px] sm:text-xs font-semibold text-slate-400">₹{row.price.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
+                      <span className={`text-[9px] sm:text-[10px] font-bold px-1 sm:px-1.5 rounded-sm ${
                         row.change >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
                       }`}>
                         {row.change >= 0 ? '+' : ''}{row.change.toFixed(2)}%
@@ -146,17 +146,16 @@ const SwingCard = ({
                 </div>
 
                 {/* AI Score Column */}
-                <div className="w-[100px] flex flex-col justify-center items-center shrink-0 px-2">
-                  <div className="flex items-end gap-1 mb-1">
-                    <span className={`text-lg font-black leading-none drop-shadow-md ${
+                <div className="w-[60px] sm:w-[70px] flex flex-col justify-center items-center shrink-0 px-1 sm:px-2">
+                  <div className="flex items-end gap-0.5 mb-1">
+                    <span className={`text-sm sm:text-base font-black leading-none drop-shadow-md ${
                       (row.aiScore || 0) >= 85 ? 'text-purple-400' : 
                       (row.aiScore || 0) >= 70 ? 'text-blue-400' : 'text-slate-400'
                     }`}>
                       {row.aiScore || '--'}
                     </span>
-                    <span className="text-[10px] text-slate-500 font-bold mb-0.5">/100</span>
                   </div>
-                  <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
                     <div 
                       className={`h-full rounded-full ${
                         (row.aiScore || 0) >= 85 ? 'bg-gradient-to-r from-purple-500 to-fuchsia-500 shadow-[0_0_5px_rgba(168,85,247,0.5)]' : 
@@ -168,32 +167,32 @@ const SwingCard = ({
                 </div>
 
                 {/* Volume Spike Column */}
-                <div className="w-[80px] flex justify-center items-center shrink-0">
-                  <div className={`flex items-center gap-1 px-2 py-1 rounded-md border ${
+                <div className="w-[50px] sm:w-[60px] flex justify-center items-center shrink-0 px-1">
+                  <div className={`flex items-center gap-0.5 sm:gap-1 px-1 sm:px-1.5 py-0.5 sm:py-1 rounded border ${
                     (row.volMultiplier || 1) >= 2.5 
                       ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400 shadow-[0_0_10px_rgba(234,179,8,0.2)]' 
                       : 'bg-slate-800/50 border-slate-700 text-slate-400'
                   }`}>
-                    {(row.volMultiplier || 1) >= 2.5 && <Zap className="w-3 h-3 animate-pulse" />}
-                    <span className="text-xs font-bold">{row.volMultiplier?.toFixed(1) || '1.0'}x</span>
+                    {(row.volMultiplier || 1) >= 2.5 && <Zap className="w-2.5 h-2.5 animate-pulse hidden sm:block" />}
+                    <span className="text-[10px] sm:text-xs font-bold">{row.volMultiplier?.toFixed(1) || '1.0'}x</span>
                   </div>
                 </div>
 
                 {/* Setup (SL/TGT) Column */}
-                <div className="w-[140px] flex flex-col justify-center items-center gap-1 shrink-0 px-2">
-                  <div className="w-full flex justify-between items-center bg-emerald-500/10 border border-emerald-500/20 rounded px-2 py-0.5">
-                    <span className="text-[9px] font-bold text-emerald-500 uppercase">TGT</span>
-                    <span className="text-xs font-black text-emerald-400">₹{row.target?.toFixed(1) || '--'}</span>
+                <div className="w-[90px] sm:w-[110px] flex flex-col justify-center items-center gap-0.5 sm:gap-1 shrink-0 px-1 sm:px-2">
+                  <div className="w-full flex justify-between items-center bg-emerald-500/10 border border-emerald-500/20 rounded px-1 sm:px-1.5 py-0.5">
+                    <span className="text-[8px] sm:text-[9px] font-bold text-emerald-500 uppercase">TGT</span>
+                    <span className="text-[10px] sm:text-xs font-black text-emerald-400">₹{row.target?.toFixed(0) || '--'}</span>
                   </div>
-                  <div className="w-full flex justify-between items-center bg-red-500/10 border border-red-500/20 rounded px-2 py-0.5">
-                    <span className="text-[9px] font-bold text-red-500 uppercase">SL</span>
-                    <span className="text-xs font-black text-red-400">₹{row.stopLoss?.toFixed(1) || '--'}</span>
+                  <div className="w-full flex justify-between items-center bg-red-500/10 border border-red-500/20 rounded px-1 sm:px-1.5 py-0.5">
+                    <span className="text-[8px] sm:text-[9px] font-bold text-red-500 uppercase">SL</span>
+                    <span className="text-[10px] sm:text-xs font-black text-red-400">₹{row.stopLoss?.toFixed(0) || '--'}</span>
                   </div>
                 </div>
 
                 {/* Signal Column */}
-                <div className="w-[70px] flex justify-end shrink-0 pl-2">
-                  <span className={`inline-flex items-center justify-center w-full max-w-[65px] py-1.5 rounded-md text-[10px] font-black tracking-widest shadow-sm border ${
+                <div className="w-[50px] sm:w-[60px] flex justify-end shrink-0 pl-1 sm:pl-2">
+                  <span className={`inline-flex items-center justify-center w-full max-w-[50px] py-1 rounded text-[8px] sm:text-[9px] font-black tracking-widest shadow-sm border ${
                     row.isBull 
                       ? 'bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 text-emerald-400 border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.2)]' 
                       : 'bg-gradient-to-br from-red-500/20 to-red-600/20 text-red-400 border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.2)]'
