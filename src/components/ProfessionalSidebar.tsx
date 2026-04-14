@@ -15,7 +15,8 @@ import {
   Eye,
   Activity,
   Radar,
-  Sparkles
+  Sparkles,
+  Target
 } from 'lucide-react';
 
 interface MenuItem {
@@ -48,6 +49,7 @@ const ProfessionalSidebar: React.FC<ProfessionalSidebarProps> = ({
     { id: 'tools', label: 'Market Pulse', icon: Globe },
     { id: 'market-eye', label: 'Market Eye', icon: Eye },
     { id: 'swing-player', label: 'Swing Player', icon: Activity },
+    { id: 'guru-scan', label: 'Guru Scan', icon: Target, isNew: true },
     { id: 'options-player', label: 'Options Player', icon: TrendingUp },
     { id: 'options-watch', label: 'Options Watch', icon: Radar, isNew: true },
     { id: 'options-decode', label: 'Options Decode', icon: Brain },

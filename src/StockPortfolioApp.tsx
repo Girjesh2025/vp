@@ -17,6 +17,7 @@ import MarketAnalysis from './components/MarketAnalysis';
 import MarketAnalysisTools from './components/MarketAnalysisTools';
 import MarketEye from './components/MarketEye';
 import SwingPlayer from './components/SwingPlayer';
+import GuruScan from './components/GuruScan';
 import OptionsPlayer from './components/OptionsPlayer';
 import OptionsHint   from './components/OptionsHint';
 import OptionsWatch  from './components/OptionsWatch';
@@ -1560,6 +1561,9 @@ const StockPortfolioApp: React.FC = () => {
           )}
           {activeTab === 'swing-player' && (
             <SwingPlayer />
+          )}
+          {activeTab === 'guru-scan' && (
+            <GuruScan />
           )}
           {activeTab === 'options-player' && (
             <OptionsPlayer />
