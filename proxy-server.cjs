@@ -14,6 +14,9 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
+const fundamentalsCache = new Map();
+const FUNDAMENTALS_CACHE_TTL = 12 * 60 * 60 * 1000; // 12 hours
+
 const brokerSessions = new Map();
 
 const getZerodhaConfig = () => {
@@ -400,6 +403,92 @@ app.get('/api/search', async (req, res) => {
   } catch (error) {
     console.error('Yahoo Search API Error:', error);
     return res.status(500).json({ error: 'Failed to fetch search data' });
+  }
+});
+
+// Fetch fundamentals from Yahoo Finance
+async function fetchYahooFundamentals(symbol) {
+  const formattedSymbol = symbol.endsWith('.NS') || symbol.endsWith('.BO') ? symbol : `${symbol}.NS`;
+  const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${formattedSymbol}?modules=defaultKeyStatistics,financialData,summaryDetail,price`;
+  
+  try {
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
+    });
+    if (!response.ok) return null;
+    
+    const data = await response.json();
+    const result = data.quoteSummary?.result?.[0];
+    if (!result) return null;
+
+    const priceData = result.price || {};
+    const financialData = result.financialData || {};
+    const keyStats = result.defaultKeyStatistics || {};
+    const summary = result.summaryDetail || {};
+
+    return {
+      symbol: symbol.replace(/\.NS$/, ''),
+      price: priceData.regularMarketPrice?.raw || 0,
+      change: (priceData.regularMarketChangePercent?.raw || 0) * 100,
+      high52: summary.fiftyTwoWeekHigh?.raw || 0,
+      low52: summary.fiftyTwoWeekLow?.raw || 0,
+      peRatio: summary.trailingPE?.raw || (financialData.currentPrice?.raw / keyStats.trailingEps?.raw) || 0,
+      pegRatio: keyStats.pegRatio?.raw || 0,
+      roe: (financialData.returnOnEquity?.raw || 0) * 100, // typically decimal 0.15 -> 15%
+      debtToEquity: financialData.debtToEquity?.raw || 0, // typically 45.0 means 45%
+      growth: (financialData.earningsGrowth?.raw || 0) * 100
+    };
+  } catch (e) {
+    console.error(`Error fetching fundamentals for ${symbol}:`, e.message);
+    return null;
+  }
+}
+
+// Batch Fundamentals Endpoint for Guru Scan
+app.post('/api/fundamentals/batch', async (req, res) => {
+  try {
+    const { symbols } = req.body;
+    if (!Array.isArray(symbols)) return res.status(400).json({ error: 'Symbols array required' });
+    
+    console.log(`📊 [Fundamentals] Fetching for ${symbols.length} symbols...`);
+    const results = {};
+    const now = Date.now();
+    const symbolsToFetch = [];
+
+    // Check cache
+    for (const sym of symbols) {
+      const cached = fundamentalsCache.get(sym);
+      if (cached && (now - cached.timestamp) < FUNDAMENTALS_CACHE_TTL) {
+        results[sym] = cached.data;
+      } else {
+        symbolsToFetch.push(sym);
+      }
+    }
+
+    if (symbolsToFetch.length > 0) {
+      console.log(`Fetching missing fundamentals for ${symbolsToFetch.length} symbols from Yahoo...`);
+      // Process in batches of 5 to avoid rate limits
+      const batchSize = 5;
+      for (let i = 0; i < symbolsToFetch.length; i += batchSize) {
+        const batch = symbolsToFetch.slice(i, i + batchSize);
+        const promises = batch.map(async (sym) => {
+           const data = await fetchYahooFundamentals(sym);
+           if (data) {
+             results[sym] = data;
+             fundamentalsCache.set(sym, { data, timestamp: now });
+           }
+        });
+        await Promise.all(promises);
+        if (i + batchSize < symbolsToFetch.length) {
+          await new Promise(r => setTimeout(r, 200)); // Rate limit delay
+        }
+      }
+    }
+    
+    res.json(results);
+  } catch (error) {
+    console.error('Fundamentals Batch Error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 

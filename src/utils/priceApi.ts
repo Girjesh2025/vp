@@ -275,7 +275,7 @@ const fetchDirectFallback = async (symbol: string): Promise<PriceData | null> =>
  * Throws if no real data can be obtained — no mock fallback.
  */
 export const fetchHistoricalPrices = async (symbol: string, days: number = 60): Promise<number[]> => {
-  const yahooSymbol = toYahooSymbol(symbol);
+  const yahooSymbol = symbol.startsWith('^') || symbol.includes('=') ? symbol : toYahooSymbol(symbol);
 
   // 1. Try our reliable backend proxy first
   try {
@@ -334,6 +334,35 @@ export const fetchHistoricalPrices = async (symbol: string, days: number = 60): 
   }
 
   throw new Error(`fetchHistoricalPrices: Unable to obtain real historical data for ${symbol}. All proxies failed.`);
+};
+
+export interface StockFundamentals {
+  symbol: string;
+  price: number;
+  change: number;
+  high52: number;
+  low52: number;
+  peRatio: number;
+  pegRatio: number;
+  roe: number;
+  debtToEquity: number;
+  growth: number;
+}
+
+export const fetchGuruFundamentals = async (symbols: string[]): Promise<Record<string, StockFundamentals>> => {
+  try {
+    const API_BASE = resolveBaseUrl();
+    const response = await fetch(`${API_BASE}/api/fundamentals/batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symbols })
+    });
+    if (!response.ok) throw new Error('Failed to fetch fundamentals');
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching fundamentals:', error);
+    return {};
+  }
 };
 
 export interface YahooOHLCVBar {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Target, Search, TrendingUp, Shield, Activity, Star, Crosshair, DollarSign, BookOpen } from 'lucide-react';
-import { fetchMultipleStockPrices, isMarketOpen } from '../utils/priceApi';
+import { fetchGuruFundamentals, StockFundamentals } from '../utils/priceApi';
 import StockLogo from './StockLogo';
 
 interface GuruStock {
@@ -87,7 +87,7 @@ const seededRandom = (str: string) => {
 export default function GuruScan() {
   const [activeGuru, setActiveGuru] = useState(GURUS[0].id);
   const [search, setSearch] = useState('');
-  const [marketData, setMarketData] = useState<any[]>([]);
+  const [marketData, setMarketData] = useState<StockFundamentals[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -95,24 +95,18 @@ export default function GuruScan() {
     const loadData = async () => {
       setLoading(true);
       try {
-        const batchSize = 50;
+        const batchSize = 15;
         const symbolsToFetch = WATCHLIST_SYMBOLS.map(s => `${s}.NS`);
-        const allData: any[] = [];
+        const allData: StockFundamentals[] = [];
 
         for (let i = 0; i < symbolsToFetch.length; i += batchSize) {
           const batch = symbolsToFetch.slice(i, i + batchSize);
           if (!isMounted) return;
           
-          const batchData = await fetchMultipleStockPrices(batch);
-          for (const [symbolWithSuffix, data] of Object.entries(batchData)) {
-            if (data) {
-              allData.push({
-                symbol: symbolWithSuffix.replace('.NS', ''),
-                price: data.price,
-                change: data.change || 0,
-                high52: data.high52,
-                low52: data.low52
-              });
+          const batchData = await fetchGuruFundamentals(batch);
+          for (const data of Object.values(batchData)) {
+            if (data && data.price > 0) {
+              allData.push(data);
             }
           }
         }
@@ -134,100 +128,76 @@ export default function GuruScan() {
     let candidates = [...marketData];
 
     if (activeGuru === 'minervini') {
-      // High change, near 52 week high, strong volume
       return candidates
-        .filter(d => d.change > 0 && d.high52 && d.price > d.high52 * 0.85)
+        .filter(d => d.change > 0 && d.high52 > 0 && d.price > d.high52 * 0.85)
         .sort((a, b) => b.change - a.change)
         .slice(0, 15)
-        .map(d => ({
-          symbol: d.symbol,
-          price: d.price,
-          change: d.change,
-          score: 80 + Math.floor(seededRandom(d.symbol + 'min') * 20),
-          reason: 'Price near 52W High, Strong Momentum breakout.'
-        }));
+        .map(d => {
+          const proximity = d.price / d.high52;
+          const score = Math.min(99, Math.floor((proximity * 50) + (d.change * 5)));
+          return {
+            ...d,
+            score: Math.max(70, score),
+            reason: `Price is within ${((1 - proximity) * 100).toFixed(1)}% of 52W High. Strong trend.`
+          };
+        });
     } 
     else if (activeGuru === 'buffett') {
-      // Mocking ROE and Debt
       return candidates
-        .map(d => {
-          const roe = 15 + seededRandom(d.symbol + 'roe') * 25; // 15% to 40%
-          const debt = seededRandom(d.symbol + 'debt') * 0.5; // 0 to 0.5
-          const score = 70 + (roe / 40) * 15 + ((0.5 - debt) * 20);
-          return { ...d, roe, debtToEquity: debt, score };
-        })
-        .filter(d => d.roe > 20 && d.debtToEquity < 0.3)
-        .sort((a, b) => b.score - a.score)
+        .filter(d => d.roe > 15 && (d.debtToEquity / 100) < 0.5 && d.peRatio > 0)
+        .sort((a, b) => b.roe - a.roe)
         .slice(0, 15)
-        .map(d => ({
-          symbol: d.symbol,
-          price: d.price,
-          change: d.change,
-          score: Math.min(99, Math.floor(d.score)),
-          roe: d.roe,
-          debtToEquity: d.debtToEquity,
-          reason: `High ROE (${d.roe.toFixed(1)}%), Low Debt (${d.debtToEquity.toFixed(2)}). Wide Moat.`
-        }));
+        .map(d => {
+          const debtRatio = d.debtToEquity / 100;
+          const score = Math.min(99, Math.floor(70 + (d.roe / 2) - (debtRatio * 20)));
+          return {
+            ...d,
+            score: Math.max(70, score),
+            reason: `High ROE (${d.roe.toFixed(1)}%), Low D/E (${debtRatio.toFixed(2)}). Wide Moat.`
+          };
+        });
     }
     else if (activeGuru === 'graham') {
-      // Mocking low PE
       return candidates
-        .map(d => {
-          const peRatio = 5 + seededRandom(d.symbol + 'pe') * 10; // 5 to 15
-          const score = 100 - peRatio * 2; // Lower PE = Higher Score
-          return { ...d, peRatio, score };
-        })
-        .filter(d => d.peRatio < 12)
+        .filter(d => d.peRatio > 0 && d.peRatio < 20)
         .sort((a, b) => a.peRatio - b.peRatio)
         .slice(0, 15)
-        .map(d => ({
-          symbol: d.symbol,
-          price: d.price,
-          change: d.change,
-          score: Math.min(99, Math.floor(d.score)),
-          peRatio: d.peRatio,
-          reason: `Deep Value: P/E Ratio is ${d.peRatio.toFixed(1)}x. High Margin of Safety.`
-        }));
+        .map(d => {
+          const score = Math.min(99, Math.floor(100 - (d.peRatio * 2)));
+          return {
+            ...d,
+            score: Math.max(70, score),
+            reason: `Deep Value: P/E Ratio is ${d.peRatio.toFixed(1)}x. High Margin of Safety.`
+          };
+        });
     }
     else if (activeGuru === 'lynch') {
-      // Mocking PEG ratio (PE / Growth)
       return candidates
-        .map(d => {
-          const growth = 15 + seededRandom(d.symbol + 'growth') * 20; // 15% to 35% growth
-          const peRatio = 15 + seededRandom(d.symbol + 'pe_lynch') * 15; // 15 to 30 PE
-          const peg = peRatio / growth;
-          const score = 100 - (peg * 20);
-          return { ...d, peg, growth, peRatio, score };
-        })
-        .filter(d => d.peg < 1.0)
-        .sort((a, b) => a.peg - b.peg)
+        .filter(d => d.pegRatio > 0 && d.pegRatio < 1.5 && d.growth > 5)
+        .sort((a, b) => a.pegRatio - b.pegRatio)
         .slice(0, 15)
-        .map(d => ({
-          symbol: d.symbol,
-          price: d.price,
-          change: d.change,
-          score: Math.min(99, Math.max(70, Math.floor(d.score))),
-          peRatio: d.peRatio,
-          reason: `GARP: High earnings growth (${d.growth.toFixed(1)}%) with PEG < 1.`
-        }));
+        .map(d => {
+          const score = Math.min(99, Math.floor(100 - (d.pegRatio * 25)));
+          return {
+            ...d,
+            score: Math.max(70, score),
+            reason: `GARP: High growth (${d.growth.toFixed(1)}%) with PEG ratio of ${d.pegRatio.toFixed(2)}.`
+          };
+        });
     }
     else if (activeGuru === 'oneil') {
-      // CAN SLIM logic: High change, near 52W high
       return candidates
-        .filter(d => d.change > 0 && d.high52 && d.price > d.high52 * 0.90)
-        .map(d => {
-          const score = 75 + Math.floor(seededRandom(d.symbol + 'canslim') * 24);
-          return { ...d, score };
-        })
-        .sort((a, b) => b.score - a.score)
+        .filter(d => d.high52 > 0 && d.price > d.high52 * 0.90 && d.growth > 10)
+        .sort((a, b) => b.growth - a.growth)
         .slice(0, 15)
-        .map(d => ({
-          symbol: d.symbol,
-          price: d.price,
-          change: d.change,
-          score: d.score,
-          reason: 'CAN SLIM: Breaking out to new highs with strong momentum & earnings.'
-        }));
+        .map(d => {
+          const score = Math.min(99, Math.floor(75 + (d.growth / 2) + (d.change * 2)));
+          return {
+            ...d,
+            score: Math.max(70, score),
+            reason: `CAN SLIM: Near 52W High with ${d.growth.toFixed(1)}% earnings growth.`
+          };
+        });
     }
 
     return [];
