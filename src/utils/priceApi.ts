@@ -7,12 +7,36 @@ import type { PriceData } from '../types';
  */
 export const isMarketOpen = (): boolean => {
   const now = new Date();
-  const istTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
+  
+  // Safely convert to IST (UTC + 5:30) avoiding browser locale parsing issues
+  const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const istTime = new Date(utcTime + (330 * 60000));
 
   const day = istTime.getDay(); // 0 = Sunday, 6 = Saturday
   if (day === 0 || day === 6) return false; // Weekend
 
-  const currentTime = istTime.getHours() * 60 + istTime.getMinutes();
+  // Format date as YYYY-MM-DD
+  const yyyy = istTime.getFullYear();
+  const mm = String(istTime.getMonth() + 1).padStart(2, '0');
+  const dd = String(istTime.getDate()).padStart(2, '0');
+  const dateStr = `${yyyy}-${mm}-${dd}`;
+
+  // List of NSE Public Holidays (2024-2026)
+  const holidays = [
+    // 2024
+    '2024-01-22', '2024-01-26', '2024-03-08', '2024-03-25', '2024-03-29', '2024-04-11', '2024-04-17', '2024-05-01', '2024-06-17', '2024-07-17', '2024-08-15', '2024-10-02', '2024-11-01', '2024-11-15', '2024-12-25',
+    // 2025
+    '2025-01-26', '2025-02-26', '2025-03-14', '2025-03-31', '2025-04-10', '2025-04-14', '2025-04-18', '2025-05-01', '2025-08-15', '2025-08-27', '2025-10-02', '2025-10-21', '2025-10-22', '2025-11-05', '2025-12-25',
+    // 2026
+    '2026-01-26', '2026-03-03', '2026-03-20', '2026-04-03', '2026-04-14', '2026-05-01', '2026-08-15', '2026-08-26', '2026-10-02', '2026-11-08', '2026-11-24', '2026-12-25'
+  ];
+  
+  if (holidays.includes(dateStr)) return false;
+
+  const hours = istTime.getHours();
+  const minutes = istTime.getMinutes();
+  const currentTime = hours * 60 + minutes;
+  
   const marketOpen  = 9 * 60 + 15;  // 9:15 AM
   const marketClose = 15 * 60 + 30; // 3:30 PM
 
