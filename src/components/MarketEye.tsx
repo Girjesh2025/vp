@@ -564,7 +564,7 @@ const MarketEye = () => {
                 const allowBreakout = isAboveDma;
                 const allowBreakdown = isBelowDma;
 
-                if (current.close > refHigh + closeBuffer && prev.close <= refHigh + closeBuffer && allowBreakout) {
+                if (current.close > refHigh + closeBuffer && allowBreakout) {
                   const weekBreakPct = ((current.close - refHigh) / refHigh) * 100;
                   breakoutRows.push({
                     symbol: c.symbol,
@@ -577,9 +577,22 @@ const MarketEye = () => {
                     momentumTag,
                     sectorSupport: sectorSupportUp,
                   });
+                } else if (nearUpPct >= 0 && nearUpPct <= 3 && allowBreakout) {
+                  // If not breaking out, but within 3% of weekly high
+                  breakoutRows.push({
+                    symbol: c.symbol,
+                    price: c.price,
+                    change: c.change,
+                    weekBreakPct: Number((-nearUpPct).toFixed(2)), // Negative indicates it's below the high
+                    isHighVolume,
+                    volumeRatio: Number(volumeRatio.toFixed(2)),
+                    weeklyRsi: weeklyRsi !== null ? Number(weeklyRsi.toFixed(1)) : undefined,
+                    momentumTag,
+                    sectorSupport: sectorSupportUp,
+                  });
                 }
 
-                if (current.close < refLow - closeBufferDown && prev.close >= refLow - closeBufferDown && allowBreakdown) {
+                if (current.close < refLow - closeBufferDown && allowBreakdown) {
                   const weekBreakPct = ((refLow - current.close) / refLow) * 100;
                   breakdownRows.push({
                     symbol: c.symbol,
@@ -592,33 +605,13 @@ const MarketEye = () => {
                     momentumTag,
                     sectorSupport: sectorSupportDown,
                   });
-                }
-
-                const radarUpOk = weeklyMode === 'pro' ? isAboveDma : true;
-                const radarDownOk = weeklyMode === 'pro' ? isBelowDma : true;
-
-                if (nearUpPct >= 0 && nearUpPct <= radarProximity && current.close <= refHigh + closeBuffer && radarUpOk) {
-                  radarUp.push({
+                } else if (nearDownPct >= 0 && nearDownPct <= 3 && allowBreakdown) {
+                  // If not breaking down, but within 3% of weekly low
+                  breakdownRows.push({
                     symbol: c.symbol,
                     price: c.price,
                     change: c.change,
-                    weekBreakPct: 0,
-                    proximityPct: Number(nearUpPct.toFixed(2)),
-                    isHighVolume,
-                    volumeRatio: Number(volumeRatio.toFixed(2)),
-                    weeklyRsi: weeklyRsi !== null ? Number(weeklyRsi.toFixed(1)) : undefined,
-                    momentumTag,
-                    sectorSupport: sectorSupportUp,
-                  });
-                }
-
-                if (nearDownPct >= 0 && nearDownPct <= radarProximity && current.close >= refLow - closeBufferDown && radarDownOk) {
-                  radarDown.push({
-                    symbol: c.symbol,
-                    price: c.price,
-                    change: c.change,
-                    weekBreakPct: 0,
-                    proximityPct: Number(nearDownPct.toFixed(2)),
+                    weekBreakPct: Number((-nearDownPct).toFixed(2)),
                     isHighVolume,
                     volumeRatio: Number(volumeRatio.toFixed(2)),
                     weeklyRsi: weeklyRsi !== null ? Number(weeklyRsi.toFixed(1)) : undefined,
