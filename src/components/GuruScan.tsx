@@ -129,7 +129,7 @@ export default function GuruScan() {
 
     if (activeGuru === 'minervini') {
       return candidates
-        .filter(d => d.change > 0 && d.high52 > 0 && d.price > d.high52 * 0.85)
+        .filter(d => d.high52 > 0 && d.price > d.high52 * 0.80) // Relaxed to 80%
         .sort((a, b) => b.change - a.change)
         .slice(0, 15)
         .map(d => {
@@ -144,7 +144,7 @@ export default function GuruScan() {
     } 
     else if (activeGuru === 'buffett') {
       return candidates
-        .filter(d => d.roe > 15 && (d.debtToEquity / 100) < 0.5 && d.peRatio > 0)
+        .filter(d => d.roe > 10 && (d.debtToEquity / 100) < 1.0 && d.peRatio > 0) // Relaxed ROE and Debt
         .sort((a, b) => b.roe - a.roe)
         .slice(0, 15)
         .map(d => {
@@ -159,11 +159,11 @@ export default function GuruScan() {
     }
     else if (activeGuru === 'graham') {
       return candidates
-        .filter(d => d.peRatio > 0 && d.peRatio < 20)
+        .filter(d => d.peRatio > 0 && d.peRatio < 25) // Relaxed PE to 25
         .sort((a, b) => a.peRatio - b.peRatio)
         .slice(0, 15)
         .map(d => {
-          const score = Math.min(99, Math.floor(100 - (d.peRatio * 2)));
+          const score = Math.min(99, Math.floor(100 - (d.peRatio * 1.5)));
           return {
             ...d,
             score: Math.max(70, score),
@@ -173,11 +173,11 @@ export default function GuruScan() {
     }
     else if (activeGuru === 'lynch') {
       return candidates
-        .filter(d => d.pegRatio > 0 && d.pegRatio < 1.5 && d.growth > 5)
+        .filter(d => d.pegRatio > 0 && d.pegRatio < 2.0 && d.growth > 0) // Relaxed PEG and Growth
         .sort((a, b) => a.pegRatio - b.pegRatio)
         .slice(0, 15)
         .map(d => {
-          const score = Math.min(99, Math.floor(100 - (d.pegRatio * 25)));
+          const score = Math.min(99, Math.floor(100 - (d.pegRatio * 20)));
           return {
             ...d,
             score: Math.max(70, score),
@@ -187,7 +187,7 @@ export default function GuruScan() {
     }
     else if (activeGuru === 'oneil') {
       return candidates
-        .filter(d => d.high52 > 0 && d.price > d.high52 * 0.90 && d.growth > 10)
+        .filter(d => d.high52 > 0 && d.price > d.high52 * 0.85 && d.growth > 5) // Relaxed 52w and growth
         .sort((a, b) => b.growth - a.growth)
         .slice(0, 15)
         .map(d => {

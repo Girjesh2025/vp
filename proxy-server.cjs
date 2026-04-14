@@ -4,6 +4,8 @@ const fetch = require('node-fetch');
 const https = require('https');
 const zlib = require('zlib');
 const crypto = require('crypto');
+const { default: YahooFinance } = require('yahoo-finance2');
+const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 require('dotenv').config();
 const { fyersModel } = require('fyers-api-v3');
 
@@ -406,20 +408,19 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-// Fetch fundamentals from Yahoo Finance
+// Fetch fundamentals from Yahoo Finance using yahoo-finance2
 async function fetchYahooFundamentals(symbol) {
   const formattedSymbol = symbol.endsWith('.NS') || symbol.endsWith('.BO') ? symbol : `${symbol}.NS`;
-  const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${formattedSymbol}?modules=defaultKeyStatistics,financialData,summaryDetail,price`;
   
   try {
-    const response = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
+    const result = await yahooFinance.quoteSummary(formattedSymbol, {
+      modules: ['defaultKeyStatistics', 'financialData', 'summaryDetail', 'price']
     });
-    if (!response.ok) return null;
-    
-    const data = await response.json();
-    const result = data.quoteSummary?.result?.[0];
-    if (!result) return null;
+
+    if (!result) {
+      console.warn(`[Fundamentals] No data from yahoo-finance2 for ${symbol}`);
+      return null;
+    }
 
     const priceData = result.price || {};
     const financialData = result.financialData || {};
@@ -428,15 +429,15 @@ async function fetchYahooFundamentals(symbol) {
 
     return {
       symbol: symbol.replace(/\.NS$/, ''),
-      price: priceData.regularMarketPrice?.raw || 0,
-      change: (priceData.regularMarketChangePercent?.raw || 0) * 100,
-      high52: summary.fiftyTwoWeekHigh?.raw || 0,
-      low52: summary.fiftyTwoWeekLow?.raw || 0,
-      peRatio: summary.trailingPE?.raw || (financialData.currentPrice?.raw / keyStats.trailingEps?.raw) || 0,
-      pegRatio: keyStats.pegRatio?.raw || 0,
-      roe: (financialData.returnOnEquity?.raw || 0) * 100, // typically decimal 0.15 -> 15%
-      debtToEquity: financialData.debtToEquity?.raw || 0, // typically 45.0 means 45%
-      growth: (financialData.earningsGrowth?.raw || 0) * 100
+      price: priceData.regularMarketPrice || 0,
+      change: (priceData.regularMarketChangePercent || 0) * 100,
+      high52: summary.fiftyTwoWeekHigh || 0,
+      low52: summary.fiftyTwoWeekLow || 0,
+      peRatio: summary.trailingPE || (financialData.currentPrice / keyStats.trailingEps) || 0,
+      pegRatio: keyStats.pegRatio || 0,
+      roe: (financialData.returnOnEquity || 0) * 100, // typically decimal 0.15 -> 15%
+      debtToEquity: financialData.debtToEquity || 0, // typically 45.0 means 45%
+      growth: (financialData.earningsGrowth || 0) * 100
     };
   } catch (e) {
     console.error(`Error fetching fundamentals for ${symbol}:`, e.message);
