@@ -66,17 +66,19 @@ const mockNewsData: NewsItem[] = [
 
 export const fetchMarketNews = async (category?: string): Promise<NewsItem[]> => {
   try {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    const response = await fetch(`${API_BASE}/api/market-news`);
     
-    // In production, replace with real API call:
-    // const response = await fetch(`https://newsapi.org/v2/everything?q=indian+stock+market&apiKey=${API_KEY}`);
-    // const data = await response.json();
+    if (!response.ok) {
+      throw new Error(`Failed to fetch news: ${response.status}`);
+    }
     
-    let filteredNews = mockNewsData;
+    const data: NewsItem[] = await response.json();
+    
+    let filteredNews = data;
     
     if (category) {
-      filteredNews = mockNewsData.filter(news => news.category === category);
+      filteredNews = data.filter(news => news.category === category);
     }
     
     // Sort by published date (newest first)
@@ -86,7 +88,7 @@ export const fetchMarketNews = async (category?: string): Promise<NewsItem[]> =>
     
   } catch (error) {
     console.error('Error fetching market news:', error);
-    return [];
+    return mockNewsData; // fallback to mock data if API fails
   }
 };
 

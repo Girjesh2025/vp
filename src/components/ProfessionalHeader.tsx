@@ -93,17 +93,31 @@ const ProfessionalHeader: React.FC<ProfessionalHeaderProps> = ({
 
           {/* Search Bar */}
           <div className="flex-1 max-w-lg mx-8" ref={searchRef}>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-slate-500" />
+            <style>{`
+              @keyframes flowHorizontal {
+                0% { background-position-x: 0%; }
+                100% { background-position-x: 200%; }
+              }
+              .custom-animated-border {
+                background: linear-gradient(90deg, #10b981, #3b82f6, #a855f7, #10b981, #3b82f6);
+                background-size: 200% 100%;
+                animation: flowHorizontal 3s linear infinite;
+              }
+            `}</style>
+            <div className="relative group p-[2px] rounded-xl custom-animated-border">
+              
+              <div className="relative z-10 bg-[#0f1520] rounded-lg h-full">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-5 w-5 text-emerald-500/70 group-hover:text-emerald-500 transition-colors duration-300" />
+                </div>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                  className="block w-full pl-10 pr-3 py-2.5 border-none rounded-lg leading-5 bg-[#0f1520] placeholder-slate-500 text-white focus:outline-none focus:ring-0 text-sm transition-all"
+                  placeholder="Search stocks to add to portfolio..."
+                />
               </div>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={handleSearchChange}
-                className="block w-full pl-10 pr-3 py-2 border border-slate-700/50 rounded-lg leading-5 bg-[#0f1520] placeholder-slate-500 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm transition-all"
-                placeholder="Search stocks to add to portfolio..."
-              />
               
               {/* Search Results Dropdown */}
               {showResults && searchResults.length > 0 && (

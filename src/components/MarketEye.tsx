@@ -200,7 +200,31 @@ const MarketEye = () => {
   const [weeklyRadarBreakdowns, setWeeklyRadarBreakdowns] = useState<WeeklySignal[]>([]);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
 
-  const [newsData, setNewsData] = useState<NewsItem[]>([]);
+  const [allNewsData, setAllNewsData] = useState<NewsItem[]>([]);
+  const [newsPage, setNewsPage] = useState(0);
+  const itemsPerPage = 5;
+
+  // Continuous News Polling (Every 1 minute)
+  useEffect(() => {
+    let isMounted = true;
+    const pollNews = async () => {
+      try {
+        const newsRes = await fetchMarketNews();
+        if (isMounted && newsRes && newsRes.length > 0) {
+          setAllNewsData(newsRes);
+        }
+      } catch (e) {
+        console.warn("Failed to poll news", e);
+      }
+    };
+
+    const intervalId = setInterval(pollNews, 60000); // 1 minute
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -236,7 +260,7 @@ const MarketEye = () => {
               sparkline: bankNiftyHist ? bankNiftyHist.map(v => ({ value: v })) : mockBankNiftySparkline
             } : null
           });
-          setNewsData(newsRes.slice(0, 5)); // Keep top 5
+          setAllNewsData(newsRes); // Keep all items for pagination
           if (fiiDiiRes && Array.isArray(fiiDiiRes)) {
              const fiiItem = fiiDiiRes.find(d => d.category === 'FII/FPI');
              const diiItem = fiiDiiRes.find(d => d.category === 'DII');
@@ -999,14 +1023,16 @@ const MarketEye = () => {
             <div className="bg-[#131b26] border border-slate-800 rounded-xl p-5 shadow-lg flex flex-col h-full">
               <div className="flex items-center justify-between mb-4 border-b border-slate-800/60 pb-3">
                 <h2 className="text-[15px] font-bold text-white">Top News</h2>
-                <a href="#" className="text-[13px] font-semibold text-emerald-400 hover:text-emerald-300 transition-colors underline underline-offset-2">View All</a>
+                <span className="text-[12px] font-medium text-slate-500">
+                  Page {newsPage + 1} / {Math.max(1, Math.ceil(allNewsData.length / itemsPerPage))}
+                </span>
               </div>
               <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-4 max-h-[350px]">
-                {newsData.map(news => (
+                {allNewsData.slice(newsPage * itemsPerPage, (newsPage + 1) * itemsPerPage).map(news => (
                   <div key={news.id} className="relative pl-4 group">
                     <div className="absolute left-0 top-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500" />
                     <a 
-                      href={news.url !== '#' ? news.url : `https://www.google.com/search?q=${encodeURIComponent(news.title)}`} 
+                      href={news.url !== '#' ? news.url : `https://www.google.com/search?q=${encodeURIComponent(news.title)}&tbm=nws`} 
                       target="_blank" 
                       rel="noopener noreferrer" 
                       className="block"
@@ -1022,10 +1048,18 @@ const MarketEye = () => {
                 ))}
               </div>
               <div className="flex justify-center gap-3 mt-4 pt-4 border-t border-slate-800/60">
-                <button className="w-8 h-8 rounded-full bg-[#1e293b] flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-colors">
+                <button 
+                  onClick={() => setNewsPage(p => Math.max(0, p - 1))}
+                  disabled={newsPage === 0}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${newsPage === 0 ? 'bg-[#131b26] text-slate-600 cursor-not-allowed' : 'bg-[#1e293b] text-slate-400 hover:text-white hover:bg-slate-700'}`}
+                >
                   {'<'}
                 </button>
-                <button className="w-8 h-8 rounded-full bg-[#1e293b] flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-colors">
+                <button 
+                  onClick={() => setNewsPage(p => Math.min(Math.ceil(allNewsData.length / itemsPerPage) - 1, p + 1))}
+                  disabled={newsPage >= Math.ceil(allNewsData.length / itemsPerPage) - 1}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${newsPage >= Math.ceil(allNewsData.length / itemsPerPage) - 1 ? 'bg-[#131b26] text-slate-600 cursor-not-allowed' : 'bg-[#1e293b] text-slate-400 hover:text-white hover:bg-slate-700'}`}
+                >
                   {'>'}
                 </button>
               </div>

@@ -705,6 +705,101 @@ app.get('/api/broker/fyers/holdings', async (req, res) => {
   }
 });
 
+// Proxy route for News (Google News RSS)
+app.get('/api/market-news', async (req, res) => {
+  try {
+    // Added 'when:2d' to force Google News to only return the latest news from the past 48 hours
+    const url = 'https://news.google.com/rss/search?q=indian+stock+market+OR+nifty+OR+sensex+when:2d&hl=en-IN&gl=IN&ceid=IN:en';
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Google News RSS failed: ${response.status}`);
+    }
+
+    const xml = await response.text();
+    
+    // Basic regex parsing for RSS XML
+    const items = [];
+    const itemRegex = /<item>([\s\S]*?)<\/item>/g;
+    let match;
+    
+    let idCounter = 1;
+
+    // List of trusted top-tier Indian financial news sources
+    const TRUSTED_SOURCES = [
+      'moneycontrol',
+      'ndtv',
+      'mint',
+      'livemint',
+      'economic times',
+      'the economic times',
+      'cnbc',
+      'cnbctv18',
+      'business standard',
+      'reuters',
+      'bloomberg',
+      'financial express',
+      'the hindu businessline'
+    ];
+
+    while ((match = itemRegex.exec(xml)) !== null && items.length < 15) {
+      const itemXml = match[1];
+      
+      const titleMatch = itemXml.match(/<title>([^<]+)<\/title>/);
+      const linkMatch = itemXml.match(/<link>([^<]+)<\/link>/);
+      const pubDateMatch = itemXml.match(/<pubDate>([^<]+)<\/pubDate>/);
+      const sourceMatch = itemXml.match(/<source[^>]*>([^<]+)<\/source>/);
+      
+      if (titleMatch && linkMatch) {
+        const source = sourceMatch ? sourceMatch[1] : 'News';
+        const sourceLower = source.toLowerCase();
+
+        // STRICT FILTER: Only allow trusted sources, reject Equitymaster and others
+        const isTrusted = TRUSTED_SOURCES.some(trusted => sourceLower.includes(trusted));
+        if (!isTrusted) continue; // Skip this news item entirely if not from a top 5 site
+
+        // Google News titles usually have the source at the end like "Title - Source"
+        let title = titleMatch[1].replace(/&apos;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+        
+        if (title.endsWith(` - ${source}`)) {
+           title = title.substring(0, title.length - source.length - 3);
+        }
+
+        // Determine category and sentiment (basic keyword matching)
+        const titleLower = title.toLowerCase();
+        let category = 'market';
+        if (titleLower.includes('rbi') || titleLower.includes('gdp') || titleLower.includes('inflation')) category = 'economy';
+        else if (titleLower.includes('reliance') || titleLower.includes('tata') || titleLower.includes('hdfc')) category = 'stocks';
+        
+        let sentiment = 'neutral';
+        if (titleLower.includes('jump') || titleLower.includes('surge') || titleLower.includes('high') || titleLower.includes('rally') || titleLower.includes('gain')) sentiment = 'positive';
+        if (titleLower.includes('fall') || titleLower.includes('drop') || titleLower.includes('crash') || titleLower.includes('low') || titleLower.includes('loss')) sentiment = 'negative';
+
+        items.push({
+          id: idCounter.toString(),
+          title: title,
+          description: title, // RSS description is usually HTML, so we fallback to title
+          url: linkMatch[1],
+          publishedAt: pubDateMatch ? new Date(pubDateMatch[1]).toISOString() : new Date().toISOString(),
+          source: source,
+          category: category,
+          sentiment: sentiment
+        });
+        idCounter++;
+      }
+    }
+
+    res.json(items);
+  } catch (error) {
+    console.error('Error fetching market news:', error);
+    res.status(500).json({ error: 'Failed to fetch news' });
+  }
+});
+
 app.get('/api/global/gift-nifty', async (req, res) => {
   const now = Date.now();
   if (cachedGiftNifty && (now - lastGiftNiftyFetch) < GIFT_NIFTY_CONFIG.cacheMs) {

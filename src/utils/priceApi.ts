@@ -253,7 +253,31 @@ const fetchDirectFallback = async (symbol: string): Promise<PriceData | null> =>
 export const fetchHistoricalPrices = async (symbol: string, days: number = 60): Promise<number[]> => {
   const yahooSymbol = toYahooSymbol(symbol);
 
-  // Build URL: 6-month range with 1-day interval gives ~120 trading days
+  // 1. Try our reliable backend proxy first
+  try {
+    const baseUrl = resolveBaseUrl();
+    const apiUrl = `${baseUrl}/api/historical/${encodeURIComponent(yahooSymbol)}?range=6mo&interval=1d`;
+    
+    const r = await fetch(apiUrl);
+    if (r.ok) {
+      const data = await r.json();
+      const result = data?.chart?.result?.[0];
+      if (result) {
+        const closes: number[] = result.indicators?.quote?.[0]?.close ?? [];
+        const validCloses = closes.filter((c: number | null) => typeof c === 'number' && c > 0) as number[];
+        
+        if (validCloses.length >= 20) {
+          const subset = validCloses.slice(-days);
+          console.log(`✅ [Historical] Got ${subset.length} real prices for ${symbol} via backend proxy`);
+          return subset;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn(`[Historical] Backend proxy failed for ${symbol}:`, e);
+  }
+
+  // 2. Fallback to external PROXY_SERVICES
   const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?range=6mo&interval=1d`;
 
   for (const p of PROXY_SERVICES) {
@@ -306,6 +330,61 @@ export const fetchHistoricalOHLCV = async (
   const bars = opts?.bars;
 
   const yahooSymbol = symbol.startsWith('^') || symbol.includes('=') ? symbol : toYahooSymbol(symbol);
+  
+  // 1. Try our reliable backend proxy first
+  try {
+    const baseUrl = resolveBaseUrl();
+    const apiUrl = `${baseUrl}/api/historical/${encodeURIComponent(yahooSymbol)}?range=${encodeURIComponent(range)}&interval=${encodeURIComponent(interval)}`;
+    
+    const r = await fetch(apiUrl);
+    if (r.ok) {
+      const data = await r.json();
+      const result = data?.chart?.result?.[0];
+      if (result) {
+        const timestamps: number[] = result.timestamp ?? [];
+        const quote = result.indicators?.quote?.[0];
+        const opens: Array<number | null> = quote?.open ?? [];
+        const highs: Array<number | null> = quote?.high ?? [];
+        const lows: Array<number | null> = quote?.low ?? [];
+        const closes: Array<number | null> = quote?.close ?? [];
+        const volumes: Array<number | null> = quote?.volume ?? [];
+
+        const out: YahooOHLCVBar[] = [];
+        for (let i = 0; i < timestamps.length; i++) {
+          const open = opens[i];
+          const high = highs[i];
+          const low = lows[i];
+          const close = closes[i];
+          const volume = volumes[i];
+
+          if (
+            typeof open !== 'number' || open <= 0 ||
+            typeof high !== 'number' || high <= 0 ||
+            typeof low !== 'number' || low <= 0 ||
+            typeof close !== 'number' || close <= 0
+          ) continue;
+
+          out.push({
+            timestamp: timestamps[i],
+            open,
+            high,
+            low,
+            close,
+            volume: typeof volume === 'number' && volume >= 0 ? volume : 0,
+          });
+        }
+
+        if (out.length >= 10) {
+          const sliced = typeof bars === 'number' ? out.slice(-bars) : out;
+          return sliced;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn(`[OHLCV] Backend proxy failed for ${symbol}:`, e);
+  }
+
+  // 2. Fallback to external PROXY_SERVICES
   const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?range=${encodeURIComponent(range)}&interval=${encodeURIComponent(interval)}`;
 
   for (const p of PROXY_SERVICES) {

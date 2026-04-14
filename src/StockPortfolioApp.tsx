@@ -895,15 +895,8 @@ const StockPortfolioApp: React.FC = () => {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-[#172030] rounded-2xl p-6 shadow-lg">
-          <h3 className="text-xl font-bold text-slate-200 mb-4">Portfolio Allocation</h3>
-          <PortfolioChart stocks={enrichedStocks} priceData={stockPrices} />
-        </div>
-        
-        <div className="bg-[#172030] rounded-2xl p-6 shadow-lg">
-          <h3 className="text-xl font-bold text-slate-200 mb-4">Performance Trends</h3>
-          <PerformanceChart stocks={enrichedStocks} priceData={stockPrices} />
-        </div>
+        <PortfolioChart stocks={enrichedStocks} priceData={stockPrices} />
+        <PerformanceChart stocks={enrichedStocks} priceData={stockPrices} />
       </div>
     </div>
   );
@@ -962,23 +955,22 @@ const StockPortfolioApp: React.FC = () => {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         {/* Professional Header */}
-        <ProfessionalHeader
-          currentPortfolio={currentPortfolio}
-          portfolioStats={{
-            totalValue: stats.totalCurrent,
-            totalGainLoss: stats.totalPnL,
-            totalGainLossPercent: stats.totalPnLPercent
-          }}
-          isLoading={isLoading}
-          brokerStatus={brokerStatus}
-          lastUpdated={priceUpdateTime}
-          onStockSelect={(stock) => {
-            addStock(stock);
-          }}
-          onNotificationClick={() => {}}
-          onSettingsClick={() => {}}
-          onProfileClick={() => {}}
-        />
+      <ProfessionalHeader
+        currentPortfolio={currentPortfolio}
+        portfolioStats={{
+          totalValue: stats.totalCurrent,
+          totalGainLoss: stats.totalPnL,
+          totalGainLossPercent: stats.totalPnLPercent
+        }}
+        isLoading={isLoading}
+        brokerStatus={brokerStatus}
+        onStockSelect={(stock) => {
+          addStock(stock);
+        }}
+        onNotificationClick={() => {}}
+        onSettingsClick={() => {}}
+        onProfileClick={() => {}}
+      />
 
         {/* Main Content Area */}
         <main className="flex-1 p-4 md:p-6 bg-[#0f1520] min-h-0 overflow-y-auto custom-scrollbar">

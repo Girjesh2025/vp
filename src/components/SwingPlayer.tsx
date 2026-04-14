@@ -224,16 +224,16 @@ const SwingPlayer = () => {
       ];
 
       // Fetch historical data in batches for candidates
-      // Timeout the entire historical fetching process after 5 seconds to prevent endless loading
+      // Timeout the entire historical fetching process after 15 seconds to prevent endless loading
       const historicalPromise = async () => {
-        for (let i = 0; i < candidates.length; i += 5) {
+        for (let i = 0; i < candidates.length; i += 10) {
           if (!isMounted) return;
-          const batch = candidates.slice(i, i + 5);
+          const batch = candidates.slice(i, i + 10);
           await Promise.allSettled(
             batch.map(async (candidate) => {
               try {
                 // Short timeout per symbol for historical data
-                const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500));
+                const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000));
                 const hist = await Promise.race([
                   fetchHistoricalPrices(`${candidate.symbol}.NS`, 60),
                   timeoutPromise
@@ -257,18 +257,22 @@ const SwingPlayer = () => {
                   const high50 = Math.max(...last50);
                   
                   // Determine Breakouts
+                  const is10DayBreakout = currentPrice >= (high10 * 0.99);
+                  
                   // 50 Day BO: Price is currently above 50 EMA, AND it crossed it recently (within 10 days) OR breaking 50 day high
                   candidate.bo50 = (currentPrice > ema50 && low10 <= ema50) || (currentPrice >= (high50 * 0.99)); 
                   
                   // 10 Day BO: Price is breaking the 10 day high, BUT we explicitly exclude 50-day breakouts so the lists don't look identical
-                  candidate.bo10 = currentPrice >= (high10 * 0.99) && !candidate.bo50;
+                  candidate.bo10 = is10DayBreakout && !candidate.bo50;
 
                   // Reversal: Price was dropping but is bouncing back (price > ema10 but < ema50)
                   const ema10 = last10.reduce((a, b) => a + b, 0) / 10;
                   candidate.reversal = currentPrice > ema10 && currentPrice < ema50 && candidate.isBull;
 
-                  // Channel BO: Just a simplified placeholder for now
-                  candidate.channel = candidate.bo10 && candidate.bo50;
+                  // Channel BO: Breaking out of a tight 10-day range
+                  const rangePct = ((high10 - low10) / low10) * 100;
+                  const isTightRange = rangePct < 4; // less than 4% range over 10 days
+                  candidate.channel = isTightRange && is10DayBreakout;
                 }
               } catch (e) {
                 // Silently fail and use fallback logic later
@@ -278,10 +282,10 @@ const SwingPlayer = () => {
         }
       };
 
-      // Wait max 5 seconds for the historical processing, then just show what we have
+      // Wait max 15 seconds for the historical processing, then just show what we have
       await Promise.race([
         historicalPromise(),
-        new Promise(resolve => setTimeout(resolve, 5000))
+        new Promise(resolve => setTimeout(resolve, 15000))
       ]);
       
       if (isMounted) {

@@ -193,31 +193,31 @@ const PerformanceDashboard: React.FC<Props> = ({ stocks, transactions, priceData
           <TrendingUp className="absolute top-4 right-4 w-8 h-8 text-white/30" />
         </div>
 
-        <div className="bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl p-6 text-white relative overflow-hidden">
+        <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/20 border border-blue-500/30 rounded-2xl p-6 text-white relative overflow-hidden group hover:border-blue-500/50 transition-colors">
           <div className="relative z-10">
             <div className="text-blue-100 text-sm font-medium">Sharpe Ratio</div>
             <div className="text-3xl font-bold mt-1">{formatMetric(metrics.sharpeRatio, 'ratio')}</div>
             <div className="text-sm text-blue-100 mt-2">Risk-adjusted return</div>
           </div>
-          <Target className="absolute top-4 right-4 w-8 h-8 text-blue-200" />
+          <Target className="absolute top-4 right-4 w-8 h-8 text-blue-400/20 group-hover:text-blue-400/40 transition-colors" />
         </div>
 
-        <div className="bg-gradient-to-br from-purple-400 to-purple-600 rounded-2xl p-6 text-white relative overflow-hidden">
+        <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 border border-purple-500/30 rounded-2xl p-6 text-white relative overflow-hidden group hover:border-purple-500/50 transition-colors">
           <div className="relative z-10">
-            <div className="text-purple-100 text-sm font-medium">Volatility</div>
-            <div className="text-3xl font-bold mt-1">{formatMetric(metrics.volatility, 'percentage')}</div>
-            <div className="text-sm text-purple-100 mt-2">Portfolio risk</div>
+            <div className="text-purple-100 text-sm font-medium">Annualized Return</div>
+            <div className="text-3xl font-bold mt-1">{formatMetric(metrics.annualizedReturn, 'percentage')}</div>
+            <div className="text-sm text-purple-100 mt-2">Projected yearly</div>
           </div>
-          <Activity className="absolute top-4 right-4 w-8 h-8 text-purple-200" />
+          <Calendar className="absolute top-4 right-4 w-8 h-8 text-purple-400/20 group-hover:text-purple-400/40 transition-colors" />
         </div>
 
-        <div className="bg-gradient-to-br from-orange-400 to-orange-600 rounded-2xl p-6 text-white relative overflow-hidden">
+        <div className="bg-gradient-to-br from-orange-500/20 to-orange-600/20 border border-orange-500/30 rounded-2xl p-6 text-white relative overflow-hidden group hover:border-orange-500/50 transition-colors">
           <div className="relative z-10">
             <div className="text-orange-100 text-sm font-medium">Max Drawdown</div>
             <div className="text-3xl font-bold mt-1">{formatMetric(metrics.maxDrawdown, 'percentage')}</div>
-            <div className="text-sm text-orange-100 mt-2">Peak to trough</div>
+            <div className="text-sm text-orange-100 mt-2">Peak-to-trough drop</div>
           </div>
-          <TrendingDown className="absolute top-4 right-4 w-8 h-8 text-orange-200" />
+          <Activity className="absolute top-4 right-4 w-8 h-8 text-orange-400/20 group-hover:text-orange-400/40 transition-colors" />
         </div>
       </div>
 
@@ -288,66 +288,75 @@ const PerformanceDashboard: React.FC<Props> = ({ stocks, transactions, priceData
         stocks={stocks}
         transactions={transactions}
         stockPrices={priceData}
-        performanceMetrics={metrics}
+        chartType="performance"
       />
 
       {/* Top Performers */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-[#172030] rounded-2xl p-6 shadow-lg">
-          <h3 className="text-xl font-bold text-slate-200 mb-4">Top Performers</h3>
-          <div className="space-y-3">
-            {stockPerformances
-              .sort((a, b) => b.pnlPercent - a.pnlPercent)
-              .slice(0, 5)
-              .map((stock, index) => (
-                <div key={stock.symbol} className="flex items-center justify-between p-3 bg-[#0f1520] rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                      index === 0 ? 'bg-yellow-100 text-yellow-800' :
-                      index === 1 ? 'bg-gray-100 text-slate-200' :
-                      index === 2 ? 'bg-orange-100 text-orange-800' :
-                      'bg-blue-100 text-blue-800'
-                    }`}>
-                      {index + 1}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-slate-200">{stock.symbol}</div>
-                      <div className="text-sm text-slate-500">{stock.sector}</div>
-                    </div>
+        <div className="bg-[#131b26] border border-slate-800 rounded-2xl p-6 shadow-lg">
+          <h3 className="text-xl font-bold text-white mb-6">Top & Bottom Performers</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Best Performer */}
+            {metrics.bestPerformer && (
+              <div className="p-4 rounded-xl bg-slate-800/30 border border-emerald-500/20">
+                <div className="flex items-center space-x-2 text-emerald-400 mb-4">
+                  <TrendingUp className="w-5 h-5" />
+                  <span className="font-semibold">Top Winner</span>
+                </div>
+                <div className="flex justify-between items-end">
+                  <div>
+                    <div className="text-2xl font-bold text-white mb-1">{metrics.bestPerformer.symbol}</div>
+                    <div className="text-sm text-slate-400">Total Return</div>
                   </div>
-                  <div className="text-right">
-                    <div className={`font-bold ${getPerformanceColor(stock.pnlPercent)}`}>
-                      {formatMetric(stock.pnlPercent, 'percentage')}
-                    </div>
-                    <div className="text-sm text-slate-500">
-                      {formatMetric(stock.pnl, 'currency')}
-                    </div>
+                  <div className="text-2xl font-bold text-emerald-400">
+                    +{formatMetric(metrics.bestPerformer.pnlPercent, 'percentage')}
                   </div>
                 </div>
-              ))}
+              </div>
+            )}
+
+            {/* Worst Performer */}
+            {metrics.worstPerformer && (
+              <div className="p-4 rounded-xl bg-slate-800/30 border border-red-500/20">
+                <div className="flex items-center space-x-2 text-red-400 mb-4">
+                  <TrendingDown className="w-5 h-5" />
+                  <span className="font-semibold">Biggest Loser</span>
+                </div>
+                <div className="flex justify-between items-end">
+                  <div>
+                    <div className="text-2xl font-bold text-white mb-1">{metrics.worstPerformer.symbol}</div>
+                    <div className="text-sm text-slate-400">Total Return</div>
+                  </div>
+                  <div className="text-2xl font-bold text-red-400">
+                    {formatMetric(metrics.worstPerformer.pnlPercent, 'percentage')}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="bg-[#172030] rounded-2xl p-6 shadow-lg">
-          <h3 className="text-xl font-bold text-slate-200 mb-4">Sector Allocation</h3>
-          <div className="space-y-3">
+        <div className="bg-[#131b26] border border-slate-800 rounded-2xl p-6 shadow-lg">
+          <h3 className="text-xl font-bold text-white mb-6">Sector Allocation</h3>
+          <div className="space-y-4">
             {Object.entries(metrics.sectorAllocation)
               .sort(([, a], [, b]) => b - a)
               .map(([sector, allocation]) => (
                 <div key={sector} className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
-                    <div className="w-4 h-4 bg-indigo-900/200 rounded-full"></div>
+                    <div className="w-4 h-4 bg-indigo-500/20 rounded-full border border-indigo-500/50"></div>
                     <span className="font-medium text-slate-300">{sector}</span>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <div className="w-24 bg-gray-200 rounded-full h-2">
+                    <div className="w-24 bg-slate-800 rounded-full h-2">
                       <div 
-                        className="bg-indigo-900/200 h-2 rounded-full" 
-                        style={{ width: `${allocation * 100}%` }}
+                        className="bg-indigo-500 h-2 rounded-full" 
+                        style={{ width: `${allocation}%` }}
                       ></div>
                     </div>
-                    <span className="text-sm font-semibold text-slate-400 w-12 text-right">
-                      {formatMetric(allocation * 100, 'percentage')}
+                    <span className="font-semibold text-slate-200 min-w-[3rem] text-right">
+                      {formatMetric(allocation, 'percentage')}
                     </span>
                   </div>
                 </div>
@@ -388,28 +397,28 @@ const PerformanceDashboard: React.FC<Props> = ({ stocks, transactions, priceData
       </div>
 
       {/* Risk Analysis */}
-      <div className="bg-[#172030] rounded-2xl p-6 shadow-lg">
-        <h3 className="text-xl font-bold text-slate-200 mb-6">Risk Analysis</h3>
+      <div className="bg-[#131b26] border border-slate-800 rounded-2xl p-6 shadow-lg">
+        <h3 className="text-xl font-bold text-white mb-6">Risk Analysis</h3>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
             <h4 className="font-semibold text-slate-300 mb-4">Risk Metrics Explanation</h4>
             <div className="space-y-3">
               <div className="flex items-start space-x-3">
-                <Info className="w-5 h-5 text-blue-500 mt-0.5" />
+                <Info className="w-5 h-5 text-indigo-400 mt-0.5" />
                 <div>
                   <div className="font-medium text-slate-200">Sharpe Ratio: {formatMetric(metrics.sharpeRatio, 'ratio')}</div>
                   <div className="text-sm text-slate-400">Measures risk-adjusted returns. Higher is better.</div>
                 </div>
               </div>
               <div className="flex items-start space-x-3">
-                <Shield className="w-5 h-5 text-green-500 mt-0.5" />
+                <Shield className="w-5 h-5 text-emerald-400 mt-0.5" />
                 <div>
                   <div className="font-medium text-slate-200">Beta: {formatMetric(metrics.beta, 'ratio')}</div>
                   <div className="text-sm text-slate-400">Portfolio sensitivity to market movements.</div>
                 </div>
               </div>
               <div className="flex items-start space-x-3">
-                <AlertTriangle className="w-5 h-5 text-orange-500 mt-0.5" />
+                <AlertTriangle className="w-5 h-5 text-orange-400 mt-0.5" />
                 <div>
                   <div className="font-medium text-slate-200">Max Drawdown: {formatMetric(metrics.maxDrawdown, 'percentage')}</div>
                   <div className="text-sm text-slate-400">Largest peak-to-trough decline.</div>
@@ -420,7 +429,7 @@ const PerformanceDashboard: React.FC<Props> = ({ stocks, transactions, priceData
           <div>
             <h4 className="font-semibold text-slate-300 mb-4">Risk Assessment</h4>
             <div className="space-y-3">
-              <div className="p-3 bg-[#0f1520] rounded-lg">
+              <div className="p-3 bg-slate-800/30 rounded-xl border border-slate-700/50">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-medium text-slate-300">Overall Risk Level</span>
                   <span className={`px-2 py-1 rounded text-sm font-medium ${
@@ -435,6 +444,44 @@ const PerformanceDashboard: React.FC<Props> = ({ stocks, transactions, priceData
                   Based on portfolio volatility of {formatMetric(metrics.volatility, 'percentage')}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-[#131b26] border border-slate-800 rounded-2xl p-6 shadow-lg hover:border-slate-700 transition-colors">
+          <h3 className="text-xl font-bold text-white mb-6">Returns Profile</h3>
+          <div className="space-y-4">
+            {timeframes.map((tf) => (
+              <div key={tf.key} className="flex items-center justify-between p-4 rounded-xl bg-slate-800/30 hover:bg-slate-800/50 transition-colors">
+                <span className="font-medium text-slate-300">{tf.label} Return</span>
+                <span className={`font-bold ${getPerformanceColor(tf.return)}`}>
+                  {formatMetric(tf.return, 'percentage')}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-[#131b26] border border-slate-800 rounded-2xl p-6 shadow-lg hover:border-slate-700 transition-colors">
+          <h3 className="text-xl font-bold text-white mb-6">Risk vs Reward</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 rounded-xl bg-slate-800/30 hover:bg-slate-800/50 transition-colors">
+              <div className="text-sm text-slate-400 mb-1">Information Ratio</div>
+              <div className="text-2xl font-bold text-white">{formatMetric(metrics.informationRatio, 'ratio')}</div>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-800/30 hover:bg-slate-800/50 transition-colors">
+              <div className="text-sm text-slate-400 mb-1">Sortino Ratio</div>
+              <div className="text-2xl font-bold text-white">{formatMetric(metrics.sortinoRatio, 'ratio')}</div>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-800/30 hover:bg-slate-800/50 transition-colors">
+              <div className="text-sm text-slate-400 mb-1">Treynor Ratio</div>
+              <div className="text-2xl font-bold text-white">{formatMetric(metrics.treynorRatio, 'ratio')}</div>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-800/30 hover:bg-slate-800/50 transition-colors">
+              <div className="text-sm text-slate-400 mb-1">Calmar Ratio</div>
+              <div className="text-2xl font-bold text-white">{formatMetric(metrics.calmarRatio, 'ratio')}</div>
             </div>
           </div>
         </div>
@@ -495,13 +542,13 @@ const PerformanceDashboard: React.FC<Props> = ({ stocks, transactions, priceData
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-200">Performance Dashboard</h2>
+          <h2 className="text-2xl font-bold text-white">Performance Analytics</h2>
           <div className="flex items-center gap-1.5 mt-1 text-sm font-medium text-slate-400">
             <Activity className="w-4 h-4 text-indigo-400" />
             <span>Last Updated: {lastUpdated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
           </div>
         </div>
-        <div className="flex flex-wrap space-x-2">
+        <div className="flex flex-wrap items-center gap-2 bg-[#131b26] p-1.5 rounded-xl border border-slate-800 shadow-sm">
           {[
             { key: 'overview', label: 'Overview', icon: BarChart3 },
             { key: 'risk', label: 'Risk', icon: Shield },
@@ -511,10 +558,10 @@ const PerformanceDashboard: React.FC<Props> = ({ stocks, transactions, priceData
             <button
               key={tab.key}
               onClick={() => setActiveView(tab.key as any)}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                 activeView === tab.key
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-slate-400 hover:bg-gray-200'
+                  ? 'bg-indigo-600/20 text-indigo-400 shadow-sm border border-indigo-500/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
               }`}
             >
               <tab.icon size={16} />
