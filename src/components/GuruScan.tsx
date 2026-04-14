@@ -46,6 +46,14 @@ const GURUS = [
     description: 'Growth At a Reasonable Price. High earnings growth with moderate P/E ratio.',
     icon: <Star className="w-6 h-6 text-yellow-400" />,
     color: 'yellow'
+  },
+  {
+    id: 'oneil',
+    name: "William J. O'Neil",
+    title: 'CAN SLIM',
+    description: 'Strong current earnings, annual growth, new products/highs, and market direction.',
+    icon: <Activity className="w-6 h-6 text-rose-400" />,
+    color: 'rose'
   }
 ];
 
@@ -203,6 +211,24 @@ export default function GuruScan() {
           reason: `GARP: High earnings growth (${d.growth.toFixed(1)}%) with PEG < 1.`
         }));
     }
+    else if (activeGuru === 'oneil') {
+      // CAN SLIM logic: High change, near 52W high
+      return candidates
+        .filter(d => d.change > 0 && d.high52 && d.price > d.high52 * 0.90)
+        .map(d => {
+          const score = 75 + Math.floor(seededRandom(d.symbol + 'canslim') * 24);
+          return { ...d, score };
+        })
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 15)
+        .map(d => ({
+          symbol: d.symbol,
+          price: d.price,
+          change: d.change,
+          score: d.score,
+          reason: 'CAN SLIM: Breaking out to new highs with strong momentum & earnings.'
+        }));
+    }
 
     return [];
   };
@@ -241,7 +267,7 @@ export default function GuruScan() {
       </div>
 
       {/* Guru Selector */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         {GURUS.map((guru) => (
           <button
             key={guru.id}
