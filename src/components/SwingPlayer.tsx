@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Activity, PlayCircle, Search, BookmarkPlus, ExternalLink, BrainCircuit, Zap, Crosshair, TrendingUp, BarChart2, ShieldAlert } from 'lucide-react';
-import { fetchHistoricalPrices, fetchMultipleStockPrices } from '../utils/priceApi';
+import { fetchHistoricalPrices, fetchMultipleStockPrices, isMarketOpen } from '../utils/priceApi';
 import StockLogo from './StockLogo';
 
 // Nifty 50 and Bank Nifty symbols for our universe
@@ -87,9 +87,15 @@ const SwingCard = ({
               <span className="text-xl sm:text-2xl animate-pulse drop-shadow-[0_0_12px_rgba(250,204,21,0.8)]">💡</span>
             </div>
             <div className="flex items-center gap-3 mt-2 text-xs sm:text-sm font-bold text-slate-400">
-              <span className="flex items-center gap-1.5 bg-red-500/10 border border-red-500/30 text-red-400 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black shadow-[0_0_10px_rgba(239,68,68,0.2)] uppercase tracking-wider">
-                <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_5px_currentColor]" /> LIVE
-              </span>
+              {isMarketOpen() ? (
+                <span className="flex items-center gap-1.5 bg-red-500/10 border border-red-500/30 text-red-400 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black shadow-[0_0_10px_rgba(239,68,68,0.2)] uppercase tracking-wider">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_5px_currentColor]" /> LIVE
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5 bg-slate-500/10 border border-slate-500/30 text-slate-400 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider">
+                  <div className="w-1.5 h-1.5 rounded-full bg-slate-500" /> CLOSED
+                </span>
+              )}
             </div>
           </div>
         </div>
