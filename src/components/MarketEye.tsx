@@ -191,13 +191,8 @@ const MarketEye = () => {
 
   const [weeklyBreakoutSearch, setWeeklyBreakoutSearch] = useState('');
   const [weeklyBreakdownSearch, setWeeklyBreakdownSearch] = useState('');
-  const [weeklyBreakoutTab, setWeeklyBreakoutTab] = useState<'signals' | 'radar'>('signals');
-  const [weeklyBreakdownTab, setWeeklyBreakdownTab] = useState<'signals' | 'radar'>('signals');
-  const [weeklyMode, setWeeklyMode] = useState<'pro' | 'relaxed'>('pro');
   const [weeklyBreakouts, setWeeklyBreakouts] = useState<WeeklySignal[]>([]);
   const [weeklyBreakdowns, setWeeklyBreakdowns] = useState<WeeklySignal[]>([]);
-  const [weeklyRadarBreakouts, setWeeklyRadarBreakouts] = useState<WeeklySignal[]>([]);
-  const [weeklyRadarBreakdowns, setWeeklyRadarBreakdowns] = useState<WeeklySignal[]>([]);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
 
   const [allNewsData, setAllNewsData] = useState<NewsItem[]>([]);
@@ -480,8 +475,9 @@ const MarketEye = () => {
           NBFC: '^NSEBANK',
         };
 
-        const volumeMultiplier = weeklyMode === 'pro' ? 1.5 : 1.2;
-        const radarProximity = weeklyMode === 'pro' ? 1 : 2;
+        const weeklyMode = 'pro';
+        const volumeMultiplier = 1.5;
+        const radarProximity = 1;
 
         for (let i = 0; i < candidates.length; i += 5) {
           const batch = candidates.slice(i, i + 5);
@@ -565,8 +561,8 @@ const MarketEye = () => {
                 const isAboveDma = dma200 !== null ? current.close > dma200 : false;
                 const isBelowDma = dma200 !== null ? current.close < dma200 : false;
 
-                const allowBreakout = weeklyMode === 'pro' ? isAboveDma : true;
-                const allowBreakdown = weeklyMode === 'pro' ? isBelowDma : true;
+                const allowBreakout = isAboveDma;
+                const allowBreakdown = isBelowDma;
 
                 if (current.close > refHigh + closeBuffer && prev.close <= refHigh + closeBuffer && allowBreakout) {
                   const weekBreakPct = ((current.close - refHigh) / refHigh) * 100;
@@ -638,10 +634,6 @@ const MarketEye = () => {
         if (!isMounted) return;
         setWeeklyBreakouts(breakoutRows.sort((a, b) => b.weekBreakPct - a.weekBreakPct).slice(0, 8));
         setWeeklyBreakdowns(breakdownRows.sort((a, b) => b.weekBreakPct - a.weekBreakPct).slice(0, 8));
-        setWeeklyRadarBreakouts(radarUp.sort((a, b) => (a.proximityPct ?? 0) - (b.proximityPct ?? 0)).slice(0, 8));
-        setWeeklyRadarBreakdowns(radarDown.sort((a, b) => (a.proximityPct ?? 0) - (b.proximityPct ?? 0)).slice(0, 8));
-        if (!breakoutRows.length && radarUp.length) setWeeklyBreakoutTab('radar');
-        if (!breakdownRows.length && radarDown.length) setWeeklyBreakdownTab('radar');
       } finally {
         if (isMounted) setWeeklyLoading(false);
       }
@@ -651,7 +643,7 @@ const MarketEye = () => {
     return () => {
       isMounted = false;
     };
-  }, [marketData, weeklyMode]);
+  }, [marketData]);
 
   const adMarketData = marketData.filter(d => {
     if (adSelectedIndex === 'NIFTY 50') return NIFTY_50_SYMBOLS.includes(d.symbol);
@@ -704,14 +696,6 @@ const MarketEye = () => {
     .slice(0, 8);
 
   const filteredWeeklyBreakdowns = weeklyBreakdowns
-    .filter(d => d.symbol.toLowerCase().includes(weeklyBreakdownSearch.toLowerCase()))
-    .slice(0, 8);
-
-  const filteredWeeklyRadarBreakouts = weeklyRadarBreakouts
-    .filter(d => d.symbol.toLowerCase().includes(weeklyBreakoutSearch.toLowerCase()))
-    .slice(0, 8);
-
-  const filteredWeeklyRadarBreakdowns = weeklyRadarBreakdowns
     .filter(d => d.symbol.toLowerCase().includes(weeklyBreakdownSearch.toLowerCase()))
     .slice(0, 8);
 
@@ -1490,62 +1474,20 @@ const MarketEye = () => {
                     </div>
                     <div className="flex items-center gap-3 mt-2 text-xs sm:text-sm font-bold text-slate-400">
                       <span className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black shadow-[0_0_10px_rgba(16,185,129,0.15)] uppercase tracking-wider">
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_5px_currentColor]" /> SCAN
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_5px_currentColor]" /> LIVE
                       </span>
                     </div>
                   </div>
                 </div>
-                <div className="hidden sm:flex items-center gap-2 relative z-10">
-                  <div className="flex items-center bg-[#0f1520] border border-slate-700 rounded-full p-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setWeeklyBreakoutTab('signals')}
-                      className={`px-3 py-1 rounded-full text-[11px] font-black tracking-wide transition-colors ${
-                        weeklyBreakoutTab === 'signals' ? 'bg-emerald-500/15 text-emerald-300' : 'text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      Signals
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setWeeklyBreakoutTab('radar')}
-                      className={`px-3 py-1 rounded-full text-[11px] font-black tracking-wide transition-colors ${
-                        weeklyBreakoutTab === 'radar' ? 'bg-emerald-500/15 text-emerald-300' : 'text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      Radar
-                    </button>
-                  </div>
-                  <div className="flex items-center bg-[#0f1520] border border-slate-700 rounded-full p-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setWeeklyMode('pro')}
-                      className={`px-3 py-1 rounded-full text-[11px] font-black tracking-wide transition-colors ${
-                        weeklyMode === 'pro' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      Pro
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setWeeklyMode('relaxed')}
-                      className={`px-3 py-1 rounded-full text-[11px] font-black tracking-wide transition-colors ${
-                        weeklyMode === 'relaxed' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      Relaxed
-                    </button>
-                  </div>
-                  <div className="relative">
-                    <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input 
-                      type="text" 
-                      placeholder="Search..." 
-                      value={weeklyBreakoutSearch}
-                      onChange={(e) => setWeeklyBreakoutSearch(e.target.value.toUpperCase())}
-                      className="bg-[#0f1520] border border-slate-700 text-sm text-white rounded-full pl-9 pr-4 py-1.5 w-40 focus:outline-none focus:border-emerald-500 transition-colors"
-                    />
-                  </div>
+                <div className="relative hidden sm:block z-10">
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input 
+                    type="text" 
+                    placeholder="Search..." 
+                    value={weeklyBreakoutSearch}
+                    onChange={(e) => setWeeklyBreakoutSearch(e.target.value.toUpperCase())}
+                    className="bg-[#0f1520] border border-slate-700 text-sm text-white rounded-full pl-9 pr-4 py-1.5 w-40 focus:outline-none focus:border-emerald-500 transition-colors"
+                  />
                 </div>
               </div>
 
@@ -1554,17 +1496,14 @@ const MarketEye = () => {
                   <div className="sticky top-0 bg-[#172030]/95 backdrop-blur-md z-10 shadow-sm border-b border-slate-700/50 flex items-center px-4 py-3 text-[10px] uppercase tracking-wider text-slate-500 font-bold shrink-0">
                     <div className="flex-1 min-w-0 pr-2">Symbol</div>
                     <div className="w-[80px] sm:w-[110px] text-center shrink-0">%</div>
-                    <div className="w-[80px] sm:w-[110px] text-center shrink-0">
-                      {weeklyBreakoutTab === 'signals' ? 'W.Break ' : 'Near '}
-                      <ChevronDown className="w-3 h-3 inline" />
-                    </div>
+                    <div className="w-[80px] sm:w-[110px] text-center shrink-0">W.Break</div>
                     <div className="w-[65px] sm:w-[80px] text-right shrink-0">Trend</div>
                   </div>
                   <div className="flex flex-col divide-y divide-slate-800/50 pb-2">
                     {weeklyLoading ? (
                       <div className="px-4 py-8 text-center text-sm text-slate-400 font-semibold">Scanning weekly levels...</div>
-                    ) : (weeklyBreakoutTab === 'signals' ? filteredWeeklyBreakouts : filteredWeeklyRadarBreakouts).length ? (
-                      (weeklyBreakoutTab === 'signals' ? filteredWeeklyBreakouts : filteredWeeklyRadarBreakouts).map((b) => (
+                    ) : filteredWeeklyBreakouts.length ? (
+                      filteredWeeklyBreakouts.map((b) => (
                         <div 
                           key={`wbo-${b.symbol}`} 
                           onClick={() => handleRowClick(b.symbol)}
@@ -1612,7 +1551,7 @@ const MarketEye = () => {
                           </div>
 
                           <div className="w-[80px] sm:w-[110px] text-center text-xs sm:text-sm font-bold text-emerald-400 shrink-0">
-                            {weeklyBreakoutTab === 'signals' ? `+${b.weekBreakPct.toFixed(2)}%` : `${(b.proximityPct ?? 0).toFixed(2)}%`}
+                            {`+${b.weekBreakPct.toFixed(2)}%`}
                           </div>
 
                           <div className="w-[65px] sm:w-[80px] shrink-0 flex justify-end">
@@ -1624,7 +1563,7 @@ const MarketEye = () => {
                       ))
                     ) : (
                       <div className="px-4 py-8 text-center text-sm text-slate-500 font-semibold">
-                        {weeklyBreakoutTab === 'signals' ? 'No weekly breakouts found. Check Radar.' : 'No near breakouts found.'}
+                        No weekly breakouts found.
                       </div>
                     )}
                   </div>
@@ -1651,62 +1590,20 @@ const MarketEye = () => {
                     </div>
                     <div className="flex items-center gap-3 mt-2 text-xs sm:text-sm font-bold text-slate-400">
                       <span className="flex items-center gap-1.5 bg-red-500/10 border border-red-500/30 text-red-400 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black shadow-[0_0_10px_rgba(239,68,68,0.15)] uppercase tracking-wider">
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_5px_currentColor]" /> SCAN
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_5px_currentColor]" /> LIVE
                       </span>
                     </div>
                   </div>
                 </div>
-                <div className="hidden sm:flex items-center gap-2 relative z-10">
-                  <div className="flex items-center bg-[#0f1520] border border-slate-700 rounded-full p-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setWeeklyBreakdownTab('signals')}
-                      className={`px-3 py-1 rounded-full text-[11px] font-black tracking-wide transition-colors ${
-                        weeklyBreakdownTab === 'signals' ? 'bg-red-500/15 text-red-300' : 'text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      Signals
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setWeeklyBreakdownTab('radar')}
-                      className={`px-3 py-1 rounded-full text-[11px] font-black tracking-wide transition-colors ${
-                        weeklyBreakdownTab === 'radar' ? 'bg-red-500/15 text-red-300' : 'text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      Radar
-                    </button>
-                  </div>
-                  <div className="flex items-center bg-[#0f1520] border border-slate-700 rounded-full p-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setWeeklyMode('pro')}
-                      className={`px-3 py-1 rounded-full text-[11px] font-black tracking-wide transition-colors ${
-                        weeklyMode === 'pro' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      Pro
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setWeeklyMode('relaxed')}
-                      className={`px-3 py-1 rounded-full text-[11px] font-black tracking-wide transition-colors ${
-                        weeklyMode === 'relaxed' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      Relaxed
-                    </button>
-                  </div>
-                  <div className="relative">
-                    <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input 
-                      type="text" 
-                      placeholder="Search..." 
-                      value={weeklyBreakdownSearch}
-                      onChange={(e) => setWeeklyBreakdownSearch(e.target.value.toUpperCase())}
-                      className="bg-[#0f1520] border border-slate-700 text-sm text-white rounded-full pl-9 pr-4 py-1.5 w-40 focus:outline-none focus:border-red-500 transition-colors"
-                    />
-                  </div>
+                <div className="relative hidden sm:block z-10">
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input 
+                    type="text" 
+                    placeholder="Search..." 
+                    value={weeklyBreakdownSearch}
+                    onChange={(e) => setWeeklyBreakdownSearch(e.target.value.toUpperCase())}
+                    className="bg-[#0f1520] border border-slate-700 text-sm text-white rounded-full pl-9 pr-4 py-1.5 w-40 focus:outline-none focus:border-red-500 transition-colors"
+                  />
                 </div>
               </div>
 
@@ -1715,17 +1612,14 @@ const MarketEye = () => {
                   <div className="sticky top-0 bg-[#172030]/95 backdrop-blur-md z-10 shadow-sm border-b border-slate-700/50 flex items-center px-4 py-3 text-[10px] uppercase tracking-wider text-slate-500 font-bold shrink-0">
                     <div className="flex-1 min-w-0 pr-2">Symbol</div>
                     <div className="w-[80px] sm:w-[110px] text-center shrink-0">%</div>
-                    <div className="w-[80px] sm:w-[110px] text-center shrink-0">
-                      {weeklyBreakdownTab === 'signals' ? 'W.Break ' : 'Near '}
-                      <ChevronDown className="w-3 h-3 inline" />
-                    </div>
+                    <div className="w-[80px] sm:w-[110px] text-center shrink-0">W.Break</div>
                     <div className="w-[65px] sm:w-[80px] text-right shrink-0">Trend</div>
                   </div>
                   <div className="flex flex-col divide-y divide-slate-800/50 pb-2">
                     {weeklyLoading ? (
                       <div className="px-4 py-8 text-center text-sm text-slate-400 font-semibold">Scanning weekly levels...</div>
-                    ) : (weeklyBreakdownTab === 'signals' ? filteredWeeklyBreakdowns : filteredWeeklyRadarBreakdowns).length ? (
-                      (weeklyBreakdownTab === 'signals' ? filteredWeeklyBreakdowns : filteredWeeklyRadarBreakdowns).map((b) => (
+                    ) : filteredWeeklyBreakdowns.length ? (
+                      filteredWeeklyBreakdowns.map((b) => (
                         <div 
                           key={`wbd-${b.symbol}`} 
                           onClick={() => handleRowClick(b.symbol)}
@@ -1768,7 +1662,7 @@ const MarketEye = () => {
                           </div>
 
                           <div className="w-[80px] sm:w-[110px] text-center text-xs sm:text-sm font-bold text-red-400 shrink-0">
-                            {weeklyBreakdownTab === 'signals' ? `+${b.weekBreakPct.toFixed(2)}%` : `${(b.proximityPct ?? 0).toFixed(2)}%`}
+                            {`+${b.weekBreakPct.toFixed(2)}%`}
                           </div>
 
                           <div className="w-[65px] sm:w-[80px] shrink-0 flex justify-end">
@@ -1780,7 +1674,7 @@ const MarketEye = () => {
                       ))
                     ) : (
                       <div className="px-4 py-8 text-center text-sm text-slate-500 font-semibold">
-                        {weeklyBreakdownTab === 'signals' ? 'No weekly breakdowns found. Check Radar.' : 'No near breakdowns found.'}
+                        No weekly breakdowns found.
                       </div>
                     )}
                   </div>
