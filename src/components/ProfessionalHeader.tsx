@@ -183,12 +183,8 @@ const ProfessionalHeader: React.FC<ProfessionalHeaderProps> = ({
                 ? 'text-emerald-400' 
                 : 'text-red-400'
               }`}>
-                {isMarketOpen() ? 'Market Open • LIVE' : 'Market Closed'}
+                {isMarketOpen() ? 'MARKET OPEN • LIVE' : 'MARKET CLOSED'}
               </span>
-              <Globe className={`w-3.5 h-3.5 ${isMarketOpen() 
-                ? 'text-emerald-500/70' 
-                : 'text-red-500/70'
-              }`} />
             </div>
 
             {/* Notifications */}
