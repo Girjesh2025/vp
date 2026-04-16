@@ -1,4 +1,6 @@
-import yahooFinance from 'yahoo-finance2';
+import { default as YahooFinance } from 'yahoo-finance2';
+
+const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 
 export default async function handler(req: any, res: any) {
   // CORS Headers
