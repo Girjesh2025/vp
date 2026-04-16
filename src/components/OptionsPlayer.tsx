@@ -453,7 +453,7 @@ const OptionsPlayer = () => {
         // 3. Fetch Real Options Chain for PCR
         try {
           const indexSymbol = chartConfig.symbol.replace('NSE:', '').replace('BSE:', '').replace('1!', '');
-          const optionsResponse = await fetch(`http://localhost:3001/api/options/${indexSymbol}`);
+          const optionsResponse = await fetch(`/api/options/${indexSymbol}`);
           if (optionsResponse.ok) {
             const optionsData = await optionsResponse.json();
             if (optionsData && optionsData.filtered) {

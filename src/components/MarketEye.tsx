@@ -238,7 +238,7 @@ const MarketEye = () => {
           fetchMarketNews(),
           fetchIntradayPrices('^NSEI').catch(() => null),
           fetchIntradayPrices('^NSEBANK').catch(() => null),
-          fetch('http://localhost:3001/api/fii-dii').then(r => r.json()).catch(() => null)
+          fetch('/api/fii-dii').then(r => r.json()).catch(() => null)
         ]);
         if (isMounted) {
           baselineNiftyChange = niftyRes?.change || 0;

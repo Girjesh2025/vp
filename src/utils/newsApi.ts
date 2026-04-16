@@ -66,7 +66,7 @@ const mockNewsData: NewsItem[] = [
 
 export const fetchMarketNews = async (category?: string): Promise<NewsItem[]> => {
   try {
-    const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    const API_BASE = '';
     const response = await fetch(`${API_BASE}/api/market-news`);
     
     if (!response.ok) {

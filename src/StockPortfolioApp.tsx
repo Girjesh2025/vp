@@ -58,12 +58,7 @@ interface StockWithPrice extends Stock {
 
 const StockPortfolioApp: React.FC = () => {
   const { user } = useAuth();
-  const apiBaseUrl = (() => {
-    const envUrl = (import.meta as any)?.env?.VITE_API_URL || (import.meta as any)?.env?.VITE_API_BASE_URL;
-    const isProd = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-    const defaultUrl = isProd ? 'https://first-nivesh.onrender.com' : 'http://localhost:3001';
-    return envUrl && typeof envUrl === 'string' && envUrl.trim() ? envUrl.trim() : defaultUrl;
-  })();
+  const apiBaseUrl = '';
   const { 
     portfolios,
     currentPortfolio,

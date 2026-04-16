@@ -90,13 +90,6 @@ const PROXY_SERVICES = [
 ];
 
 const resolveBaseUrl = (): string => {
-  try {
-    const envUrl = (import.meta as any)?.env?.VITE_API_URL || (import.meta as any)?.env?.VITE_API_BASE_URL;
-    if (envUrl && typeof envUrl === 'string' && envUrl.trim() !== '') {
-      return envUrl.trim();
-    }
-  } catch (e) {}
-  
   // Always use relative paths for API calls so they work seamlessly on Vercel (Serverless Functions) 
   // and locally (via Vite's proxy to localhost:3001).
   return '';
