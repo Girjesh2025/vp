@@ -79,6 +79,7 @@ export default async function handler(req: any, res: any) {
           }
         } catch (e: any) {
           console.warn(`[Fundamentals] Error for ${sym}:`, e.message);
+          results[sym] = { error: e.message, stack: e.stack };
         }
       });
       
