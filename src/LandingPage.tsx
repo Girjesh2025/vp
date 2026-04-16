@@ -26,38 +26,38 @@ function LandingPage({ onGetStarted }: LandingPageProps) {
   const features = [
     {
       icon: IndianRupee,
-      title: 'Virtual ₹10 Lakh Capital',
-      description: 'Start with ₹10,00,000 virtual money. Build and test portfolios with NSE & BSE stocks — no real money involved.',
+      title: 'Unlimited Virtual Capital',
+      description: 'Start with unlimited virtual money. Build and test portfolios with NSE & BSE stocks without ever worrying about running out of funds.',
+    },
+    {
+      icon: Target,
+      title: 'Guru Scan (Pro Setup)',
+      description: 'Discover stocks matching the exact criteria of legendary investors like Mark Minervini, Warren Buffett, and Peter Lynch.',
+    },
+    {
+      icon: Zap,
+      title: 'Options Trading Suite',
+      description: 'Master F&O with our advanced Options Player, Options Watch, and Options Decode tools without any financial risk.',
+    },
+    {
+      icon: TrendingUp,
+      title: 'Swing Player',
+      description: 'Identify and practice swing trading setups with real-time momentum tracking and technical analysis indicators.',
+    },
+    {
+      icon: Brain,
+      title: 'Trading Psychology',
+      description: 'Improve your mental game with dedicated tools to track your trading emotions, discipline, and rule adherence.',
     },
     {
       icon: Shield,
       title: 'Zero Financial Risk',
-      description: 'This is 100% paper trading. Practice strategies freely — your real money is never touched.',
-    },
-    {
-      icon: TrendingUp,
-      title: 'Live NSE / BSE Prices',
-      description: 'Track real-time prices of Nifty 50, Sensex, midcap, and smallcap stocks with live market data.',
-    },
-    {
-      icon: Brain,
-      title: 'AI Trading Signals',
-      description: 'Get AI-powered buy/sell/hold recommendations based on technical analysis for your portfolio stocks.',
-    },
-    {
-      icon: BarChart3,
-      title: 'Portfolio Analytics',
-      description: 'Detailed P&L tracking, sector allocation, and performance charts — just like a real demat account.',
-    },
-    {
-      icon: BookOpen,
-      title: 'Learn Before You Invest',
-      description: 'Understand the Indian stock market, practice SIP planning, and develop trading discipline — risk free.',
+      description: 'This is 100% paper trading. Practice advanced F&O and equity strategies freely — your real money is never touched.',
     },
     {
       icon: LineChart,
-      title: 'Stock Recommendations',
-      description: 'Curated NSE/BSE stock picks with entry price, stop loss, and target — so you can trade like a pro.',
+      title: 'Live NSE / BSE Prices',
+      description: 'Track real-time prices of Nifty 50, Bank Nifty, Sensex, midcap, and smallcap stocks with live market data.',
     },
     {
       icon: PieChart,
@@ -141,7 +141,7 @@ function LandingPage({ onGetStarted }: LandingPageProps) {
 
             <p className="text-xl text-slate-300 mb-4 max-w-3xl mx-auto leading-relaxed">
               <span className="text-emerald-400 font-bold">PaperProfit</span> is a free paper trading simulator for the Indian stock market.
-              Practice buying and selling NSE & BSE stocks with virtual ₹10 lakh — <span className="text-white font-semibold">zero real money at risk.</span>
+              Practice buying and selling NSE & BSE stocks with <span className="text-emerald-400 font-semibold">unlimited virtual capital</span> — <span className="text-white font-semibold">zero real money at risk.</span>
             </p>
             <p className="text-base text-slate-500 mb-10 max-w-2xl mx-auto">
               Perfect for beginners, students, and experienced traders who want to test strategies before committing real capital.
@@ -197,8 +197,8 @@ function LandingPage({ onGetStarted }: LandingPageProps) {
                         <ArrowUpRight className="w-5 h-5 text-green-400" />
                       </div>
                     </div>
-                    <div className="text-4xl font-bold text-green-400 mb-1">₹12,47,830</div>
-                    <div className="text-sm text-green-400 font-medium">+24.78% from ₹10L start</div>
+                    <div className="text-4xl font-bold text-green-400 mb-1">₹50,47,830</div>
+                    <div className="text-sm text-green-400 font-medium">+24.78% Lifetime</div>
                     <div className="text-xs text-slate-500 mt-1">Virtual money only</div>
                   </div>
                 </div>
@@ -337,7 +337,7 @@ function LandingPage({ onGetStarted }: LandingPageProps) {
                 Journey
               </h2>
               <p className="text-xl text-slate-300 mb-3 max-w-2xl mx-auto">
-                Practice with <span className="text-emerald-400 font-bold">₹10 lakh virtual money</span> on real NSE & BSE stocks.
+                Practice with <span className="text-emerald-400 font-bold">unlimited virtual money</span> on real NSE & BSE stocks and F&O.
                 No risk. No losses. Pure learning.
               </p>
               <p className="text-slate-500 text-sm mb-8">No demat account needed. No real money. Just practice.</p>
