@@ -21,7 +21,8 @@ const GURUS = [
     title: 'Trend & Momentum',
     description: 'Volatility Contraction Pattern (VCP) & strong uptrend momentum near 52-week highs.',
     icon: <TrendingUp className="w-6 h-6 text-emerald-400" />,
-    color: 'emerald'
+    color: 'emerald',
+    imageUrl: 'https://unavatar.io/twitter/markminervini'
   },
   {
     id: 'buffett',
@@ -29,7 +30,8 @@ const GURUS = [
     title: 'Value & Moat',
     description: 'High Return on Equity (ROE), low debt, and consistent long-term growth (Economic Moat).',
     icon: <Shield className="w-6 h-6 text-blue-400" />,
-    color: 'blue'
+    color: 'blue',
+    imageUrl: 'https://unavatar.io/twitter/WarrenBuffett'
   },
   {
     id: 'graham',
@@ -37,7 +39,8 @@ const GURUS = [
     title: 'Deep Value',
     description: 'Low P/E ratio, low Price-to-Book, and high margin of safety.',
     icon: <DollarSign className="w-6 h-6 text-purple-400" />,
-    color: 'purple'
+    color: 'purple',
+    imageUrl: 'https://wsrv.nl/?url=upload.wikimedia.org/wikipedia/commons/2/2a/Benjamin_Graham_%281894-1976%29_portrait_on_23_March_1950.jpg&w=400&h=400&fit=cover'
   },
   {
     id: 'lynch',
@@ -45,7 +48,8 @@ const GURUS = [
     title: 'GARP',
     description: 'Growth At a Reasonable Price. High earnings growth with moderate P/E ratio.',
     icon: <Star className="w-6 h-6 text-yellow-400" />,
-    color: 'yellow'
+    color: 'yellow',
+    imageUrl: 'https://images.openai.com/static-rsc-4/UPEZlz3hyLhsLamSPyukvLazAITm9gBp8xquXh6Nfxa9u44jTP3MHWPTquB9agdQME4aipAXa62RYj-pq_Oo1HVR3Nn68H6-VO4pGaB_Wpr5JEj46tFAsfadJQT9JEWDMKpc58er6zilI3f_HxY7q9P590QxtXDXAaKFjpDnZXMoU3W6KkBoaL0VkdBu616N?purpose=fullsize'
   },
   {
     id: 'oneil',
@@ -53,7 +57,8 @@ const GURUS = [
     title: 'CAN SLIM',
     description: 'Strong current earnings, annual growth, new products/highs, and market direction.',
     icon: <Activity className="w-6 h-6 text-rose-400" />,
-    color: 'rose'
+    color: 'rose',
+    imageUrl: 'https://wsrv.nl/?url=upload.wikimedia.org/wikipedia/en/b/b3/William_J._O%27Neil_%281933-2023%29_in_2018.jpg&w=400&h=400&fit=cover'
   }
 ];
 
@@ -237,22 +242,40 @@ export default function GuruScan() {
       </div>
 
       {/* Guru Selector */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {GURUS.map((guru) => (
           <button
             key={guru.id}
             onClick={() => setActiveGuru(guru.id)}
-            className={`flex flex-col items-start p-4 rounded-xl border transition-all duration-300 text-left ${
+            className={`flex flex-row items-center gap-4 p-3 sm:p-4 rounded-2xl border transition-all duration-300 text-left w-full ${
               activeGuru === guru.id 
                 ? `bg-${guru.color}-500/10 border-${guru.color}-500/50 shadow-[0_0_20px_rgba(var(--${guru.color}-500),0.15)] scale-[1.02]` 
                 : 'bg-[#172030]/50 border-slate-700/50 hover:bg-slate-800/50 hover:border-slate-600'
             }`}
           >
-            <div className={`p-2 rounded-lg mb-3 ${activeGuru === guru.id ? `bg-${guru.color}-500/20` : 'bg-slate-800'}`}>
-              {guru.icon}
+            <div className="relative shrink-0">
+              <img 
+                src={guru.imageUrl} 
+                alt={guru.name} 
+                referrerPolicy="no-referrer"
+                className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl object-cover border-2 transition-all duration-300 ${
+                  activeGuru === guru.id ? `border-${guru.color}-500 shadow-[0_0_15px_rgba(var(--${guru.color}-500),0.4)]` : 'border-slate-700'
+                }`}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(guru.name)}&background=172030&color=fff`;
+                }}
+              />
+              <div className={`absolute -bottom-2 -right-2 p-1.5 rounded-lg border shadow-lg ${
+                activeGuru === guru.id ? `bg-${guru.color}-500/20 border-${guru.color}-500/50 backdrop-blur-md` : 'bg-slate-800 border-slate-700'
+              }`}>
+                {React.cloneElement(guru.icon as React.ReactElement, { className: `w-3.5 h-3.5 ${activeGuru === guru.id ? `text-${guru.color}-400` : 'text-slate-400'}` })}
+              </div>
             </div>
-            <h3 className={`font-black tracking-wide ${activeGuru === guru.id ? 'text-white' : 'text-slate-300'}`}>{guru.name}</h3>
-            <p className={`text-xs font-bold mt-1 ${activeGuru === guru.id ? `text-${guru.color}-400` : 'text-slate-500'}`}>{guru.title}</p>
+            
+            <div className="flex flex-col justify-center min-w-0">
+              <h3 className={`font-black tracking-wide text-sm sm:text-base truncate ${activeGuru === guru.id ? 'text-white' : 'text-slate-300'}`}>{guru.name}</h3>
+              <p className={`text-[10px] sm:text-xs font-bold mt-0.5 truncate ${activeGuru === guru.id ? `text-${guru.color}-400` : 'text-slate-500'}`}>{guru.title}</p>
+            </div>
           </button>
         ))}
       </div>
