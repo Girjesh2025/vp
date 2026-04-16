@@ -106,8 +106,22 @@ function LandingPage({ onGetStarted }: LandingPageProps) {
             </div>
           </div>
           <div className="flex items-center gap-6">
-            <button className="text-slate-300 hover:text-white transition-colors hidden md:block">Features</button>
-            <button className="text-slate-300 hover:text-white transition-colors hidden md:block">How It Works</button>
+            <button 
+              onClick={() => {
+                document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="text-slate-300 hover:text-white transition-colors hidden md:block"
+            >
+              Features
+            </button>
+            <button 
+              onClick={() => {
+                document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="text-slate-300 hover:text-white transition-colors hidden md:block"
+            >
+              How It Works
+            </button>
             <button
               onClick={onGetStarted}
               className="px-6 py-2 bg-gradient-to-r from-emerald-600 to-green-500 rounded-lg font-semibold hover:shadow-lg hover:shadow-emerald-500/50 transform hover:scale-105 transition-all duration-300"
@@ -258,7 +272,7 @@ function LandingPage({ onGetStarted }: LandingPageProps) {
       </section>
 
       {/* How It Works */}
-      <section className="py-20 px-6">
+      <section id="how-it-works" className="py-20 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-full mb-6">
@@ -281,7 +295,7 @@ function LandingPage({ onGetStarted }: LandingPageProps) {
       </section>
 
       {/* Features Grid */}
-      <section className="py-20 px-6 bg-gradient-to-b from-transparent to-emerald-950/10">
+      <section id="features" className="py-20 px-6 bg-gradient-to-b from-transparent to-emerald-950/10">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-500/10 border border-green-500/30 rounded-full mb-6">
