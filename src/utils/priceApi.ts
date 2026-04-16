@@ -97,8 +97,9 @@ const resolveBaseUrl = (): string => {
     }
   } catch (e) {}
   
-  const isProd = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-  return isProd ? 'https://first-nivesh.onrender.com' : 'http://localhost:3001';
+  // Always use relative paths for API calls so they work seamlessly on Vercel (Serverless Functions) 
+  // and locally (via Vite's proxy to localhost:3001).
+  return '';
 };
 
 const getBrokerPreference = () => {

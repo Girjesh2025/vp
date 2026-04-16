@@ -427,17 +427,33 @@ async function fetchYahooFundamentals(symbol) {
     const keyStats = result.defaultKeyStatistics || {};
     const summary = result.summaryDetail || {};
 
+    // Calculate ROE if missing: EPS / Book Value
+    let roe = financialData.returnOnEquity;
+    if (roe === undefined && keyStats.trailingEps && keyStats.bookValue) {
+      roe = keyStats.trailingEps / keyStats.bookValue;
+    }
+
+    // Calculate PE
+    const peRatio = summary.trailingPE || (financialData.currentPrice / (keyStats.trailingEps || 1)) || 0;
+    
+    // Calculate PEG if missing
+    const growth = financialData.earningsGrowth || 0;
+    let pegRatio = keyStats.pegRatio;
+    if (pegRatio === undefined && growth > 0 && peRatio > 0) {
+      pegRatio = peRatio / (growth * 100);
+    }
+
     return {
       symbol: symbol.replace(/\.NS$/, ''),
       price: priceData.regularMarketPrice || 0,
       change: (priceData.regularMarketChangePercent || 0) * 100,
       high52: summary.fiftyTwoWeekHigh || 0,
       low52: summary.fiftyTwoWeekLow || 0,
-      peRatio: summary.trailingPE || (financialData.currentPrice / keyStats.trailingEps) || 0,
-      pegRatio: keyStats.pegRatio || 0,
-      roe: (financialData.returnOnEquity || 0) * 100, // typically decimal 0.15 -> 15%
-      debtToEquity: financialData.debtToEquity || 0, // typically 45.0 means 45%
-      growth: (financialData.earningsGrowth || 0) * 100
+      peRatio: peRatio,
+      pegRatio: pegRatio || 0,
+      roe: (roe || 0) * 100,
+      debtToEquity: financialData.debtToEquity || 0,
+      growth: growth * 100
     };
   } catch (e) {
     console.error(`Error fetching fundamentals for ${symbol}:`, e.message);
