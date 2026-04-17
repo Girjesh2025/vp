@@ -98,6 +98,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem('pp_data_source');
         localStorage.removeItem('pp_broker');
         localStorage.removeItem('pp_broker_pending');
+        localStorage.removeItem('pp_broker_session');
+        localStorage.removeItem('pp_broker_flow');
+        localStorage.removeItem('pp_broker_user_id');
       } catch (e) {}
       setUser(null);
       setSession(null);

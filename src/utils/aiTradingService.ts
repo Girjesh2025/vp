@@ -149,12 +149,10 @@ export interface AIAnalysis {
 }
 
 class AITradingService {
-  private apiKey: string | null = null;
   private cache: Map<string, { data: AIAnalysis; timestamp: number }> = new Map();
   private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
   constructor() {
-    this.apiKey = import.meta.env.VITE_OPENAI_API_KEY || null;
     // Clear cache on initialization to ensure fresh analysis
     this.cache.clear();
     console.log('AI Trading Service initialized with fresh cache');

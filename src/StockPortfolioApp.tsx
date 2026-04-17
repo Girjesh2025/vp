@@ -54,6 +54,46 @@ interface StockWithPrice extends Stock {
   priceChangePercent?: number;
 }
 
+const BROKER_SESSION_STORAGE_KEY = 'pp_broker_session';
+const BROKER_FLOW_STORAGE_KEY = 'pp_broker_flow';
+
+const getStoredBrokerSessionToken = (): string | null => {
+  try {
+    return localStorage.getItem(BROKER_SESSION_STORAGE_KEY);
+  } catch (e) {
+    return null;
+  }
+};
+
+const setStoredBrokerSessionToken = (token: string | null) => {
+  try {
+    if (token) localStorage.setItem(BROKER_SESSION_STORAGE_KEY, token);
+    else localStorage.removeItem(BROKER_SESSION_STORAGE_KEY);
+  } catch (e) {}
+};
+
+const getStoredBrokerFlowToken = (): string | null => {
+  try {
+    return localStorage.getItem(BROKER_FLOW_STORAGE_KEY);
+  } catch (e) {
+    return null;
+  }
+};
+
+const setStoredBrokerFlowToken = (token: string | null) => {
+  try {
+    if (token) localStorage.setItem(BROKER_FLOW_STORAGE_KEY, token);
+    else localStorage.removeItem(BROKER_FLOW_STORAGE_KEY);
+  } catch (e) {}
+};
+
+const buildBrokerHeaders = (): HeadersInit => {
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+  const sessionToken = getStoredBrokerSessionToken();
+  if (sessionToken) headers['x-broker-session'] = sessionToken;
+  return headers;
+};
+
 
 
 const StockPortfolioApp: React.FC = () => {
@@ -130,7 +170,9 @@ const StockPortfolioApp: React.FC = () => {
       
       try {
         setBrokerHoldingsLoading(true);
-        const res = await fetch(`${apiBaseUrl}/api/broker/fyers/holdings?userId=${encodeURIComponent(userId)}`);
+        const res = await fetch(`${apiBaseUrl}/api/broker/fyers/holdings?userId=${encodeURIComponent(userId)}`, {
+          headers: buildBrokerHeaders(),
+        });
         if (!res.ok) throw new Error('Failed to fetch broker holdings');
         const data = await res.json();
         
@@ -196,7 +238,9 @@ const StockPortfolioApp: React.FC = () => {
     try {
       setBrokerLoading(true);
       setBrokerError(null);
-      const res = await fetch(`${apiBaseUrl}/api/broker/status?userId=${encodeURIComponent(userId)}`);
+      const res = await fetch(`${apiBaseUrl}/api/broker/status?userId=${encodeURIComponent(userId)}`, {
+        headers: buildBrokerHeaders(),
+      });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || 'Failed to load broker status');
       setBrokerStatus(data);
@@ -221,11 +265,12 @@ const StockPortfolioApp: React.FC = () => {
       localStorage.setItem('pp_broker', 'zerodha');
       const res = await fetch(`${apiBaseUrl}/api/broker/zerodha/login-url`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildBrokerHeaders(),
         body: JSON.stringify({ userId: user.id }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || 'Failed to get login URL');
+      if (data?.flowToken) setStoredBrokerFlowToken(data.flowToken);
       if (data?.loginUrl) {
         window.location.href = data.loginUrl;
       } else {
@@ -247,11 +292,12 @@ const StockPortfolioApp: React.FC = () => {
       localStorage.setItem('pp_broker', 'fyers');
       const res = await fetch(`${apiBaseUrl}/api/broker/fyers/login-url`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildBrokerHeaders(),
         body: JSON.stringify({ userId: user.id }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || 'Failed to get login URL');
+      if (data?.flowToken) setStoredBrokerFlowToken(data.flowToken);
       if (data?.loginUrl) {
         window.location.href = data.loginUrl;
       } else {
@@ -271,12 +317,14 @@ const StockPortfolioApp: React.FC = () => {
       setBrokerError(null);
       const res = await fetch(`${apiBaseUrl}/api/broker/disconnect`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildBrokerHeaders(),
         body: JSON.stringify({ userId: user.id }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || 'Failed to disconnect');
       setBrokerStatus({ connected: false });
+      setStoredBrokerSessionToken(null);
+      setStoredBrokerFlowToken(null);
       localStorage.removeItem('pp_data_source');
       localStorage.removeItem('pp_broker_pending');
       setUseBrokerData(false);
@@ -299,6 +347,7 @@ const StockPortfolioApp: React.FC = () => {
     const status = params.get('status');
     const authCode = params.get('auth_code') || params.get('code');
     const pending = localStorage.getItem('pp_broker_pending');
+    const flowToken = getStoredBrokerFlowToken();
     const shouldHandleZerodha = pending === 'zerodha' || (!!requestToken && status === 'success');
     const shouldHandleFyers = pending === 'fyers' || (!!authCode && !requestToken);
     if (!shouldHandleZerodha && !shouldHandleFyers) return;
@@ -310,11 +359,12 @@ const StockPortfolioApp: React.FC = () => {
         if (shouldHandleZerodha) {
           const res = await fetch(`${apiBaseUrl}/api/broker/zerodha/exchange`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: user.id, requestToken }),
+            headers: buildBrokerHeaders(),
+            body: JSON.stringify({ userId: user?.id || localStorage.getItem('pp_user_id'), requestToken, flowToken }),
           });
           const data = await res.json().catch(() => null);
           if (!res.ok) throw new Error(data?.error || 'Broker connection failed');
+          if (data?.sessionToken) setStoredBrokerSessionToken(data.sessionToken);
           setBrokerStatus({ connected: true, broker: 'zerodha' });
           setSelectedBroker('zerodha');
           localStorage.setItem('pp_broker', 'zerodha');
@@ -339,14 +389,15 @@ const StockPortfolioApp: React.FC = () => {
 
           const res = await fetch(`${apiBaseUrl}/api/broker/fyers/exchange`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: user?.id || localStorage.getItem('pp_user_id'), authCode }),
+            headers: buildBrokerHeaders(),
+            body: JSON.stringify({ userId: user?.id || localStorage.getItem('pp_user_id'), authCode, flowToken }),
           });
           const data = await res.json().catch(() => null);
           if (!res.ok) {
             alert(`Fyers Login Failed!\nReason: ${data?.error || 'Unknown Error'}\nDetails: ${JSON.stringify(data?.details || {})}`);
             throw new Error(data?.error || 'Broker connection failed');
           }
+          if (data?.sessionToken) setStoredBrokerSessionToken(data.sessionToken);
           
           // Instantly populate the holdings from the exchange response
           if (data && data.holdings && Array.isArray(data.holdings)) {
@@ -362,6 +413,7 @@ const StockPortfolioApp: React.FC = () => {
           params.delete('code');
         }
         localStorage.removeItem('pp_broker_pending');
+        setStoredBrokerFlowToken(null);
         const newSearch = params.toString();
         const newUrl = `${window.location.pathname}${newSearch ? `?${newSearch}` : ''}${window.location.hash || ''}`;
         window.history.replaceState({}, document.title, newUrl);
@@ -372,6 +424,7 @@ const StockPortfolioApp: React.FC = () => {
       } finally {
         setBrokerLoading(false);
         localStorage.removeItem('pp_broker_pending');
+        setStoredBrokerFlowToken(null);
         params.delete('auth_code');
         params.delete('code');
         params.delete('request_token');

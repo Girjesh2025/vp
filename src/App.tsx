@@ -26,7 +26,9 @@ function AppRoutes() {
     if (authCode && !location.pathname.startsWith('/app')) {
       // Ensure broker mode is active
       if (!localStorage.getItem('pp_auth_mode')) {
-        const userId = `broker-${Date.now()}`;
+        const userId = typeof crypto !== 'undefined' && crypto.randomUUID
+          ? `broker-${crypto.randomUUID()}`
+          : `broker-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         localStorage.setItem('pp_auth_mode', 'broker');
         localStorage.setItem('pp_local_user_id', userId);
         localStorage.setItem('pp_user_id', userId);

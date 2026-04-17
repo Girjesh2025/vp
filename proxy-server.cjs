@@ -12,14 +12,44 @@ const { fyersModel } = require('fyers-api-v3');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Enable CORS for all routes
-app.use(cors());
+const DEFAULT_ALLOWED_ORIGINS = [
+  'https://first-nivesh.vercel.app',
+];
+
+const extraAllowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
+
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true;
+  try {
+    const parsed = new URL(origin);
+    const hostname = parsed.hostname.toLowerCase();
+    if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
+    if (hostname.endsWith('.vercel.app')) return true;
+  } catch (e) {
+    return false;
+  }
+  return DEFAULT_ALLOWED_ORIGINS.includes(origin) || extraAllowedOrigins.includes(origin);
+};
+
+// Restrict CORS to trusted local/dev and deployed app origins.
+app.use(cors({
+  origin(origin, callback) {
+    if (isAllowedOrigin(origin)) return callback(null, true);
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+}));
 app.use(express.json());
 
 const fundamentalsCache = new Map();
 const FUNDAMENTALS_CACHE_TTL = 12 * 60 * 60 * 1000; // 12 hours
 
 const brokerSessions = new Map();
+const pendingBrokerLogins = new Map();
+const BROKER_FLOW_TTL_MS = 10 * 60 * 1000;
 
 const getZerodhaConfig = () => {
   return {
@@ -53,10 +83,51 @@ const requireUserId = (req, res) => {
   return userId;
 };
 
-const getUserBrokerSession = (userId, brokerName) => {
+const generateOpaqueToken = () => crypto.randomBytes(32).toString('hex');
+const hashOpaqueToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
+
+const createPendingBrokerFlow = (userId, broker) => {
+  const flowToken = generateOpaqueToken();
+  pendingBrokerLogins.set(`${userId}:${broker}`, {
+    tokenHash: hashOpaqueToken(flowToken),
+    expiresAt: Date.now() + BROKER_FLOW_TTL_MS,
+  });
+  return flowToken;
+};
+
+const consumePendingBrokerFlow = (userId, broker, flowToken) => {
+  const key = `${userId}:${broker}`;
+  const pending = pendingBrokerLogins.get(key);
+  pendingBrokerLogins.delete(key);
+  if (!pending) return false;
+  if (pending.expiresAt < Date.now()) return false;
+  if (!flowToken || typeof flowToken !== 'string') return false;
+  return pending.tokenHash === hashOpaqueToken(flowToken);
+};
+
+const getBrokerSessionToken = (req) => {
+  const token = req.headers['x-broker-session'];
+  if (Array.isArray(token)) return token[0];
+  return typeof token === 'string' ? token : '';
+};
+
+const createBrokerSession = ({ userId, broker, accessToken, ...rest }) => {
+  const sessionToken = generateOpaqueToken();
+  brokerSessions.set(userId, {
+    broker,
+    accessToken,
+    sessionTokenHash: hashOpaqueToken(sessionToken),
+    createdAt: new Date().toISOString(),
+    ...rest,
+  });
+  return sessionToken;
+};
+
+const getUserBrokerSession = (userId, brokerName, sessionToken) => {
   const existing = brokerSessions.get(userId);
   if (!existing) return null;
   if (brokerName && existing.broker !== brokerName) return null;
+  if (!sessionToken || existing.sessionTokenHash !== hashOpaqueToken(sessionToken)) return null;
   return existing;
 };
 
@@ -70,9 +141,9 @@ const API_SOURCES = {
 
 // API Keys (replace with your own)
 const API_KEYS = {
-  ALPHA_VANTAGE: 'demo', // Get free key from alphavantage.co
-  FINNHUB: 'demo', // Get free key from finnhub.io
-  EODHD: '68ded7adeebd01.04469623'
+  ALPHA_VANTAGE: process.env.ALPHA_VANTAGE_KEY || 'demo',
+  FINNHUB: process.env.FINNHUB_KEY || 'demo',
+  EODHD: process.env.EODHD_API_TOKEN || process.env.VITE_EODHD_API_KEY || ''
 };
 
 const GIFT_NIFTY_CONFIG = {
@@ -578,8 +649,8 @@ app.get('/api/options/:symbol', async (req, res) => {
 app.get('/api/broker/status', (req, res) => {
   const userId = requireUserId(req, res);
   if (!userId) return;
-  console.log(`[broker] GET /api/broker/status userId=${userId}`);
-  const session = brokerSessions.get(userId);
+  const sessionToken = getBrokerSessionToken(req);
+  const session = getUserBrokerSession(userId, undefined, sessionToken);
   if (!session) return res.json({ connected: false });
   return res.json({
     connected: true,
@@ -594,14 +665,18 @@ app.post('/api/broker/zerodha/login-url', (req, res) => {
   const { apiKey } = getZerodhaConfig();
   if (!apiKey) return res.status(500).json({ error: 'ZERODHA_API_KEY not configured' });
   const loginUrl = `https://kite.trade/connect/login?api_key=${encodeURIComponent(apiKey)}&v=3`;
-  return res.json({ loginUrl });
+  const flowToken = createPendingBrokerFlow(userId, 'zerodha');
+  return res.json({ loginUrl, flowToken });
 });
 
 app.post('/api/broker/zerodha/exchange', async (req, res) => {
   const userId = requireUserId(req, res);
   if (!userId) return;
-  const { requestToken } = req.body || {};
+  const { requestToken, flowToken } = req.body || {};
   if (!requestToken || typeof requestToken !== 'string') return res.status(400).json({ error: 'Missing requestToken' });
+  if (!consumePendingBrokerFlow(userId, 'zerodha', flowToken)) {
+    return res.status(401).json({ error: 'Invalid or expired broker login session' });
+  }
 
   const { apiKey, apiSecret } = getZerodhaConfig();
   if (!apiKey || !apiSecret) return res.status(500).json({ error: 'Zerodha not configured' });
@@ -626,33 +701,35 @@ app.post('/api/broker/zerodha/exchange', async (req, res) => {
     return res.status(400).json({ error: 'Failed to exchange token', details: data });
   }
 
-  brokerSessions.set(userId, {
+  const sessionToken = createBrokerSession({
+    userId,
     broker: 'zerodha',
     accessToken: data.data.access_token,
-    createdAt: new Date().toISOString(),
     user: data.data.user_id,
   });
 
-  return res.json({ connected: true, broker: 'zerodha' });
+  return res.json({ connected: true, broker: 'zerodha', sessionToken });
 });
 
 app.post('/api/broker/fyers/login-url', (req, res) => {
   const userId = requireUserId(req, res);
   if (!userId) return;
-  console.log(`[broker] POST /api/broker/fyers/login-url userId=${userId}`);
   const { clientId, redirectUri } = getFyersConfig();
   if (!clientId || !redirectUri) return res.status(500).json({ error: 'FYERS_APP_ID or FYERS_REDIRECT_URI not configured' });
   const fyers = createFyers();
   const loginUrl = fyers.generateAuthCode();
-  return res.json({ loginUrl });
+  const flowToken = createPendingBrokerFlow(userId, 'fyers');
+  return res.json({ loginUrl, flowToken });
 });
 
 app.post('/api/broker/fyers/exchange', async (req, res) => {
   const userId = requireUserId(req, res);
   if (!userId) return;
-  const { authCode } = req.body || {};
+  const { authCode, flowToken } = req.body || {};
   if (!authCode || typeof authCode !== 'string') return res.status(400).json({ error: 'Missing authCode' });
-  console.log(`[broker] POST /api/broker/fyers/exchange userId=${userId} authCodePresent=${Boolean(authCode)}`);
+  if (!consumePendingBrokerFlow(userId, 'fyers', flowToken)) {
+    return res.status(401).json({ error: 'Invalid or expired broker login session' });
+  }
 
   const { clientId, secretKey, redirectUri } = getFyersConfig();
   if (!clientId || !secretKey || !redirectUri) return res.status(500).json({ error: 'Fyers not configured' });
@@ -704,11 +781,10 @@ app.post('/api/broker/fyers/exchange', async (req, res) => {
       console.error('Fyers token exchange invalid response:', response);
       return res.status(400).json({ error: 'Failed to exchange token', details: response });
     }
-    console.log(`[broker] Fyers token exchange success userId=${userId}`);
-    brokerSessions.set(userId, {
+    const sessionToken = createBrokerSession({
+      userId,
       broker: 'fyers',
       accessToken: response.access_token,
-      createdAt: new Date().toISOString(),
       clientId,
     });
     
@@ -727,7 +803,7 @@ app.post('/api/broker/fyers/exchange', async (req, res) => {
       console.warn('Failed to automatically fetch holdings on login', holdingsErr);
     }
     
-    return res.json({ connected: true, broker: 'fyers', holdings });
+    return res.json({ connected: true, broker: 'fyers', holdings, sessionToken });
   } catch (e) {
     console.error('Fyers exchange route exception:', e);
     return res.status(400).json({ error: 'Failed to exchange token' });
@@ -737,6 +813,9 @@ app.post('/api/broker/fyers/exchange', async (req, res) => {
 app.post('/api/broker/disconnect', (req, res) => {
   const userId = requireUserId(req, res);
   if (!userId) return;
+  const sessionToken = getBrokerSessionToken(req);
+  const session = getUserBrokerSession(userId, undefined, sessionToken);
+  if (!session) return res.status(401).json({ error: 'Broker session not authorized' });
   brokerSessions.delete(userId);
   return res.json({ connected: false });
 });
@@ -744,11 +823,12 @@ app.post('/api/broker/disconnect', (req, res) => {
 app.get('/api/broker/zerodha/ltp', async (req, res) => {
   const userId = requireUserId(req, res);
   if (!userId) return;
+  const sessionToken = getBrokerSessionToken(req);
   const { instrument } = req.query || {};
   if (!instrument || typeof instrument !== 'string') return res.status(400).json({ error: 'Missing instrument' });
   const { apiKey } = getZerodhaConfig();
   if (!apiKey) return res.status(500).json({ error: 'ZERODHA_API_KEY not configured' });
-  const session = getUserBrokerSession(userId, 'zerodha');
+  const session = getUserBrokerSession(userId, 'zerodha', sessionToken);
   if (!session) return res.status(401).json({ error: 'Broker not connected' });
 
   const url = `https://api.kite.trade/quote/ltp?i=${encodeURIComponent(instrument)}`;
@@ -769,10 +849,10 @@ app.get('/api/broker/zerodha/ltp', async (req, res) => {
 app.get('/api/broker/fyers/quotes', async (req, res) => {
   const userId = requireUserId(req, res);
   if (!userId) return;
+  const sessionToken = getBrokerSessionToken(req);
   const { symbols } = req.query || {};
   if (!symbols || typeof symbols !== 'string') return res.status(400).json({ error: 'Missing symbols' });
-  console.log(`[broker] GET /api/broker/fyers/quotes userId=${userId} symbols=${symbols}`);
-  const session = getUserBrokerSession(userId, 'fyers');
+  const session = getUserBrokerSession(userId, 'fyers', sessionToken);
   if (!session) return res.status(401).json({ error: 'Broker not connected' });
 
   const { clientId, redirectUri } = getFyersConfig();
@@ -793,8 +873,8 @@ app.get('/api/broker/fyers/quotes', async (req, res) => {
 app.get('/api/broker/fyers/holdings', async (req, res) => {
   const userId = requireUserId(req, res);
   if (!userId) return;
-  console.log(`[broker] GET /api/broker/fyers/holdings userId=${userId}`);
-  const session = getUserBrokerSession(userId, 'fyers');
+  const sessionToken = getBrokerSessionToken(req);
+  const session = getUserBrokerSession(userId, 'fyers', sessionToken);
   if (!session) return res.status(401).json({ error: 'Broker not connected' });
 
   const { clientId, redirectUri } = getFyersConfig();

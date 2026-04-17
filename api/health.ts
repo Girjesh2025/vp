@@ -1,9 +1,19 @@
 export default async function handler(req: any, res: any) {
+  const isProd = process.env.NODE_ENV === 'production';
+  const adminToken = process.env.HEALTHCHECK_TOKEN || '';
+  const providedToken = req.headers['x-health-token'] || req.query?.token || '';
+  const isAuthorized = !!adminToken && providedToken === adminToken;
+
   const eodhdKey = process.env.EODHD_API_TOKEN || '';
   const alphaKey = process.env.ALPHA_VANTAGE_KEY || '';
   const finnhubKey = process.env.FINNHUB_KEY || '';
 
+  if (isProd && !isAuthorized) {
+    return res.status(200).json({ ok: true });
+  }
+
   const checks: any = {
+    ok: true,
     env: {
       EODHD_API_TOKEN: !!eodhdKey,
       ALPHA_VANTAGE_KEY: !!alphaKey,
