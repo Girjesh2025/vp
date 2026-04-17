@@ -891,6 +891,16 @@ app.get('/api/broker/fyers/holdings', async (req, res) => {
   }
 });
 
+// FII/DII Mock Route
+app.get('/api/fii-dii', (req, res) => {
+  const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  const mockData = [
+    { category: 'FII/FPI', netValue: '-8692.00', date },
+    { category: 'DII', netValue: '7979.00', date }
+  ];
+  res.json(mockData);
+});
+
 // Proxy route for News (Google News RSS)
 app.get('/api/market-news', async (req, res) => {
   try {
