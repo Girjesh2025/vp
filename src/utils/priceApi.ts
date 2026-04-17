@@ -100,9 +100,10 @@ const getBrokerPreference = () => {
     const userId = typeof window !== 'undefined' ? localStorage.getItem('pp_user_id') : null;
     const dataSource = typeof window !== 'undefined' ? localStorage.getItem('pp_data_source') : null;
     const broker = typeof window !== 'undefined' ? localStorage.getItem('pp_broker') : null;
-    return { userId, dataSource, broker };
+    const sessionToken = typeof window !== 'undefined' ? localStorage.getItem('pp_broker_session') : null;
+    return { userId, dataSource, broker, sessionToken };
   } catch (e) {
-    return { userId: null, dataSource: null, broker: null };
+    return { userId: null, dataSource: null, broker: null, sessionToken: null };
   }
 };
 
@@ -138,15 +139,16 @@ const parseFyersLtp = (payload: any, fyersSymbol: string): number | null => {
 };
 
 const fetchBrokerPrice = async (symbol: string): Promise<PriceData | null> => {
-  const { userId, dataSource, broker } = getBrokerPreference();
-  if (!userId || dataSource !== 'broker') return null;
+  const { userId, dataSource, broker, sessionToken } = getBrokerPreference();
+  if (!userId || !sessionToken || dataSource !== 'broker') return null;
   const baseUrl = resolveBaseUrl();
+  const headers = { 'x-broker-session': sessionToken };
 
   if (broker === 'fyers') {
     const fyersSymbol = toFyersSymbol(symbol);
     if (!fyersSymbol) return null;
     const url = `${baseUrl}/api/broker/fyers/quotes?userId=${encodeURIComponent(userId)}&symbols=${encodeURIComponent(fyersSymbol)}`;
-    const r = await fetch(url, { method: 'GET' });
+    const r = await fetch(url, { method: 'GET', headers });
     if (!r.ok) return null;
     const data = await r.json().catch(() => null);
     const ltp = parseFyersLtp(data, fyersSymbol);
@@ -157,7 +159,7 @@ const fetchBrokerPrice = async (symbol: string): Promise<PriceData | null> => {
   const instrument = toZerodhaInstrument(symbol);
   if (!instrument) return null;
   const url = `${baseUrl}/api/broker/zerodha/ltp?userId=${encodeURIComponent(userId)}&instrument=${encodeURIComponent(instrument)}`;
-  const r = await fetch(url, { method: 'GET' });
+  const r = await fetch(url, { method: 'GET', headers });
   if (!r.ok) return null;
   const data = await r.json().catch(() => null);
   const key = data?.data ? Object.keys(data.data)[0] : null;
@@ -188,32 +190,7 @@ const toYahooSymbol = (symbol: string): string => {
 };
 
 const fetchDirectFallback = async (symbol: string): Promise<PriceData | null> => {
-  // First try EODHD if it's a regular stock
-  if (!isGlobalOrIndexSymbol(symbol)) {
-    const candidates = toEODHDSymbols(symbol);
-    for (const cand of candidates) {
-      try {
-        const url = `https://eodhd.com/api/real-time/${cand}?api_token=68ded7adeebd01.04469623&fmt=json`;
-        const r = await fetch(url);
-        if (r.ok) {
-          const data = await r.json();
-          if (data && typeof data.close === 'number' && data.close > 0) {
-            const prevClose = data.previousClose || data.open || data.close;
-            const change = prevClose ? ((data.close - prevClose) / prevClose) * 100 : 0;
-            return {
-              price: Number(data.close.toFixed(2)),
-              change: Number(change.toFixed(2)),
-              previousClose: data.previousClose !== undefined ? data.previousClose : undefined,
-            };
-          }
-        }
-      } catch (e) {
-        console.warn(`[EODHD Fallback] Failed for ${cand}:`, e);
-      }
-    }
-  }
-
-  // Then try Yahoo via our Vite proxy or other proxies
+  // Try Yahoo via our Vite proxy or other proxies.
   const yahooSymbol = toYahooSymbol(symbol);
   const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}`;
   for (const p of PROXY_SERVICES) {
@@ -782,7 +759,6 @@ export const fetchMultipleStockPrices = async (symbols: string[]): Promise<Recor
 
 export const fetchStockPrice = async (symbol: string): Promise<PriceData | null> => {
   try {
-    console.log(`🚀 [DEBUG] fetchStockPrice called for symbol: ${symbol}`);
     const baseUrl = resolveBaseUrl();
 
     const brokerPrice = await fetchBrokerPrice(symbol);
@@ -790,7 +766,6 @@ export const fetchStockPrice = async (symbol: string): Promise<PriceData | null>
 
     // For global indices / futures, send the symbol directly to the proxy (URL-encoded)
     if (isGlobalOrIndexSymbol(symbol)) {
-      console.log(`🌍 [DEBUG] Global/index symbol detected: ${symbol}, sending directly to proxy`);
       try {
         const response = await fetch(`${baseUrl}/api/stock/${encodeURIComponent(symbol)}?source=yahoo`, {
           method: 'GET',
@@ -831,7 +806,6 @@ export const fetchStockPrice = async (symbol: string): Promise<PriceData | null>
 
     // For regular Indian / US stocks, use EODHD symbol conversion
     const candidates = toEODHDSymbols(symbol);
-    console.log(`🔄 [DEBUG] Converted candidates: ${candidates.join(', ')}`);
     
     for (const cand of candidates) {
       try {
