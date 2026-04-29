@@ -153,7 +153,25 @@ const fetchBrokerPrice = async (symbol: string): Promise<PriceData | null> => {
     const data = await r.json().catch(() => null);
     const ltp = parseFyersLtp(data, fyersSymbol);
     if (typeof ltp !== 'number' || ltp <= 0) return null;
-    return { price: Number(ltp.toFixed(2)), change: 0 };
+
+    // Fetch 52-week data separately if we are using Fyers
+    let high52, low52;
+    try {
+      const cleanSym = symbol.replace(/\.(NS|BO|NSE|BSE)$/i, '');
+      const nseUrl = `${baseUrl}/api/nse/highlow`;
+      const nseRes = await fetch(nseUrl);
+      if (nseRes.ok) {
+        const nseData = await nseRes.json();
+        if (nseData[cleanSym]) {
+          high52 = nseData[cleanSym].high52;
+          low52 = nseData[cleanSym].low52;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch 52-week high/low for Fyers fallback', e);
+    }
+
+    return { price: Number(ltp.toFixed(2)), change: 0, high52, low52 };
   }
 
   const instrument = toZerodhaInstrument(symbol);
@@ -165,7 +183,25 @@ const fetchBrokerPrice = async (symbol: string): Promise<PriceData | null> => {
   const key = data?.data ? Object.keys(data.data)[0] : null;
   const ltp = key ? data.data[key]?.last_price : null;
   if (typeof ltp !== 'number' || ltp <= 0) return null;
-  return { price: Number(ltp.toFixed(2)), change: 0 };
+
+  // Fetch 52-week data separately if we are using Zerodha
+  let high52, low52;
+  try {
+    const cleanSym = symbol.replace(/\.(NS|BO|NSE|BSE)$/i, '');
+    const nseUrl = `${baseUrl}/api/nse/highlow`;
+    const nseRes = await fetch(nseUrl);
+    if (nseRes.ok) {
+      const nseData = await nseRes.json();
+      if (nseData[cleanSym]) {
+        high52 = nseData[cleanSym].high52;
+        low52 = nseData[cleanSym].low52;
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to fetch 52-week high/low for Zerodha fallback', e);
+  }
+
+  return { price: Number(ltp.toFixed(2)), change: 0, high52, low52 };
 };
 
 // Check if a symbol is a global index or futures symbol (e.g. ^DJI, ^NSEI, YM=F)
