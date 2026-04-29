@@ -1,7 +1,8 @@
 import { NseIndia } from 'stock-nse-india';
-import yahooFinance from 'yahoo-finance2';
+import { default as YahooFinance } from 'yahoo-finance2';
 
 const nseIndia = new NseIndia();
+const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 
 const FALLBACK_SYMBOLS = [
   'ADANIENT', 'ADANIPORTS', 'APOLLOHOSP', 'ASIANPAINT', 'AXISBANK', 'BAJAJ-AUTO', 'BAJFINANCE', 'BAJAJFINSV', 'BPCL', 'BHARTIARTL',

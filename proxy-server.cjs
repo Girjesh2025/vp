@@ -617,8 +617,42 @@ app.get('/api/nse/highlow', async (req, res) => {
     }
   } catch (err) {
     console.error('Error fetching NSE high/low:', err.message);
-    if (cachedNseHighLow) return res.json(cachedNseHighLow); // Return stale cache if error
-    return res.status(500).json({ error: 'Failed to fetch NSE high/low data' });
+    console.log('Falling back to Yahoo Finance for NSE high/low data...');
+    
+    try {
+      const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+      const FALLBACK_SYMBOLS = [
+        'ADANIENT', 'ADANIPORTS', 'APOLLOHOSP', 'ASIANPAINT', 'AXISBANK', 'BAJAJ-AUTO', 'BAJFINANCE', 'BAJAJFINSV', 'BPCL', 'BHARTIARTL',
+        'BRITANNIA', 'CIPLA', 'COALINDIA', 'DIVISLAB', 'DRREDDY', 'EICHERMOT', 'GRASIM', 'HCLTECH', 'HDFCBANK', 'HDFCLIFE',
+        'HEROMOTOCO', 'HINDALCO', 'HINDUNILVR', 'ICICIBANK', 'ITC', 'INDUSINDBK', 'INFY', 'JSWSTEEL', 'KOTAKBANK', 'LTIM',
+        'LT', 'M&M', 'MARUTI', 'NTPC', 'NESTLEIND', 'ONGC', 'POWERGRID', 'RELIANCE', 'SBILIFE', 'SBIN',
+        'SUNPHARMA', 'TCS', 'TATACONSUM', 'TATAMOTORS', 'TATASTEEL', 'TECHM', 'TITAN', 'ULTRACEMCO', 'UPL', 'WIPRO',
+        'PNB', 'AUBANK', 'BANKBARODA', 'FEDERALBNK', 'IDFCFIRSTB', 'BANDHANBNK'
+      ];
+      const querySymbols = FALLBACK_SYMBOLS.map(s => `${s}.NS`);
+      const quotes = await yahooFinance.quote(querySymbols);
+      
+      const result = {};
+      const quoteArray = Array.isArray(quotes) ? quotes : [quotes];
+      quoteArray.forEach((q) => {
+        const sym = q.symbol.replace('.NS', '');
+        result[sym] = {
+          symbol: sym,
+          high52: q.fiftyTwoWeekHigh,
+          low52: q.fiftyTwoWeekLow,
+          price: q.regularMarketPrice,
+          pChange: q.regularMarketChangePercent
+        };
+      });
+      
+      cachedNseHighLow = result;
+      lastNseHighLowFetch = Date.now();
+      return res.json(result);
+    } catch (yahooErr) {
+      console.error('Error fetching fallback Yahoo data:', yahooErr.message);
+      if (cachedNseHighLow) return res.json(cachedNseHighLow); // Return stale cache if error
+      return res.status(500).json({ error: 'Failed to fetch NSE high/low data from all sources' });
+    }
   }
 });
 
