@@ -69,7 +69,7 @@ const getMockPrice = (symbol: string): PriceData => {
 const PROXY_SERVICES = [
   {
     name: 'vite-proxy',
-    url: '/api/yahoo/',
+    url: '/api/stock/',
     transform: (data: any) => data
   },
   {
@@ -129,7 +129,7 @@ const fetchDirectFallback = async (symbol: string): Promise<PriceData | null> =>
       
       const queryPart = yahooUrl.includes('?') ? yahooUrl.substring(yahooUrl.indexOf('?')) : '';
       const targetUrl = p.name === 'vite-proxy' 
-        ? `${p.url}${yahooSymbol}${queryPart}` 
+        ? `${p.url}${encodeURIComponent(yahooSymbol)}?source=yahoo` 
         : `${p.url}${encodeURIComponent(yahooUrl)}`;
 
       const r = await fetch(targetUrl, { 
@@ -149,7 +149,24 @@ const fetchDirectFallback = async (symbol: string): Promise<PriceData | null> =>
       }
       
         const data = p.transform ? p.transform(raw) : raw;
-        const meta = data?.chart?.result?.[0]?.meta;
+      
+      if (p.name === 'vite-proxy') {
+        // vite-proxy returns our normalized PriceData format directly
+        if (data && typeof data.close === 'number') {
+           const close = data.close;
+           const prevClose = data.previousClose ?? close;
+           const change = prevClose ? ((close - prevClose) / prevClose) * 100 : 0;
+           return {
+             price: Number(close.toFixed(2)),
+             change: Number(change.toFixed(2)),
+             previousClose: data.previousClose !== undefined ? Number(data.previousClose.toFixed(2)) : undefined,
+             high52: data.high52 !== undefined ? Number(data.high52.toFixed(2)) : undefined,
+             low52: data.low52 !== undefined ? Number(data.low52.toFixed(2)) : undefined,
+           };
+        }
+      }
+
+      const meta = data?.chart?.result?.[0]?.meta;
         if (meta && (typeof meta.regularMarketPrice === 'number' || typeof meta.previousClose === 'number')) {
           const close = meta.regularMarketPrice ?? meta.previousClose ?? 0;
           const prevClose = meta.previousClose ?? close;
