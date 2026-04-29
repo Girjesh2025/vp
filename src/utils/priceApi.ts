@@ -95,114 +95,7 @@ const resolveBaseUrl = (): string => {
   return '';
 };
 
-const getBrokerPreference = () => {
-  try {
-    const userId = typeof window !== 'undefined' ? localStorage.getItem('pp_user_id') : null;
-    const dataSource = typeof window !== 'undefined' ? localStorage.getItem('pp_data_source') : null;
-    const broker = typeof window !== 'undefined' ? localStorage.getItem('pp_broker') : null;
-    const sessionToken = typeof window !== 'undefined' ? localStorage.getItem('pp_broker_session') : null;
-    return { userId, dataSource, broker, sessionToken };
-  } catch (e) {
-    return { userId: null, dataSource: null, broker: null, sessionToken: null };
-  }
-};
-
-const toZerodhaInstrument = (symbol: string): string | null => {
-  const clean = symbol.replace(/\.(NS|BO|NSE|BSE)$/i, '');
-  if (isGlobalOrIndexSymbol(clean)) return null;
-  const isBse = /\.BSE$/i.test(symbol) || /\.BO$/i.test(symbol);
-  const exchange = isBse ? 'BSE' : 'NSE';
-  return `${exchange}:${clean}`;
-};
-
-const toFyersSymbol = (symbol: string): string | null => {
-  const clean = symbol.replace(/\.(NS|BO|NSE|BSE)$/i, '');
-  if (isGlobalOrIndexSymbol(clean)) return null;
-  const isBse = /\.BSE$/i.test(symbol) || /\.BO$/i.test(symbol);
-  const exchange = isBse ? 'BSE' : 'NSE';
-  return `${exchange}:${clean}-EQ`;
-};
-
-const parseFyersLtp = (payload: any, fyersSymbol: string): number | null => {
-  if (!payload) return null;
-  if (payload.s === 'ok') {
-    const d = payload.d;
-    if (Array.isArray(d)) {
-      const row = d.find((x: any) => x?.n === fyersSymbol) ?? d[0];
-      const lp = row?.v?.lp ?? row?.v?.ltp ?? row?.v?.last_price ?? row?.v?.lastPrice;
-      if (typeof lp === 'number' && lp > 0) return lp;
-    }
-  }
-  const lp = payload?.lp ?? payload?.ltp ?? payload?.last_price ?? payload?.data?.lp;
-  if (typeof lp === 'number' && lp > 0) return lp;
-  return null;
-};
-
-const fetchBrokerPrice = async (symbol: string): Promise<PriceData | null> => {
-  const { userId, dataSource, broker, sessionToken } = getBrokerPreference();
-  if (!userId || !sessionToken || dataSource !== 'broker') return null;
-  const baseUrl = resolveBaseUrl();
-  const headers = { 'x-broker-session': sessionToken };
-
-  if (broker === 'fyers') {
-    const fyersSymbol = toFyersSymbol(symbol);
-    if (!fyersSymbol) return null;
-    const url = `${baseUrl}/api/broker/fyers/quotes?userId=${encodeURIComponent(userId)}&symbols=${encodeURIComponent(fyersSymbol)}`;
-    const r = await fetch(url, { method: 'GET', headers });
-    if (!r.ok) return null;
-    const data = await r.json().catch(() => null);
-    const ltp = parseFyersLtp(data, fyersSymbol);
-    if (typeof ltp !== 'number' || ltp <= 0) return null;
-
-    // Fetch 52-week data separately if we are using Fyers
-    let high52, low52;
-    try {
-      const cleanSym = symbol.replace(/\.(NS|BO|NSE|BSE)$/i, '');
-      const nseUrl = `${baseUrl}/api/nse/highlow`;
-      const nseRes = await fetch(nseUrl);
-      if (nseRes.ok) {
-        const nseData = await nseRes.json();
-        if (nseData[cleanSym]) {
-          high52 = nseData[cleanSym].high52;
-          low52 = nseData[cleanSym].low52;
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to fetch 52-week high/low for Fyers fallback', e);
-    }
-
-    return { price: Number(ltp.toFixed(2)), change: 0, high52, low52 };
-  }
-
-  const instrument = toZerodhaInstrument(symbol);
-  if (!instrument) return null;
-  const url = `${baseUrl}/api/broker/zerodha/ltp?userId=${encodeURIComponent(userId)}&instrument=${encodeURIComponent(instrument)}`;
-  const r = await fetch(url, { method: 'GET', headers });
-  if (!r.ok) return null;
-  const data = await r.json().catch(() => null);
-  const key = data?.data ? Object.keys(data.data)[0] : null;
-  const ltp = key ? data.data[key]?.last_price : null;
-  if (typeof ltp !== 'number' || ltp <= 0) return null;
-
-  // Fetch 52-week data separately if we are using Zerodha
-  let high52, low52;
-  try {
-    const cleanSym = symbol.replace(/\.(NS|BO|NSE|BSE)$/i, '');
-    const nseUrl = `${baseUrl}/api/nse/highlow`;
-    const nseRes = await fetch(nseUrl);
-    if (nseRes.ok) {
-      const nseData = await nseRes.json();
-      if (nseData[cleanSym]) {
-        high52 = nseData[cleanSym].high52;
-        low52 = nseData[cleanSym].low52;
-      }
-    }
-  } catch (e) {
-    console.warn('Failed to fetch 52-week high/low for Zerodha fallback', e);
-  }
-
-  return { price: Number(ltp.toFixed(2)), change: 0, high52, low52 };
-};
+// Removed broker fetching completely
 
 // Check if a symbol is a global index or futures symbol (e.g. ^DJI, ^NSEI, YM=F)
 // These must NOT be converted via toEODHDSymbols — send directly to proxy
@@ -716,71 +609,8 @@ const toEODHDSymbols = (symbol: string): string[] => {
 
 // Main function to fetch stock prices using local proxy server
 export const fetchMultipleStockPrices = async (symbols: string[]): Promise<Record<string, PriceData>> => {
-  const { userId, dataSource, broker } = getBrokerPreference();
   const results: Record<string, PriceData> = {};
   
-  if (userId && dataSource === 'broker' && broker === 'fyers' && symbols.length > 0) {
-    const baseUrl = resolveBaseUrl();
-    const validSymbols = symbols.map(s => ({ original: s, fyers: toFyersSymbol(s) })).filter(s => s.fyers);
-    
-    // We will batch Fyers requests in chunks of 10 to prevent any single invalid symbol from failing a massive batch
-    // and to ensure we don't hit URL length or undocumented API limits.
-    const fyersBatchSize = 10;
-    
-    // Fetch 52-week data from our custom NSE proxy endpoint for all Nifty 500 stocks
-    let nseHighLowData: Record<string, { high52: number, low52: number }> = {};
-    try {
-      const nseUrl = `${baseUrl}/api/nse/highlow`;
-      const nseRes = await fetch(nseUrl);
-      if (nseRes.ok) {
-        nseHighLowData = await nseRes.json();
-      }
-    } catch (e) {
-      console.warn('Failed to fetch NSE high/low data', e);
-    }
-    
-    for (let i = 0; i < validSymbols.length; i += fyersBatchSize) {
-      const batch = validSymbols.slice(i, i + fyersBatchSize);
-      const fyersSymbolsStr = batch.map(s => s.fyers).join(',');
-      
-      try {
-        const url = `${baseUrl}/api/broker/fyers/quotes?userId=${encodeURIComponent(userId)}&symbols=${encodeURIComponent(fyersSymbolsStr)}`;
-        const r = await fetch(url, { method: 'GET' });
-        
-        if (r.ok) {
-          const data = await r.json().catch(() => null);
-          if (data && data.d && Array.isArray(data.d)) {
-            data.d.forEach((item: any) => {
-              if (item.v && item.v.lp) {
-                const fSymbol = item.n; 
-                const original = batch.find(s => s.fyers === fSymbol)?.original;
-                if (original) {
-                  // Attach 52-week high/low from NSE cache if available
-                  const cleanSym = original.replace(/\.NS$/, '');
-                  const hl = nseHighLowData[cleanSym];
-                  
-                  results[original] = { 
-                    price: Number(item.v.lp.toFixed(2)), 
-                    change: item.v.chp || 0,
-                    high52: hl?.high52,
-                    low52: hl?.low52
-                  };
-                }
-              }
-            });
-          }
-        }
-      } catch (e) {
-        console.warn('Failed to fetch batch from Fyers', e);
-      }
-    }
-    
-    // If we are in Fyers broker mode, we never want to fallback to Yahoo/EODHD for massive batch requests
-    // because firing 50+ individual requests will instantly trigger 429 Too Many Requests rate limits.
-    return results;
-  }
-
-  // Fallback: fetch individually (only if NOT in broker mode)
   await Promise.allSettled(
     symbols.map(async (symbol) => {
       const data = await fetchStockPrice(symbol);
@@ -796,9 +626,6 @@ export const fetchMultipleStockPrices = async (symbols: string[]): Promise<Recor
 export const fetchStockPrice = async (symbol: string): Promise<PriceData | null> => {
   try {
     const baseUrl = resolveBaseUrl();
-
-    const brokerPrice = await fetchBrokerPrice(symbol);
-    if (brokerPrice) return brokerPrice;
 
     // For global indices / futures, send the symbol directly to the proxy (URL-encoded)
     if (isGlobalOrIndexSymbol(symbol)) {
