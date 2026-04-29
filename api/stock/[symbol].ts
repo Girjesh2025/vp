@@ -36,6 +36,8 @@ export default async function handler(req: any, res: any) {
       low: result.regularMarketDayLow,
       volume: result.regularMarketVolume,
       previousClose: result.previousClose,
+      high52: result.fiftyTwoWeekHigh,
+      low52: result.fiftyTwoWeekLow,
       source: 'Yahoo Finance'
     };
   };
@@ -107,6 +109,8 @@ export default async function handler(req: any, res: any) {
       low: Math.round(base * (1 - Math.random() * v) * 100) / 100,
       volume: Math.floor(Math.random() * 1000000) + 10000,
       previousClose: base,
+      high52: Math.round(base * 1.5 * 100) / 100,
+      low52: Math.round(base * 0.5 * 100) / 100,
       source: 'Mock Data'
     };
   };
