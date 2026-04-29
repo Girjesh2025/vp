@@ -177,36 +177,23 @@ function formatSymbolForAPI(symbol, apiSource) {
 // Fetch from Yahoo Finance (Free, no API key needed)
 async function fetchFromYahoo(symbol) {
   const formattedSymbol = formatSymbolForAPI(symbol, API_SOURCES.YAHOO);
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${formattedSymbol}`;
-  
   console.log(`Fetching ${symbol} from Yahoo Finance...`);
   
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-    }
-  });
+  const quote = await YahooFinance.quote(formattedSymbol);
   
-  if (!response.ok) {
-    throw new Error(`Yahoo Finance responded with status: ${response.status}`);
+  if (!quote) {
+    throw new Error('Invalid or empty response from Yahoo Finance');
   }
-  
-  const data = await response.json();
-  const result = data.chart?.result?.[0];
-  
-  if (!result || !result.meta) {
-    throw new Error('Invalid data from Yahoo Finance');
-  }
-  
+
   return {
-    close: result.meta.regularMarketPrice || result.meta.previousClose,
-    open: result.meta.regularMarketOpen,
-    high: result.meta.regularMarketDayHigh,
-    low: result.meta.regularMarketDayLow,
-    volume: result.meta.regularMarketVolume,
-    previousClose: result.meta.previousClose,
-    high52: result.meta.fiftyTwoWeekHigh,
-    low52: result.meta.fiftyTwoWeekLow,
+    close: quote.regularMarketPrice || quote.regularMarketPreviousClose,
+    open: quote.regularMarketOpen,
+    high: quote.regularMarketDayHigh,
+    low: quote.regularMarketDayLow,
+    volume: quote.regularMarketVolume,
+    previousClose: quote.regularMarketPreviousClose,
+    high52: quote.fiftyTwoWeekHigh,
+    low52: quote.fiftyTwoWeekLow,
     source: 'Yahoo Finance'
   };
 }

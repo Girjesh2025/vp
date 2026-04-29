@@ -1,3 +1,7 @@
+import { default as YahooFinance } from 'yahoo-finance2';
+
+const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+
 export default async function handler(req: any, res: any) {
   const symbol = (req.query?.symbol || req.query?.params?.symbol || '').toString();
   const source = (req.query?.source || '').toString().toLowerCase();
@@ -23,21 +27,17 @@ export default async function handler(req: any, res: any) {
 
   const fetchFromYahoo = async () => {
     const formatted = formatSymbolForAPI(symbol, 'yahoo');
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${formatted}`;
-    const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-    if (!r.ok) throw new Error(`yahoo ${r.status}`);
-    const data = await r.json();
-    const result = data?.chart?.result?.[0]?.meta;
-    if (!result) throw new Error('yahoo invalid');
+    const quote = await yahooFinance.quote(formatted);
+    if (!quote) throw new Error('yahoo invalid');
     return {
-      close: result.regularMarketPrice || result.previousClose,
-      open: result.regularMarketOpen,
-      high: result.regularMarketDayHigh,
-      low: result.regularMarketDayLow,
-      volume: result.regularMarketVolume,
-      previousClose: result.previousClose,
-      high52: result.fiftyTwoWeekHigh,
-      low52: result.fiftyTwoWeekLow,
+      close: quote.regularMarketPrice || quote.regularMarketPreviousClose,
+      open: quote.regularMarketOpen,
+      high: quote.regularMarketDayHigh,
+      low: quote.regularMarketDayLow,
+      volume: quote.regularMarketVolume,
+      previousClose: quote.regularMarketPreviousClose,
+      high52: quote.fiftyTwoWeekHigh,
+      low52: quote.fiftyTwoWeekLow,
       source: 'Yahoo Finance'
     };
   };
