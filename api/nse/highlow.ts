@@ -1,6 +1,16 @@
 import { NseIndia } from 'stock-nse-india';
+import yahooFinance from 'yahoo-finance2';
 
 const nseIndia = new NseIndia();
+
+const FALLBACK_SYMBOLS = [
+  'ADANIENT', 'ADANIPORTS', 'APOLLOHOSP', 'ASIANPAINT', 'AXISBANK', 'BAJAJ-AUTO', 'BAJFINANCE', 'BAJAJFINSV', 'BPCL', 'BHARTIARTL',
+  'BRITANNIA', 'CIPLA', 'COALINDIA', 'DIVISLAB', 'DRREDDY', 'EICHERMOT', 'GRASIM', 'HCLTECH', 'HDFCBANK', 'HDFCLIFE',
+  'HEROMOTOCO', 'HINDALCO', 'HINDUNILVR', 'ICICIBANK', 'ITC', 'INDUSINDBK', 'INFY', 'JSWSTEEL', 'KOTAKBANK', 'LTIM',
+  'LT', 'M&M', 'MARUTI', 'NTPC', 'NESTLEIND', 'ONGC', 'POWERGRID', 'RELIANCE', 'SBILIFE', 'SBIN',
+  'SUNPHARMA', 'TCS', 'TATACONSUM', 'TATAMOTORS', 'TATASTEEL', 'TECHM', 'TITAN', 'ULTRACEMCO', 'UPL', 'WIPRO',
+  'PNB', 'AUBANK', 'BANKBARODA', 'FEDERALBNK', 'IDFCFIRSTB', 'BANDHANBNK'
+];
 
 export default async function handler(req: any, res: any) {
   // CORS Headers
@@ -35,7 +45,28 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json(result);
   } catch (error: any) {
-    console.error("Error fetching NSE high/low:", error.message);
-    return res.status(500).json({ error: "Failed to fetch NSE market data" });
+    console.error("Error fetching NSE high/low from NSE India, falling back to Yahoo:", error.message);
+    
+    try {
+      const querySymbols = FALLBACK_SYMBOLS.map(s => `${s}.NS`);
+      const quotes = await yahooFinance.quote(querySymbols);
+      
+      const result: Record<string, any> = {};
+      const quoteArray = Array.isArray(quotes) ? quotes : [quotes];
+      quoteArray.forEach((q: any) => {
+        const sym = q.symbol.replace('.NS', '');
+        result[sym] = {
+          symbol: sym,
+          high52: q.fiftyTwoWeekHigh,
+          low52: q.fiftyTwoWeekLow,
+          price: q.regularMarketPrice,
+          pChange: q.regularMarketChangePercent
+        };
+      });
+      return res.status(200).json(result);
+    } catch (yahooError: any) {
+      console.error("Error fetching fallback Yahoo data:", yahooError.message);
+      return res.status(500).json({ error: "Failed to fetch market data from all sources" });
+    }
   }
 }
