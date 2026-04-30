@@ -4,8 +4,8 @@ const fetch = require('node-fetch');
 const https = require('https');
 const zlib = require('zlib');
 const crypto = require('crypto');
-const { default: YahooFinance } = require('yahoo-finance2');
-const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+const YahooFinanceLib = require('yahoo-finance2').default;
+const yahooFinance = new YahooFinanceLib({ suppressNotices: ['yahooSurvey'] });
 require('dotenv').config();
 const { fyersModel } = require('fyers-api-v3');
 
@@ -283,7 +283,63 @@ function generateMockData(symbol) {
 // Main endpoint with fallback system
 app.get('/api/stock/:symbol', async (req, res) => {
   const { symbol } = req.params;
+  const isHistorical = req.query.historical === 'true' || req.query.range || req.query.interval;
+  const range = req.query.range || '6mo';
+  const interval = req.query.interval || '1d';
   
+  if (isHistorical) {
+    try {
+      const queryOptions = { period1: '2020-01-01' }; // A safe long-term period
+      
+      const r = range;
+      const i = interval;
+
+      if (r === '1d') queryOptions.period1 = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      else if (r === '1wk') queryOptions.period1 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      else if (r === '1mo') queryOptions.period1 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      else if (r === '3mo') queryOptions.period1 = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+      else if (r === '6mo') queryOptions.period1 = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
+      else if (r === '1y') queryOptions.period1 = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+      
+      const formatted = formatSymbolForAPI(symbol, API_SOURCES.YAHOO);
+      const chartData = await yahooFinance.chart(formatted, {
+        period1: queryOptions.period1,
+        interval: i
+      });
+      
+      const timestamps = chartData.quotes.map(q => Math.floor(new Date(q.date).getTime() / 1000));
+      const opens = chartData.quotes.map(q => q.open);
+      const highs = chartData.quotes.map(q => q.high);
+      const lows = chartData.quotes.map(q => q.low);
+      const closes = chartData.quotes.map(q => q.close);
+      const volumes = chartData.quotes.map(q => q.volume);
+      
+      return res.json({
+        chart: {
+          result: [
+            {
+              timestamp: timestamps,
+              indicators: {
+                quote: [
+                  { 
+                    open: opens,
+                    high: highs,
+                    low: lows,
+                    close: closes,
+                    volume: volumes
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      });
+    } catch (err) {
+      console.log(`❌ yahoo chart invalid for ${symbol}: ${err.message}`);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   // Define the order of API sources to try
   const apiSources = [
     fetchFromYahoo,
@@ -607,7 +663,6 @@ app.get('/api/nse/highlow', async (req, res) => {
     console.log('Falling back to Yahoo Finance for NSE high/low data...');
     
     try {
-      const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
       const FALLBACK_SYMBOLS = [
         'ADANIENT', 'ADANIPORTS', 'APOLLOHOSP', 'ASIANPAINT', 'AXISBANK', 'BAJAJ-AUTO', 'BAJFINANCE', 'BAJAJFINSV', 'BPCL', 'BHARTIARTL',
         'BRITANNIA', 'CIPLA', 'COALINDIA', 'DIVISLAB', 'DRREDDY', 'EICHERMOT', 'GRASIM', 'HCLTECH', 'HDFCBANK', 'HDFCLIFE',

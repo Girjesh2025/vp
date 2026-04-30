@@ -5,6 +5,11 @@ const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 export default async function handler(req: any, res: any) {
   const symbol = (req.query?.symbol || req.query?.params?.symbol || '').toString();
   const source = (req.query?.source || '').toString().toLowerCase();
+  const range = (req.query?.range || '').toString();
+  const interval = (req.query?.interval || '').toString();
+  const isHistorical = req.query?.historical === 'true' || !!range || !!interval;
+
+
   if (!symbol) {
     res.status(400).json({ error: 'Missing symbol' });
     return;
@@ -27,6 +32,59 @@ export default async function handler(req: any, res: any) {
 
   const fetchFromYahoo = async () => {
     const formatted = formatSymbolForAPI(symbol, 'yahoo');
+    
+    if (isHistorical) {
+      try {
+        const queryOptions: any = { period1: '2020-01-01' }; // A safe long-term period
+        
+        const r = range || '6mo';
+        const i = interval || '1d';
+
+        if (r === '1d') queryOptions.period1 = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        else if (r === '1wk') queryOptions.period1 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        else if (r === '1mo') queryOptions.period1 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        else if (r === '3mo') queryOptions.period1 = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+        else if (r === '6mo') queryOptions.period1 = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
+        else if (r === '1y') queryOptions.period1 = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+        
+        const chartData = await yahooFinance.chart(formatted, {
+          period1: queryOptions.period1,
+          interval: i as any
+        });
+        
+        // Format it exactly as Yahoo's raw API so the frontend parsing doesn't break
+        const timestamps = chartData.quotes.map(q => Math.floor(new Date(q.date).getTime() / 1000));
+        const opens = chartData.quotes.map(q => q.open);
+        const highs = chartData.quotes.map(q => q.high);
+        const lows = chartData.quotes.map(q => q.low);
+        const closes = chartData.quotes.map(q => q.close);
+        const volumes = chartData.quotes.map(q => q.volume);
+        
+        return {
+          chart: {
+            result: [
+              {
+                timestamp: timestamps,
+                indicators: {
+                  quote: [
+                    { 
+                      open: opens,
+                      high: highs,
+                      low: lows,
+                      close: closes,
+                      volume: volumes
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        };
+      } catch (err: any) {
+        throw new Error(`yahoo chart invalid: ${err.message}`);
+      }
+    }
+
     const quote = await yahooFinance.quote(formatted);
     if (!quote) throw new Error('yahoo invalid');
     return {

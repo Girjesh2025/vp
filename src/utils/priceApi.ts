@@ -197,7 +197,8 @@ export const fetchHistoricalPrices = async (symbol: string, days: number = 60): 
   // 1. Try our reliable backend proxy first
   try {
     const baseUrl = resolveBaseUrl();
-    const apiUrl = `${baseUrl}/api/historical/${encodeURIComponent(yahooSymbol)}?range=6mo&interval=1d`;
+    // We updated the /api/stock endpoint to handle historical data when ?historical=true
+    const apiUrl = `${baseUrl}/api/stock/${encodeURIComponent(yahooSymbol)}?historical=true&range=6mo&interval=1d`;
     
     const r = await fetch(apiUrl);
     if (r.ok) {
@@ -225,7 +226,7 @@ export const fetchHistoricalPrices = async (symbol: string, days: number = 60): 
     try {
       const queryPart = yahooUrl.includes('?') ? yahooUrl.substring(yahooUrl.indexOf('?')) : '';
       const targetUrl = p.name === 'vite-proxy' 
-        ? `${p.url}${yahooSymbol}${queryPart}` 
+        ? `${p.url}${yahooSymbol}${queryPart}&historical=true` 
         : `${p.url}${encodeURIComponent(yahooUrl)}`;
 
       const r = await fetch(targetUrl, { method: 'GET' });
@@ -304,7 +305,7 @@ export const fetchHistoricalOHLCV = async (
   // 1. Try our reliable backend proxy first
   try {
     const baseUrl = resolveBaseUrl();
-    const apiUrl = `${baseUrl}/api/historical/${encodeURIComponent(yahooSymbol)}?range=${encodeURIComponent(range)}&interval=${encodeURIComponent(interval)}`;
+    const apiUrl = `${baseUrl}/api/stock/${encodeURIComponent(yahooSymbol)}?range=${encodeURIComponent(range)}&interval=${encodeURIComponent(interval)}`;
     
     const r = await fetch(apiUrl);
     if (r.ok) {
@@ -426,7 +427,7 @@ export const fetchIntradayPrices = async (symbol: string): Promise<number[]> => 
   // Use our backend proxy if available to avoid CORS/Cloudflare issues
   try {
     const baseUrl = resolveBaseUrl();
-    const apiUrl = `${baseUrl}/api/historical/${encodeURIComponent(yahooSymbol)}?range=1d&interval=5m`;
+    const apiUrl = `${baseUrl}/api/stock/${encodeURIComponent(yahooSymbol)}?historical=true&range=1d&interval=5m`;
     
     const r = await fetch(apiUrl);
     if (r.ok) {
@@ -495,7 +496,7 @@ export const fetchMonthlySectorPerformance = async (symbol: string): Promise<num
   try {
     const baseUrl = resolveBaseUrl();
     // Use the backend proxy (which avoids all CORS / Cloudflare blocking from external proxies)
-    const apiUrl = `${baseUrl}/api/historical/${encodeURIComponent(yahooSymbol)}?range=18mo&interval=1mo`;
+    const apiUrl = `${baseUrl}/api/stock/${encodeURIComponent(yahooSymbol)}?historical=true&range=18mo&interval=1mo`;
     
     const r = await fetch(apiUrl);
     if (!r.ok) throw new Error(`Proxy historical API failed with status ${r.status}`);
@@ -562,7 +563,7 @@ export const fetchSectorRawMonthly = async (symbol: string): Promise<SectorRawMo
     const baseUrl = resolveBaseUrl();
 
     // 1️⃣ Try daily data first — gives full coverage even for newer index symbols
-    const dailyUrl = `${baseUrl}/api/historical/${encodeURIComponent(yahooSymbol)}?range=3y&interval=1d`;
+    const dailyUrl = `${baseUrl}/api/stock/${encodeURIComponent(yahooSymbol)}?historical=true&range=3y&interval=1d`;
     const rd = await fetch(dailyUrl);
     if (rd.ok) {
       const data = await rd.json();
@@ -579,7 +580,7 @@ export const fetchSectorRawMonthly = async (symbol: string): Promise<SectorRawMo
     }
 
     // 2️⃣ Fallback to monthly interval (faster, but shorter history for some symbols)
-    const moUrl = `${baseUrl}/api/historical/${encodeURIComponent(yahooSymbol)}?range=3y&interval=1mo`;
+    const moUrl = `${baseUrl}/api/stock/${encodeURIComponent(yahooSymbol)}?historical=true&range=3y&interval=1mo`;
     const rm = await fetch(moUrl);
     if (rm.ok) {
       const data = await rm.json();
