@@ -257,7 +257,7 @@ const OptionsPlayer = () => {
   const [niftyData, setNiftyData] = useState<{price: number, pts: number, percent: number} | null>(null);
   const [liveMovers, setLiveMovers] = useState<any[]>([]);
 
-  const [chartConfig, setChartConfig] = useState({ symbol: "NSE:NIFTY", interval: "D" });
+  const [chartConfig, setChartConfig] = useState({ symbol: "NSE:NIFTY50", interval: "D" });
   const [chartMode, setChartMode] = useState<'internal' | 'tradingview'>('internal');
   const [internalSeries, setInternalSeries] = useState<Array<{ i: number; price: number }>>([]);
   const [internalLoading, setInternalLoading] = useState(false);
@@ -270,7 +270,7 @@ const OptionsPlayer = () => {
 
   const indexYahooMap = useMemo<Record<string, string>>(() => {
     return {
-      'NSE:NIFTY': '^NSEI',
+      'NSE:NIFTY50': '^NSEI',
       'NSE:BANKNIFTY': '^NSEBANK',
       'NSE:FINNIFTY': '^NSEI',
       'NSE:MIDCPNIFTY': '^NSEI',
@@ -321,6 +321,9 @@ const OptionsPlayer = () => {
     container.innerHTML = '';
 
     const initWidget = () => {
+      const container = document.getElementById(containerId);
+      if (container) container.innerHTML = '';
+
       if (typeof window !== 'undefined' && (window as any).TradingView) {
         new (window as any).TradingView.widget({
           "autosize": true,
@@ -452,7 +455,7 @@ const OptionsPlayer = () => {
         
         // 3. Fetch Real Options Chain for PCR
         try {
-          const indexSymbol = chartConfig.symbol.replace('NSE:', '').replace('BSE:', '').replace('1!', '');
+          const indexSymbol = chartConfig.symbol.replace('NSE:', '').replace('BSE:', '').replace('1!', '').replace('50', ''); // clean NIFTY50 -> NIFTY
           const optionsResponse = await fetch(`/api/options/${indexSymbol}`);
           if (optionsResponse.ok) {
             const optionsData = await optionsResponse.json();
@@ -521,7 +524,7 @@ const OptionsPlayer = () => {
             value={chartConfig.symbol}
             onChange={(e) => setChartConfig(prev => ({ ...prev, symbol: e.target.value }))}
           >
-            <option value="NSE:NIFTY">Index: NIFTY 50</option>
+            <option value="NSE:NIFTY50">Index: NIFTY 50</option>
             <option value="BSE:SENSEX">Index: SENSEX</option>
             <option value="NSE:BANKNIFTY">Index: BANK NIFTY</option>
             <option value="NSE:MIDCPNIFTY">Index: MIDCAP NIFTY</option>
