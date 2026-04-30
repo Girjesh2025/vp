@@ -179,7 +179,7 @@ async function fetchFromYahoo(symbol) {
   const formattedSymbol = formatSymbolForAPI(symbol, API_SOURCES.YAHOO);
   console.log(`Fetching ${symbol} from Yahoo Finance...`);
   
-  const quote = await YahooFinance.quote(formattedSymbol);
+  const quote = await yahooFinance.quote(formattedSymbol);
   
   if (!quote) {
     throw new Error('Invalid or empty response from Yahoo Finance');
@@ -267,14 +267,15 @@ async function fetchFromEODHD(symbol) {
 function generateMockData(symbol) {
   const basePrice = Math.random() * 1000 + 100; // Random price between 100-1100
   const variation = 0.05; // 5% variation
+  const closePrice = Math.round(basePrice * (1 + (Math.random() - 0.5) * variation) * 100) / 100;
   
   return {
-    close: Math.round(basePrice * 100) / 100,
+    close: closePrice,
     open: Math.round(basePrice * (1 + (Math.random() - 0.5) * variation) * 100) / 100,
-    high: Math.round(basePrice * (1 + Math.random() * variation) * 100) / 100,
-    low: Math.round(basePrice * (1 - Math.random() * variation) * 100) / 100,
+    high: Math.round(Math.max(basePrice, closePrice) * (1 + Math.random() * variation) * 100) / 100,
+    low: Math.round(Math.min(basePrice, closePrice) * (1 - Math.random() * variation) * 100) / 100,
     volume: Math.floor(Math.random() * 1000000) + 10000,
-    previousClose: basePrice,
+    previousClose: Math.round(basePrice * 100) / 100,
     source: 'Mock Data',
     timestamp: new Date().toISOString()
   };

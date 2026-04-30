@@ -160,13 +160,14 @@ export default async function handler(req: any, res: any) {
   const generateMock = () => {
     const base = Math.random() * 1000 + 100;
     const v = 0.05;
+    const closePrice = Math.round(base * (1 + (Math.random() - 0.5) * v) * 100) / 100;
     return {
-      close: Math.round(base * 100) / 100,
+      close: closePrice,
       open: Math.round(base * (1 + (Math.random() - 0.5) * v) * 100) / 100,
-      high: Math.round(base * (1 + Math.random() * v) * 100) / 100,
-      low: Math.round(base * (1 - Math.random() * v) * 100) / 100,
+      high: Math.round(Math.max(base, closePrice) * (1 + Math.random() * v) * 100) / 100,
+      low: Math.round(Math.min(base, closePrice) * (1 - Math.random() * v) * 100) / 100,
       volume: Math.floor(Math.random() * 1000000) + 10000,
-      previousClose: base,
+      previousClose: Math.round(base * 100) / 100,
       high52: Math.round(base * 1.5 * 100) / 100,
       low52: Math.round(base * 0.5 * 100) / 100,
       source: 'Mock Data'
