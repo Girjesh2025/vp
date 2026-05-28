@@ -47,6 +47,11 @@ app.use(express.json());
 const fundamentalsCache = new Map();
 const FUNDAMENTALS_CACHE_TTL = 12 * 60 * 60 * 1000; // 12 hours
 
+const chartCache = new Map();
+const CHART_CACHE_STALE_TTL_MS = 10 * 60 * 1000;
+const CHART_CACHE_INTRADAY_TTL_MS = 60 * 1000;
+const CHART_CACHE_LONG_TTL_MS = 6 * 60 * 60 * 1000;
+
 const brokerSessions = new Map();
 const pendingBrokerLogins = new Map();
 const BROKER_FLOW_TTL_MS = 10 * 60 * 1000;
@@ -281,6 +286,123 @@ function generateMockData(symbol) {
   };
 }
 
+function getChartCacheTtlMs(interval) {
+  if (typeof interval !== 'string') return CHART_CACHE_LONG_TTL_MS;
+  if (interval.endsWith('m') || interval.endsWith('h')) return CHART_CACHE_INTRADAY_TTL_MS;
+  return CHART_CACHE_LONG_TTL_MS;
+}
+
+function resolvePeriod1FromRange(range) {
+  const now = Date.now();
+  if (range === '1d') return new Date(now - 1 * 24 * 60 * 60 * 1000);
+  if (range === '5d') return new Date(now - 5 * 24 * 60 * 60 * 1000);
+  if (range === '1wk') return new Date(now - 7 * 24 * 60 * 60 * 1000);
+  if (range === '1mo') return new Date(now - 30 * 24 * 60 * 60 * 1000);
+  if (range === '3mo') return new Date(now - 90 * 24 * 60 * 60 * 1000);
+  if (range === '6mo') return new Date(now - 180 * 24 * 60 * 60 * 1000);
+  if (range === '1y') return new Date(now - 365 * 24 * 60 * 60 * 1000);
+  if (range === '18mo') return new Date(now - 18 * 30 * 24 * 60 * 60 * 1000);
+  if (range === '2y') return new Date(now - 2 * 365 * 24 * 60 * 60 * 1000);
+  if (range === '3y') return new Date(now - 3 * 365 * 24 * 60 * 60 * 1000);
+  return new Date(now - 365 * 24 * 60 * 60 * 1000);
+}
+
+function intervalToSeconds(interval) {
+  if (typeof interval !== 'string') return 86400;
+  if (interval.endsWith('m')) return parseInt(interval, 10) * 60;
+  if (interval.endsWith('h')) return parseInt(interval, 10) * 60 * 60;
+  if (interval === '1d') return 86400;
+  if (interval === '1wk') return 7 * 86400;
+  if (interval === '1mo') return 30 * 86400;
+  return 86400;
+}
+
+function syntheticChartPoints(range, interval) {
+  if (range === '1d' && interval === '5m') return 75;
+  if (range === '1y' && interval === '1wk') return 52;
+  if (range === '18mo' && interval === '1mo') return 18;
+  if (range === '3y' && interval === '1d') return 756;
+  if (range === '3y' && interval === '1mo') return 36;
+  if (range === '1y' && interval === '1d') return 252;
+  return 120;
+}
+
+function createSeededRng(seedStr) {
+  let h = 2166136261;
+  for (let i = 0; i < seedStr.length; i++) {
+    h ^= seedStr.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return () => {
+    h += 0x6D2B79F5;
+    let t = h;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function generateSyntheticChart(symbol, range, interval) {
+  const points = syntheticChartPoints(range, interval);
+  const step = intervalToSeconds(interval);
+  const endTs = Math.floor(Date.now() / 1000);
+  const startTs = endTs - (points - 1) * step;
+  const rng = createSeededRng(`${symbol}|${range}|${interval}|${Math.floor(Date.now() / (5 * 60 * 1000))}`);
+
+  const mock = generateMockData(symbol);
+  const base = typeof mock.close === 'number' && mock.close > 0 ? mock.close : 100;
+  const drift = (rng() - 0.5) * 0.8;
+
+  const timestamp = [];
+  const open = [];
+  const high = [];
+  const low = [];
+  const close = [];
+  const volume = [];
+
+  let price = base;
+  for (let i = 0; i < points; i++) {
+    const ts = startTs + i * step;
+    const noise = (rng() - 0.5) * 0.6;
+    const stepMovePct = drift / points + noise / Math.max(20, points);
+    const o = price;
+    const c = Math.max(1, price * (1 + stepMovePct / 100));
+    const hi = Math.max(o, c) * (1 + rng() * 0.002);
+    const lo = Math.min(o, c) * (1 - rng() * 0.002);
+
+    timestamp.push(ts);
+    open.push(Number(o.toFixed(2)));
+    high.push(Number(hi.toFixed(2)));
+    low.push(Number(lo.toFixed(2)));
+    close.push(Number(c.toFixed(2)));
+    volume.push(Math.floor(50000 + rng() * 950000));
+
+    price = c;
+  }
+
+  return {
+    chart: {
+      result: [
+        {
+          timestamp,
+          indicators: {
+            quote: [
+              {
+                open,
+                high,
+                low,
+                close,
+                volume,
+              },
+            ],
+          },
+        },
+      ],
+      error: null,
+    },
+  };
+}
+
 // Main endpoint with fallback system
 app.get('/api/stock/:symbol', async (req, res) => {
   const { symbol } = req.params;
@@ -289,55 +411,74 @@ app.get('/api/stock/:symbol', async (req, res) => {
   const interval = req.query.interval || '1d';
   
   if (isHistorical) {
-    try {
-      const queryOptions = { period1: '2020-01-01' }; // A safe long-term period
-      
-      const r = range;
-      const i = interval;
+    const formatted = formatSymbolForAPI(symbol, API_SOURCES.YAHOO);
+    const cacheKey = `${formatted}|${range}|${interval}`;
+    const now = Date.now();
+    const cached = chartCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) {
+      res.setHeader('X-Cache', 'hit');
+      return res.json(cached.data);
+    }
 
-      if (r === '1d') queryOptions.period1 = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      else if (r === '1wk') queryOptions.period1 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-      else if (r === '1mo') queryOptions.period1 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      else if (r === '3mo') queryOptions.period1 = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-      else if (r === '6mo') queryOptions.period1 = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
-      else if (r === '1y') queryOptions.period1 = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
-      
-      const formatted = formatSymbolForAPI(symbol, API_SOURCES.YAHOO);
-      const chartData = await yahooFinance.chart(formatted, {
-        period1: queryOptions.period1,
-        interval: i
-      });
-      
+    try {
+      const period1 = resolvePeriod1FromRange(range);
+      const chartData = await yahooFinance.chart(formatted, { period1, interval });
+
       const timestamps = chartData.quotes.map(q => Math.floor(new Date(q.date).getTime() / 1000));
       const opens = chartData.quotes.map(q => q.open);
       const highs = chartData.quotes.map(q => q.high);
       const lows = chartData.quotes.map(q => q.low);
       const closes = chartData.quotes.map(q => q.close);
       const volumes = chartData.quotes.map(q => q.volume);
-      
-      return res.json({
+
+      const payload = {
         chart: {
           result: [
             {
               timestamp: timestamps,
               indicators: {
                 quote: [
-                  { 
+                  {
                     open: opens,
                     high: highs,
                     low: lows,
                     close: closes,
-                    volume: volumes
-                  }
-                ]
-              }
-            }
-          ]
-        }
+                    volume: volumes,
+                  },
+                ],
+              },
+            },
+          ],
+          error: null,
+        },
+      };
+
+      const ttl = getChartCacheTtlMs(interval);
+      chartCache.set(cacheKey, {
+        data: payload,
+        expiresAt: now + ttl,
+        staleExpiresAt: now + ttl + CHART_CACHE_STALE_TTL_MS,
       });
+
+      res.setHeader('X-Cache', 'miss');
+      return res.json(payload);
     } catch (err) {
-      console.log(`❌ yahoo chart invalid for ${symbol}: ${err.message}`);
-      return res.status(500).json({ error: err.message });
+      const stale = chartCache.get(cacheKey);
+      if (stale && stale.staleExpiresAt > now) {
+        res.setHeader('X-Cache', 'stale');
+        return res.json(stale.data);
+      }
+
+      const payload = generateSyntheticChart(formatted, range, interval);
+      const ttl = getChartCacheTtlMs(interval);
+      chartCache.set(cacheKey, {
+        data: payload,
+        expiresAt: now + ttl,
+        staleExpiresAt: now + ttl + CHART_CACHE_STALE_TTL_MS,
+      });
+
+      res.setHeader('X-Cache', 'synthetic');
+      return res.json(payload);
     }
   }
 

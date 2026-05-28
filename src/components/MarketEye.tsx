@@ -312,11 +312,35 @@ const MarketEye = () => {
               // Base Signal % is absolute change (fallback)
               const signalPct = absChange;
               
-              // Intraday Boost (R.Fac): Relative Strength vs Benchmark
+              // --- Advanced Wall Street R.Fac (Relative Factor) Calculation ---
               const isBank = BANK_NIFTY_SYMBOLS.includes(symbol);
               const benchmarkChange = isBank ? baselineBankNiftyChange : baselineNiftyChange;
-              const relativeMomentum = stockChange - benchmarkChange;
-              const rFac = Math.abs(relativeMomentum);
+              
+              // 1. Pure Alpha (Relative Momentum)
+              const pureAlpha = stockChange - benchmarkChange;
+              
+              // 2. Structural Trend Context (Distance to 52W High/Low)
+              let trendMultiplier = 1.0;
+              if (data.high52 && data.low52 && data.price) {
+                const range = data.high52 - data.low52;
+                if (range > 0) {
+                  // Position in 52w range (0 to 1). 1 = at 52w high, 0 = at 52w low
+                  const posInRange = (data.price - data.low52) / range;
+                  // If in top 20% of 52w range, boost bullish RS. If in bottom 20%, boost bearish RS.
+                  if (pureAlpha > 0 && posInRange > 0.8) trendMultiplier = 1.3;
+                  else if (pureAlpha < 0 && posInRange < 0.2) trendMultiplier = 1.3;
+                  // Mean reversion penalty (choppy middle of the range)
+                  else if (posInRange > 0.4 && posInRange < 0.6) trendMultiplier = 0.85;
+                }
+              }
+              
+              // 3. Institutional Volatility Smoothing
+              // High volatility absolute moves are discounted slightly to find true underlying strength vs noise
+              const volSmoothing = Math.max(1, Math.sqrt(Math.abs(stockChange) / 2));
+              
+              const rFacRaw = (pureAlpha * trendMultiplier) / volSmoothing;
+              const rFac = Math.abs(rFacRaw);
+              const isBull = rFacRaw >= 0;
               
               // Generate a realistic recent breakout time today (between 9:15 AM and 3:30 PM)
               const now = new Date();
@@ -345,7 +369,7 @@ const MarketEye = () => {
                 signalPct,
                 time,
                 rFac,
-                isBull: relativeMomentum >= 0,
+                isBull,
                 high52: data.high52,
                 low52: data.low52
               });
@@ -660,28 +684,63 @@ const MarketEye = () => {
     .sort((a, b) => (a.price / (a.low52 || 1)) - (b.price / (b.low52 || 1)))
     .slice(0, 5);
   
-  // Breakout Beacon prefers high absolute percentage change
+  // Breakout Gems: Advanced Wall Street Volume/Surge Proxy Scanner
   const breakouts = [...marketData]
-    .filter(d => d.signalPct > 0.5)
     .filter(d => d.symbol.toLowerCase().includes(breakoutSearch.toLowerCase()))
     .filter(d => {
-      if (breakoutFilter === 'Bullish') return d.change >= 0;
-      if (breakoutFilter === 'Bearish') return d.change < 0;
-      return true; // 'All Signals'
+      const absMove = Math.abs(d.change);
+
+      // Always show big movers (>= 2% move) in Breakout Gems
+      const isBigMover = absMove >= 2;
+
+      // 1. Must have a meaningful absolute move today (noise filter)
+      const passesNoiseFilter = absMove >= 0.75;
+
+      // 2. The recent intraday surge/drop (signalPct) must be significant compared to its daily move
+      // This identifies stocks that are actively breaking out *right now* rather than just gapped up in the morning
+      const isActiveBreakout = d.signalPct >= (absMove * 0.4);
+
+      // 3. For non-big-movers, require alignment with the relative strength trend
+      const isAlignedWithTrend = (d.change > 0 && d.isBull) || (d.change < 0 && !d.isBull);
+
+      const meetsCriteria = isBigMover || (passesNoiseFilter && isActiveBreakout && isAlignedWithTrend);
+
+      if (breakoutFilter === 'Bullish') return meetsCriteria && d.change > 0;
+      if (breakoutFilter === 'Bearish') return meetsCriteria && d.change < 0;
+      return meetsCriteria; // 'All Signals'
     })
-    .sort((a, b) => b.signalPct - a.signalPct)
+    .sort((a, b) => {
+      const aBig = Math.abs(a.change) >= 2 ? 1 : 0;
+      const bBig = Math.abs(b.change) >= 2 ? 1 : 0;
+      if (aBig !== bBig) return bBig - aBig;
+
+      const absDiff = Math.abs(b.change) - Math.abs(a.change);
+      if (absDiff !== 0) return absDiff;
+
+      return b.signalPct - a.signalPct;
+    })
     .slice(0, 8);
     
-  // Intraday Boost prefers high Relative Strength (R.Fac) compared to the index
   const boosters = [...marketData]
-    .filter(d => d.rFac > 0.25) // Must be outperforming/underperforming the index by at least 0.25%
+    .map((d) => {
+      const absMove = Math.abs(d.change || 0);
+      const rs = d.rFac || 0;
+      const activeMove = d.signalPct || 0;
+      const aligned = (d.change > 0 && d.isBull) || (d.change < 0 && !d.isBull);
+      const score = (rs * 1.6 + activeMove * 1.2 + absMove * 0.8) * (aligned ? 1.15 : 0.85);
+      return { ...d, hunterScore: score };
+    })
     .filter(d => d.symbol.toLowerCase().includes(boostSearch.toLowerCase()))
     .filter(d => {
-      if (boostFilter === 'Bullish') return d.isBull; // Outperforming
-      if (boostFilter === 'Bearish') return !d.isBull; // Underperforming
-      return true; // 'All Signals'
+      const absMove = Math.abs(d.change);
+      const qualifies = (d.rFac >= 0.35 && absMove >= 0.4) || absMove >= 2 || d.signalPct >= 1.2;
+      if (!qualifies) return false;
+
+      if (boostFilter === 'Bullish') return d.change > 0;
+      if (boostFilter === 'Bearish') return d.change < 0;
+      return true;
     })
-    .sort((a, b) => b.rFac - a.rFac)
+    .sort((a, b) => b.hunterScore - a.hunterScore)
     .slice(0, 8);
 
   const filteredWeeklyBreakouts = weeklyBreakouts
@@ -1220,7 +1279,7 @@ const MarketEye = () => {
                   </div>
                   <div>
                     <div className="flex items-center gap-3">
-                      <h2 className="text-lg sm:text-2xl font-black text-white tracking-widest uppercase drop-shadow-[0_2px_10px_rgba(255,255,255,0.2)]">BREAKOUT BEACON</h2>
+                      <h2 className="text-lg sm:text-2xl font-black text-white tracking-widest uppercase drop-shadow-[0_2px_10px_rgba(255,255,255,0.2)]">BREAKOUT GEMS</h2>
                       <Flame className="w-5 h-5 text-orange-500 fill-orange-500 drop-shadow-[0_0_12px_rgba(249,115,22,0.8)] animate-pulse" />
                     </div>
                     <div className="flex items-center gap-3 mt-2 text-xs sm:text-sm font-bold text-slate-400">
@@ -1282,12 +1341,18 @@ const MarketEye = () => {
                     <div className="w-[60px] sm:w-[80px] text-right shrink-0">Time</div>
                   </div>
                   <div className="flex flex-col divide-y divide-slate-800/50 pb-2">
-                    {breakouts.map((b) => (
-                      <div 
-                        key={`breakout-${b.symbol}`} 
-                        onClick={() => handleRowClick(b.symbol)}
-                        className="flex items-center px-4 py-3 hover:bg-slate-800/30 transition-all duration-200 group/row cursor-pointer relative"
-                      >
+                    {breakouts.length === 0 ? (
+                      <div className="px-4 py-8 text-center text-sm text-slate-400 font-semibold flex flex-col items-center justify-center gap-2">
+                        <Flame className="w-8 h-8 text-slate-600 mb-1" />
+                        No Breakout Gems signals currently active.
+                      </div>
+                    ) : (
+                      breakouts.map((b) => (
+                        <div 
+                          key={`breakout-${b.symbol}`} 
+                          onClick={() => handleRowClick(b.symbol)}
+                          className="flex items-center px-4 py-3 hover:bg-slate-800/30 transition-all duration-200 group/row cursor-pointer relative"
+                        >
                         <div className={`absolute left-0 top-0 bottom-0 w-1 opacity-0 group-hover/row:opacity-100 transition-opacity ${b.isBull ? 'bg-emerald-500' : 'bg-red-500'}`} />
                         
                         <div className="w-[65px] sm:w-[80px] shrink-0">
@@ -1321,7 +1386,7 @@ const MarketEye = () => {
                           {b.time}
                         </div>
                       </div>
-                    ))}
+                    )))}
                   </div>
                 </div>
               </div>
@@ -1343,7 +1408,7 @@ const MarketEye = () => {
                   </div>
                   <div>
                     <div className="flex items-center gap-3">
-                      <h2 className="text-lg sm:text-2xl font-black text-white tracking-widest uppercase drop-shadow-[0_2px_10px_rgba(255,255,255,0.2)]">INTRADAY BOOST</h2>
+                      <h2 className="text-lg sm:text-2xl font-black text-white tracking-widest uppercase drop-shadow-[0_2px_10px_rgba(255,255,255,0.2)]">INTRADAY HUNTER</h2>
                       <Droplets className="w-5 h-5 text-blue-400 fill-blue-400 drop-shadow-[0_0_12px_rgba(96,165,250,0.8)] animate-pulse" />
                     </div>
                     <div className="flex items-center gap-3 mt-2 text-xs sm:text-sm font-bold text-slate-400">
@@ -1404,12 +1469,18 @@ const MarketEye = () => {
                     <div className="w-[65px] sm:w-[80px] text-right shrink-0">Trend</div>
                   </div>
                   <div className="flex flex-col divide-y divide-slate-800/50 pb-2">
-                    {boosters.map((b) => (
-                      <div 
-                        key={`boost-${b.symbol}`} 
-                        onClick={() => handleRowClick(b.symbol)}
-                        className="flex items-center px-4 py-3 hover:bg-slate-800/30 transition-all duration-200 group/row cursor-pointer relative"
-                      >
+                    {boosters.length === 0 ? (
+                      <div className="px-4 py-8 text-center text-sm text-slate-400 font-semibold flex flex-col items-center justify-center gap-2">
+                        <Droplets className="w-8 h-8 text-slate-600 mb-1" />
+                        No Intraday Hunter signals currently active.
+                      </div>
+                    ) : (
+                      boosters.map((b) => (
+                        <div 
+                          key={`boost-${b.symbol}`} 
+                          onClick={() => handleRowClick(b.symbol)}
+                          className="flex items-center px-4 py-3 hover:bg-slate-800/30 transition-all duration-200 group/row cursor-pointer relative"
+                        >
                         <div className={`absolute left-0 top-0 bottom-0 w-1 opacity-0 group-hover/row:opacity-100 transition-opacity ${b.isBull ? 'bg-emerald-500' : 'bg-red-500'}`} />
                         
                         <div className="flex-1 min-w-0 flex items-center gap-3 sm:gap-4 pr-2">
@@ -1439,7 +1510,7 @@ const MarketEye = () => {
                           </span>
                         </div>
                       </div>
-                    ))}
+                    )))}
                   </div>
                 </div>
               </div>

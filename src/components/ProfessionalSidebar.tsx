@@ -46,7 +46,7 @@ const ProfessionalSidebar: React.FC<ProfessionalSidebarProps> = ({
   const menuItems: MenuItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'portfolio', label: 'Portfolio', icon: Briefcase, badge: portfolioCount > 0 ? portfolioCount : undefined },
-    { id: 'tools', label: 'Market Pulse', icon: Globe },
+    { id: 'tools', label: 'Sector Look', icon: Globe },
     { id: 'market-eye', label: 'Market Eye', icon: Eye },
     { id: 'swing-player', label: 'Swing Player', icon: Activity },
     { id: 'guru-scan', label: 'Guru Scan', icon: Target, isNew: true },

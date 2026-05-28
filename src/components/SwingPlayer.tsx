@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, PlayCircle, Search, BookmarkPlus, ExternalLink, BrainCircuit, Zap, Crosshair, TrendingUp, BarChart2, ShieldAlert } from 'lucide-react';
+import { Search, BrainCircuit, Zap, Crosshair } from 'lucide-react';
 import { fetchHistoricalPrices, fetchMultipleStockPrices, isMarketOpen } from '../utils/priceApi';
 import StockLogo from './StockLogo';
 
@@ -246,14 +246,10 @@ const SwingPlayer = () => {
               const now = new Date();
               const dateStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 
-              // Generate premium feature mock data dynamically based on price action
               const isBull = (data.change || 0) >= 0;
               const absChange = Math.abs(data.change || 0);
-              const aiScore = Math.min(99, Math.max(45, Math.floor(60 + (absChange * 5) + (Math.random() * 15))));
-              const volMultiplier = Number((1 + (absChange * 0.5) + (Math.random() * 1.5)).toFixed(1));
               const currentPrice = data.price || 0;
               
-              // Smart Auto-Setup (Risk/Reward 1:2 or 1:3 approx based on volatility)
               const atrApprox = currentPrice * (absChange < 1 ? 0.02 : 0.05);
               const stopLoss = isBull ? currentPrice - (atrApprox * 1.5) : currentPrice + (atrApprox * 1.5);
               const target = isBull ? currentPrice + (atrApprox * 3) : currentPrice - (atrApprox * 3);
@@ -264,8 +260,6 @@ const SwingPlayer = () => {
                 price: currentPrice,
                 date: dateStr,
                 isBull,
-                aiScore,
-                volMultiplier,
                 stopLoss,
                 target
               });
@@ -278,25 +272,15 @@ const SwingPlayer = () => {
 
       if (!isMounted) return;
 
-      // 2. Perform Real Technical Analysis on Top Movers to find Breakouts
-      // We take the top 25 gainers and top 25 losers to avoid fetching 70+ historical datasets
-      const sortedByChange = [...results].sort((a, b) => b.change - a.change);
-      const candidates = [
-        ...sortedByChange.slice(0, 25), // Top gainers for Breakouts
-        ...sortedByChange.slice(-25)    // Top losers for Reversals
-      ];
-
-      // Fetch historical data in batches for candidates
-      // Timeout the entire historical fetching process after 15 seconds to prevent endless loading
+      // Fetch historical data in batches for scanned symbols
       const historicalPromise = async () => {
-        for (let i = 0; i < candidates.length; i += 10) {
+        for (let i = 0; i < results.length; i += 10) {
           if (!isMounted) return;
-          const batch = candidates.slice(i, i + 10);
+          const batch = results.slice(i, i + 10);
           await Promise.allSettled(
             batch.map(async (candidate) => {
               try {
-                // Short timeout per symbol for historical data
-                const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000));
+                const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500));
                 const hist = await Promise.race([
                   fetchHistoricalPrices(`${candidate.symbol}.NS`, 60),
                   timeoutPromise
@@ -306,49 +290,62 @@ const SwingPlayer = () => {
                   const currentPrice = candidate.price;
                   const last50 = hist.slice(-50);
                   const last10 = hist.slice(-10);
+                  const last15 = hist.slice(-15);
                   
-                  // Calculate 50 EMA (Exponential Moving Average)
                   const k = 2 / (50 + 1);
                   let ema50 = last50[0];
                   for (let j = 1; j < last50.length; j++) {
                     ema50 = (last50[j] * k) + (ema50 * (1 - k));
                   }
                   
-                  // Calculate 10 Day High and Low
                   const high10 = Math.max(...last10);
                   const low10 = Math.min(...last10);
                   const high50 = Math.max(...last50);
+                  const ema10 = last10.reduce((a, b) => a + b, 0) / 10;
                   
-                  // Determine Breakouts
-                  const is10DayBreakout = currentPrice >= (high10 * 0.99);
+                  const is10DayBreakout = currentPrice >= (high10 * 0.995);
                   
-                  // 50 Day BO: Price is currently above 50 EMA, AND it crossed it recently (within 10 days) OR breaking 50 day high
                   candidate.bo50 = (currentPrice > ema50 && low10 <= ema50) || (currentPrice >= (high50 * 0.99)); 
                   
-                  // 10 Day BO: Price is breaking the 10 day high, BUT we explicitly exclude 50-day breakouts so the lists don't look identical
                   candidate.bo10 = is10DayBreakout && !candidate.bo50;
 
-                  // Reversal: Price was dropping but is bouncing back (price > ema10 but < ema50)
-                  const ema10 = last10.reduce((a, b) => a + b, 0) / 10;
-                  candidate.reversal = currentPrice > ema10 && currentPrice < ema50 && candidate.isBull;
+                  const tenDayTrend = ((last10[last10.length - 1] - last10[0]) / last10[0]) * 100;
+                  candidate.reversal = tenDayTrend < -2 && currentPrice > ema10 && currentPrice < ema50 && candidate.isBull;
 
-                  // Channel BO: Breaking out of a tight 10-day range
                   const rangePct = ((high10 - low10) / low10) * 100;
-                  const isTightRange = rangePct < 4; // less than 4% range over 10 days
-                  candidate.channel = isTightRange && is10DayBreakout;
+                  const isTightRange = rangePct < 3.5;
+                  candidate.channel = isTightRange && is10DayBreakout && !candidate.bo10 && !candidate.bo50;
+
+                  const returns = [];
+                  for (let j = 1; j < last15.length; j++) {
+                    const prev = last15[j - 1];
+                    const curr = last15[j];
+                    if (prev > 0 && curr > 0) returns.push(Math.abs((curr - prev) / prev) * 100);
+                  }
+                  const atrPct = returns.length ? (returns.reduce((a, b) => a + b, 0) / returns.length) : 2;
+                  const volMultiplier = Number(Math.min(5, Math.max(1, atrPct / 1.2)).toFixed(1));
+
+                  const strength = Math.max(0, Math.min(40, Math.abs(candidate.change) * 8));
+                  const trend = currentPrice > ema50 ? 25 : 10;
+                  const setup = (candidate.bo50 ? 20 : 0) + (candidate.bo10 ? 15 : 0) + (candidate.channel ? 15 : 0) + (candidate.reversal ? 20 : 0);
+                  const aiScore = Math.min(99, Math.max(45, Math.round(45 + strength + trend + setup - Math.min(15, volMultiplier * 2))));
+
+                  const risk = currentPrice * Math.max(0.018, (atrPct * 1.2) / 100);
+                  candidate.stopLoss = candidate.isBull ? currentPrice - (risk * 1.4) : currentPrice + (risk * 1.4);
+                  candidate.target = candidate.isBull ? currentPrice + (risk * 2.8) : currentPrice - (risk * 2.8);
+                  candidate.aiScore = aiScore;
+                  candidate.volMultiplier = volMultiplier;
                 }
               } catch (e) {
-                // Silently fail and use fallback logic later
               }
             })
           );
         }
       };
 
-      // Wait max 15 seconds for the historical processing, then just show what we have
       await Promise.race([
         historicalPromise(),
-        new Promise(resolve => setTimeout(resolve, 15000))
+        new Promise(resolve => setTimeout(resolve, 18000))
       ]);
       
       if (isMounted) {
@@ -361,11 +358,10 @@ const SwingPlayer = () => {
     return () => { isMounted = false; };
   }, []);
 
-  // Categorize based on actual historical data if available, otherwise fallback with distinct logic
-  const bo10 = [...marketData].filter(d => d.bo10 !== undefined ? d.bo10 : (d.isBull && d.change > 1 && d.change <= 3)).sort((a,b) => b.change - a.change).slice(0, 8);
-  const bo50 = [...marketData].filter(d => d.bo50 !== undefined ? d.bo50 : (d.isBull && d.change > 3)).sort((a,b) => b.change - a.change).slice(0, 8); 
-  const reversal = [...marketData].filter(d => d.reversal !== undefined ? d.reversal : (!d.isBull && d.change > -2)).sort((a,b) => a.change - b.change).slice(0, 8); 
-  const channel = [...marketData].filter(d => d.channel !== undefined ? d.channel : d.isBull).sort((a,b) => b.change - a.change).slice(5, 13);
+  const bo10 = [...marketData].filter(d => d.bo10).sort((a,b) => b.change - a.change).slice(0, 8);
+  const bo50 = [...marketData].filter(d => d.bo50).sort((a,b) => b.change - a.change).slice(0, 8); 
+  const reversal = [...marketData].filter(d => d.reversal).sort((a,b) => a.change - b.change).slice(0, 8); 
+  const channel = [...marketData].filter(d => d.channel).sort((a,b) => b.change - a.change).slice(0, 8);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 w-full min-w-0">
