@@ -29,6 +29,7 @@ const isAllowedOrigin = (origin) => {
     if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
     if (hostname.endsWith('.vercel.app')) return true;
     if (hostname.endsWith('.onrender.com')) return true;
+    if (hostname === 'paperprofit.in' || hostname.endsWith('.paperprofit.in')) return true;
   } catch (e) {
     return false;
   }
