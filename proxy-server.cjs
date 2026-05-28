@@ -28,6 +28,7 @@ const isAllowedOrigin = (origin) => {
     const hostname = parsed.hostname.toLowerCase();
     if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
     if (hostname.endsWith('.vercel.app')) return true;
+    if (hostname.endsWith('.onrender.com')) return true;
   } catch (e) {
     return false;
   }
@@ -712,6 +713,24 @@ async function fetchYahooFundamentals(symbol) {
       growth: growth * 100
     };
   } catch (e) {
+    try {
+      const q = await yahooFinance.quote(formattedSymbol);
+      if (q && (typeof q.regularMarketPrice === 'number' || typeof q.regularMarketPreviousClose === 'number')) {
+        return {
+          symbol: symbol.replace(/\.NS$/, '').replace(/\.BO$/, ''),
+          price: q.regularMarketPrice || q.regularMarketPreviousClose || 0,
+          change: (q.regularMarketChangePercent || 0) * 100,
+          high52: q.fiftyTwoWeekHigh || 0,
+          low52: q.fiftyTwoWeekLow || 0,
+          peRatio: q.trailingPE || q.forwardPE || 0,
+          pegRatio: q.pegRatio || 0,
+          roe: 0,
+          debtToEquity: 0,
+          growth: 0
+        };
+      }
+    } catch (_) {}
+
     console.error(`Error fetching fundamentals for ${symbol}:`, e.message);
     return null;
   }
@@ -740,8 +759,8 @@ app.post('/api/fundamentals/batch', async (req, res) => {
 
     if (symbolsToFetch.length > 0) {
       console.log(`Fetching missing fundamentals for ${symbolsToFetch.length} symbols from Yahoo...`);
-      // Process in batches of 5 to avoid rate limits
-      const batchSize = 5;
+      // Process in smaller batches to avoid rate limits (Render/Vercel frequently hit Yahoo throttling)
+      const batchSize = 3;
       for (let i = 0; i < symbolsToFetch.length; i += batchSize) {
         const batch = symbolsToFetch.slice(i, i + batchSize);
         const promises = batch.map(async (sym) => {
@@ -753,7 +772,7 @@ app.post('/api/fundamentals/batch', async (req, res) => {
         });
         await Promise.all(promises);
         if (i + batchSize < symbolsToFetch.length) {
-          await new Promise(r => setTimeout(r, 200)); // Rate limit delay
+          await new Promise(r => setTimeout(r, 600)); // Rate limit delay
         }
       }
     }
