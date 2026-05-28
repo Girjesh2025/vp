@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Lightbulb, Info, Target, Zap, TrendingUp, TrendingDown, ShieldAlert, BarChart3, Activity } from 'lucide-react';
+import { Zap, BarChart3, Activity, Target } from 'lucide-react';
+import { getApiBaseUrl } from '../utils/priceApi';
 
 type IndexName = 'NIFTY 50' | 'BANK NIFTY' | 'FINNIFTY' | 'SENSEX';
 
@@ -12,82 +13,24 @@ interface StrikeData {
   isATM?: boolean;
 }
 
-// Highly stylized, realistic mock option chain data
-const INDEX_DATA: Record<IndexName, StrikeData[]> = {
-  'NIFTY 50': [
-    { strike: 24700, bulls: 80000,   bears: 550000,  bullsChange: -12000, bearsChange: 45000 },
-    { strike: 24650, bulls: 20000,   bears: 90000,   bullsChange: 2000,   bearsChange: 15000 },
-    { strike: 24600, bulls: 120000,  bears: 850000,  bullsChange: 5000,   bearsChange: 120000 },
-    { strike: 24550, bulls: 45000,   bears: 210000,  bullsChange: 15000,  bearsChange: 35000 },
-    { strike: 24500, bulls: 480000,  bears: 1450000, bullsChange: 120000, bearsChange: 250000 }, // Huge Resistance
-    { strike: 24450, bulls: 220000,  bears: 410000,  bullsChange: 80000,  bearsChange: 45000 },
-    { strike: 24400, bulls: 920000,  bears: 830000,  bullsChange: 350000, bearsChange: -50000, isATM: true }, // Current ATM
-    { strike: 24350, bulls: 430000,  bears: 210000,  bullsChange: 140000, bearsChange: -15000 },
-    { strike: 24300, bulls: 1450000, bears: 520000,  bullsChange: 420000, bearsChange: -80000 }, // Big Support
-    { strike: 24250, bulls: 410000,  bears: 180000,  bullsChange: 80000,  bearsChange: -5000 },
-    { strike: 24200, bulls: 1250000, bears: 380000,  bullsChange: 150000, bearsChange: -25000 },
-    { strike: 24150, bulls: 380000,  bears: 150000,  bullsChange: 45000,  bearsChange: 10000 },
-    { strike: 24100, bulls: 950000,  bears: 250000,  bullsChange: 90000,  bearsChange: 5000 },
-    { strike: 24050, bulls: 280000,  bears: 80000,   bullsChange: 10000,  bearsChange: 2000 },
-    { strike: 24000, bulls: 1850000, bears: 250000,  bullsChange: 210000, bearsChange: -15000 }, // Max Support
-  ],
-  'BANK NIFTY': [
-    { strike: 52500, bulls: 150000, bears: 850000, bullsChange: 10000, bearsChange: 95000 },
-    { strike: 52400, bulls: 40000,  bears: 230000, bullsChange: 5000,  bearsChange: 20000 },
-    { strike: 52300, bulls: 60000,  bears: 150000, bullsChange: -2000, bearsChange: 12000 },
-    { strike: 52200, bulls: 180000, bears: 420000, bullsChange: 15000, bearsChange: 45000 },
-    { strike: 52100, bulls: 95000,  bears: 210000, bullsChange: 8000,  bearsChange: 18000 },
-    { strike: 52000, bulls: 1200000,bears: 2150000,bullsChange: 180000,bearsChange: 450000 }, // Huge Resistance
-    { strike: 51900, bulls: 420000, bears: 810000, bullsChange: 95000, bearsChange: -120000, isATM: true }, // Current ATM
-    { strike: 51800, bulls: 810000, bears: 300000, bullsChange: 250000,bearsChange: -45000 },
-    { strike: 51700, bulls: 310000, bears: 120000, bullsChange: 80000, bearsChange: -15000 },
-    { strike: 51600, bulls: 800000, bears: 250000, bullsChange: 120000,bearsChange: -5000 },
-    { strike: 51500, bulls: 1950000,bears: 450000, bullsChange: 550000,bearsChange: -85000 }, // Huge Support
-    { strike: 51400, bulls: 450000, bears: 180000, bullsChange: 45000, bearsChange: -2000 },
-    { strike: 51300, bulls: 620000, bears: 210000, bullsChange: 60000, bearsChange: 5000 },
-    { strike: 51200, bulls: 310000, bears: 80000,  bullsChange: 15000, bearsChange: 1000 },
-    { strike: 51100, bulls: 850000, bears: 120000, bullsChange: 90000, bearsChange: 4000 },
-  ],
-  'FINNIFTY': [
-    { strike: 23400, bulls: 25000,  bears: 280000, bullsChange: -5000, bearsChange: 45000 },
-    { strike: 23350, bulls: 12000,  bears: 90000,  bullsChange: 1000,  bearsChange: 12000 },
-    { strike: 23300, bulls: 80000,  bears: 350000, bullsChange: 5000,  bearsChange: 85000 },
-    { strike: 23250, bulls: 35000,  bears: 125000, bullsChange: 8000,  bearsChange: 25000 },
-    { strike: 23200, bulls: 150000, bears: 620000, bullsChange: 25000, bearsChange: 140000 }, // Resistance
-    { strike: 23150, bulls: 55000,  bears: 180000, bullsChange: 12000, bearsChange: 45000 },
-    { strike: 23100, bulls: 420000, bears: 450000, bullsChange: 150000,bearsChange: -20000, isATM: true }, // Current ATM
-    { strike: 23050, bulls: 220000, bears: 140000, bullsChange: 85000, bearsChange: -15000 },
-    { strike: 23000, bulls: 820000, bears: 480000, bullsChange: 280000,bearsChange: -55000 }, // Strong Support
-    { strike: 22950, bulls: 180000, bears: 110000, bullsChange: 45000, bearsChange: -5000 },
-    { strike: 22900, bulls: 350000, bears: 180000, bullsChange: 95000, bearsChange: -2000 },
-    { strike: 22850, bulls: 95000,  bears: 45000,  bullsChange: 15000, bearsChange: -1000 },
-    { strike: 22800, bulls: 420000, bears: 120000, bullsChange: 80000, bearsChange: 5000 },
-    { strike: 22750, bulls: 75000,  bears: 25000,  bullsChange: 5000,  bearsChange: 1000 },
-    { strike: 22700, bulls: 280000, bears: 80000,  bullsChange: 25000, bearsChange: 2000 },
-  ],
-  'SENSEX': [
-    { strike: 81500, bulls: 150000, bears: 950000, bullsChange: 25000, bearsChange: 150000 },
-    { strike: 81400, bulls: 45000,  bears: 320000, bullsChange: 5000,  bearsChange: 60000 },
-    { strike: 81300, bulls: 85000,  bears: 510000, bullsChange: 15000, bearsChange: 95000 },
-    { strike: 81200, bulls: 120000, bears: 750000, bullsChange: 25000, bearsChange: 180000 },
-    { strike: 81100, bulls: 180000, bears: 480000, bullsChange: 45000, bearsChange: 80000 },
-    { strike: 81000, bulls: 850000, bears: 1850000,bullsChange: 120000,bearsChange: 420000 }, // Heavy Resistance
-    { strike: 80900, bulls: 410000, bears: 850000, bullsChange: 90000, bearsChange: -50000, isATM: true }, // ATM
-    { strike: 80800, bulls: 720000, bears: 280000, bullsChange: 250000,bearsChange: -45000 },
-    { strike: 80700, bulls: 450000, bears: 310000, bullsChange: 120000,bearsChange: -15000 },
-    { strike: 80600, bulls: 580000, bears: 250000, bullsChange: 150000,bearsChange: -20000 },
-    { strike: 80500, bulls: 1450000,bears: 650000, bullsChange: 480000,bearsChange: -90000 }, // Strong Support
-    { strike: 80400, bulls: 310000, bears: 120000, bullsChange: 60000, bearsChange: -5000 },
-    { strike: 80300, bulls: 480000, bears: 180000, bullsChange: 85000, bearsChange: 15000 },
-    { strike: 80200, bulls: 250000, bears: 80000,  bullsChange: 35000, bearsChange: 5000 },
-    { strike: 80100, bulls: 850000, bears: 210000, bullsChange: 120000,bearsChange: 25000 },
-  ]
+const INDEXES: IndexName[] = ['NIFTY 50', 'BANK NIFTY', 'FINNIFTY', 'SENSEX'];
+
+const INDEX_API_SYMBOL: Record<IndexName, string | null> = {
+  'NIFTY 50': 'NIFTY',
+  'BANK NIFTY': 'BANKNIFTY',
+  'FINNIFTY': 'FINNIFTY',
+  'SENSEX': null,
 };
 
 const OptionsWatch: React.FC = () => {
   const [selectedIndex, setSelectedIndex] = useState<IndexName>('NIFTY 50');
   const [timeProgress, setTimeProgress] = useState<number>(100);
   const [maxTimeProgress, setMaxTimeProgress] = useState<number>(100);
+  const [chainData, setChainData] = useState<StrikeData[]>([]);
+  const [underlyingValue, setUnderlyingValue] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
 
   // Set the slider to reflect the current real-world time between 9:15 AM and 3:30 PM
   useEffect(() => {
@@ -144,39 +87,162 @@ const OptionsWatch: React.FC = () => {
   };
 
   // --- Data Crunching ---
-  const rawData = INDEX_DATA[selectedIndex];
-  
-  // Scale the data chronologically based on the time slider (20% to 100%)
-  const timeScale = 0.2 + (timeProgress / 100) * 0.8; 
-  
-  const currentData = useMemo(() => {
-    return rawData.map(d => {
-       // Deterministic pseudo-randomness for organic growth variance (+/- 6% and 10%)
-       const vBulls = 1 + (((d.strike % 7) - 3) * 0.02); 
-       const vBears = 1 + (((d.strike % 11) - 5) * 0.02);
-       return {
-         ...d,
-         bulls: Math.floor(d.bulls * timeScale * vBulls),
-         bears: Math.floor(d.bears * timeScale * vBears),
-         bullsChange: Math.floor(d.bullsChange * (timeProgress / 100)),
-         bearsChange: Math.floor(d.bearsChange * (timeProgress / 100)),
-       };
-    });
-  }, [rawData, timeProgress, timeScale]);
-  
-  // Keep the horizontal chart scale stable while scrubbing by finding max from raw fixed data
-  const maxBarValue = Math.max(...rawData.map(d => Math.max(d.bulls, d.bears)));
+  type OptionLeg = {
+    openInterest?: number;
+    changeinOpenInterest?: number;
+  };
 
-  const totalBulls = currentData.reduce((acc, curr) => acc + curr.bulls, 0);
-  const totalBears = currentData.reduce((acc, curr) => acc + curr.bears, 0);
-  const totalBullsChg = currentData.reduce((acc, curr) => acc + curr.bullsChange, 0);
-  const totalBearsChg = currentData.reduce((acc, curr) => acc + curr.bearsChange, 0);
+  type OptionChainRow = {
+    strikePrice?: number;
+    CE?: OptionLeg;
+    PE?: OptionLeg;
+  };
 
-  const atmStrikeData = currentData.find(d => d.isATM) || currentData[Math.floor(currentData.length / 2)];
-  
-  // Find strongest zones dynamically as they shift over time
-  const maxSupport = currentData.reduce((prev, curr) => (curr.bulls > prev.bulls ? curr : prev));
-  const maxResistance = currentData.reduce((prev, curr) => (curr.bears > prev.bears ? curr : prev));
+  type OptionChainResponse = {
+    filtered?: {
+      underlyingValue?: number;
+      data?: OptionChainRow[];
+    };
+    records?: {
+      underlyingValue?: number;
+      data?: OptionChainRow[];
+    };
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchChain = async () => {
+      const apiSymbol = INDEX_API_SYMBOL[selectedIndex];
+      if (!apiSymbol) {
+        setChainData([]);
+        setUnderlyingValue(null);
+        setLoadError('Options chain not available for this index.');
+        setIsLoading(false);
+        setLastUpdatedAt(null);
+        return;
+      }
+
+      setIsLoading(true);
+      setLoadError(null);
+
+      try {
+        const apiBase = getApiBaseUrl();
+        const res = await fetch(`${apiBase}/api/options/${encodeURIComponent(apiSymbol)}`);
+        if (!res.ok) {
+          throw new Error(`API error ${res.status}`);
+        }
+
+        const payload = (await res.json()) as OptionChainResponse;
+        const rows = payload.filtered?.data ?? payload.records?.data ?? [];
+        const underlying = payload.filtered?.underlyingValue ?? payload.records?.underlyingValue ?? null;
+
+        const normalized = rows
+          .map((row): StrikeData | null => {
+            if (typeof row.strikePrice !== 'number') return null;
+            const peOi = row.PE?.openInterest ?? 0;
+            const ceOi = row.CE?.openInterest ?? 0;
+            const peChg = row.PE?.changeinOpenInterest ?? 0;
+            const ceChg = row.CE?.changeinOpenInterest ?? 0;
+
+            return {
+              strike: row.strikePrice,
+              bulls: Number.isFinite(peOi) ? peOi : 0,
+              bears: Number.isFinite(ceOi) ? ceOi : 0,
+              bullsChange: Number.isFinite(peChg) ? peChg : 0,
+              bearsChange: Number.isFinite(ceChg) ? ceChg : 0,
+            };
+          })
+          .filter((v): v is StrikeData => v !== null && Number.isFinite(v.strike));
+
+        const sortedAsc = normalized.slice().sort((a, b) => a.strike - b.strike);
+        if (!sortedAsc.length) {
+          throw new Error('No option chain rows returned');
+        }
+
+        let atmIndex = Math.floor(sortedAsc.length / 2);
+        if (typeof underlying === 'number' && Number.isFinite(underlying)) {
+          let bestIndex = atmIndex;
+          let bestDist = Number.POSITIVE_INFINITY;
+          sortedAsc.forEach((r, i) => {
+            const dist = Math.abs(r.strike - underlying);
+            if (dist < bestDist) {
+              bestDist = dist;
+              bestIndex = i;
+            }
+          });
+          atmIndex = bestIndex;
+        }
+
+        const windowSize = 21;
+        const half = Math.floor(windowSize / 2);
+        let start = Math.max(0, atmIndex - half);
+        let end = Math.min(sortedAsc.length, start + windowSize);
+        start = Math.max(0, end - windowSize);
+
+        const window = sortedAsc.slice(start, end);
+        const atmStrike = sortedAsc[atmIndex]?.strike ?? window[Math.floor(window.length / 2)]?.strike ?? 0;
+        const finalRows = window
+          .map((r) => ({
+            ...r,
+            isATM: r.strike === atmStrike,
+          }))
+          .sort((a, b) => b.strike - a.strike);
+
+        if (cancelled) return;
+        setChainData(finalRows);
+        setUnderlyingValue(typeof underlying === 'number' && Number.isFinite(underlying) ? underlying : null);
+        setLastUpdatedAt(Date.now());
+      } catch (e) {
+        if (cancelled) return;
+        setChainData([]);
+        setUnderlyingValue(null);
+        setLoadError(e instanceof Error ? e.message : 'Failed to load');
+        setLastUpdatedAt(null);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+
+    fetchChain();
+    const intervalId = window.setInterval(fetchChain, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [selectedIndex]);
+
+  const currentData = chainData;
+
+  const emptyStrike: StrikeData = useMemo(
+    () => ({ strike: 0, bulls: 0, bears: 0, bullsChange: 0, bearsChange: 0 }),
+    []
+  );
+
+  const maxBarValue = useMemo(() => {
+    if (!currentData.length) return 0;
+    return currentData.reduce((max, d) => Math.max(max, d.bulls, d.bears), 0);
+  }, [currentData]);
+
+  const totalBulls = useMemo(() => currentData.reduce((acc, curr) => acc + curr.bulls, 0), [currentData]);
+  const totalBears = useMemo(() => currentData.reduce((acc, curr) => acc + curr.bears, 0), [currentData]);
+  const totalBullsChg = useMemo(() => currentData.reduce((acc, curr) => acc + curr.bullsChange, 0), [currentData]);
+  const totalBearsChg = useMemo(() => currentData.reduce((acc, curr) => acc + curr.bearsChange, 0), [currentData]);
+
+  const atmStrikeData = useMemo(() => {
+    if (!currentData.length) return emptyStrike;
+    return currentData.find((d) => d.isATM) ?? currentData[Math.floor(currentData.length / 2)] ?? emptyStrike;
+  }, [currentData, emptyStrike]);
+
+  const maxSupport = useMemo(() => {
+    if (!currentData.length) return emptyStrike;
+    return currentData.reduce((prev, curr) => (curr.bulls > prev.bulls ? curr : prev), currentData[0]);
+  }, [currentData, emptyStrike]);
+
+  const maxResistance = useMemo(() => {
+    if (!currentData.length) return emptyStrike;
+    return currentData.reduce((prev, curr) => (curr.bears > prev.bears ? curr : prev), currentData[0]);
+  }, [currentData, emptyStrike]);
   
   // --- Analytics Derivations ---
   const pcr = totalBears > 0 ? (totalBulls / totalBears).toFixed(2) : '0.00';
@@ -199,14 +265,16 @@ const OptionsWatch: React.FC = () => {
 
   // --- Visuals ---
   // Freeze maximum possible capacity for Net charts so vertical bars visibly grow instead of reshaping axes
-  const maxPossibleTotalBulls = rawData.reduce((acc, curr) => acc + curr.bulls, 0);
-  const maxPossibleTotalBears = rawData.reduce((acc, curr) => acc + curr.bears, 0);
-  const totalNet = Math.max(maxPossibleTotalBulls, maxPossibleTotalBears);
+  const totalNet = Math.max(totalBulls, totalBears);
 
   const yTicksNet = [1.0, 0.8, 0.6, 0.4, 0.2, 0].map(val => totalNet * val);
-  const bullPct = (totalBulls / (totalBulls + totalBears)) * 100;
+  const bullPct = totalBulls + totalBears > 0 ? (totalBulls / (totalBulls + totalBears)) * 100 : 50;
   const bearPct = 100 - bullPct;
   const times = ['9:15', '10:00', '11:00', '12:00', '13:00', '14:00', '15:30'];
+  const lastUpdatedLabel = useMemo(() => {
+    if (!lastUpdatedAt) return null;
+    return new Date(lastUpdatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  }, [lastUpdatedAt]);
 
   return (
     <div className="min-h-[calc(100vh-64px)] bg-[#111111] p-6 text-slate-300">
@@ -215,24 +283,29 @@ const OptionsWatch: React.FC = () => {
         {/* ── Top Navigation & Filters ─────────────────────────────────────── */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex gap-2">
-            {(Object.keys(INDEX_DATA) as IndexName[]).map(idx => (
+            {INDEXES.map((idx) => (
               <button
                 key={idx}
                 onClick={() => setSelectedIndex(idx)}
+                disabled={!INDEX_API_SYMBOL[idx]}
                 className={`px-5 py-2 rounded-lg text-xs font-bold transition-all duration-200 ${
                   selectedIndex === idx
                     ? 'bg-[#60a5fa]/20 text-[#60a5fa] border-2 border-[#60a5fa]/50 shadow-[0_0_12px_rgba(37,99,235,0.25)]'
                     : 'bg-[#1a1a1a] text-[#888] border-2 border-[#2a2a2a] hover:bg-[#222] hover:text-[#bbb]'
-                }`}
+                } ${INDEX_API_SYMBOL[idx] ? '' : 'opacity-40 cursor-not-allowed hover:bg-[#1a1a1a] hover:text-[#888]'}`}
               >
                 {idx}
               </button>
             ))}
           </div>
           <div className="flex items-center gap-2">
-             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+             <span
+               className={`w-2 h-2 rounded-full ${loadError ? 'bg-rose-500' : 'bg-emerald-500'} ${
+                 isLoading ? '' : 'animate-pulse'
+               }`}
+             />
              <div className="text-xs text-[#666] font-mono tracking-widest uppercase">
-                Live Data Connected
+                {isLoading ? 'Loading Live Data' : loadError ? 'Live Data Unavailable' : `Live Data • ${lastUpdatedLabel ?? ''}`}
              </div>
           </div>
         </div>
@@ -259,6 +332,12 @@ const OptionsWatch: React.FC = () => {
                  <div className="text-sky-400 font-mono font-bold text-sm tracking-wide">{atmStrikeData.strike}</div>
               </div>
               <div className="bg-black/20 border border-white/5 rounded-lg px-4 py-2 text-center shadow-inner">
+                 <div className="text-[9px] text-[#666] uppercase font-bold">Spot</div>
+                 <div className="text-slate-200 font-mono font-bold text-sm tracking-wide">
+                   {underlyingValue ? formatRaw(Math.round(underlyingValue)) : '--'}
+                 </div>
+              </div>
+              <div className="bg-black/20 border border-white/5 rounded-lg px-4 py-2 text-center shadow-inner">
                  <div className="text-[9px] text-[#666] uppercase font-bold">Today's OI Shift</div>
                  <div className="text-sm font-mono font-bold tracking-wide flex gap-2">
                     <span className={totalBullsChg > 0 ? 'text-emerald-400' : 'text-[#888]'}>{totalBullsChg > 0 ? '+' : ''}{formatNumber(totalBullsChg)} Puts</span>
@@ -280,13 +359,8 @@ const OptionsWatch: React.FC = () => {
                type="range" 
                min="0" max="100" 
                value={timeProgress}
-               onChange={(e) => {
-                 const val = Number(e.target.value);
-                 if (val <= maxTimeProgress) {
-                   setTimeProgress(val);
-                 }
-               }}
-               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30"
+               disabled
+               className="absolute inset-0 w-full h-full opacity-0 cursor-not-allowed z-30"
             />
 
             {/* Base Track */}
@@ -372,7 +446,17 @@ const OptionsWatch: React.FC = () => {
               <div className="absolute left-[calc(50%+24px)] top-0 bottom-6 w-px bg-gradient-to-b from-transparent via-[#444] to-transparent z-0"></div>
               
               <div className="w-full flex flex-col space-y-2.5 min-h-[400px]">
-                {currentData.map((row) => {
+                {isLoading ? (
+                  <div className="flex items-center justify-center min-h-[400px] text-sm text-[#777]">
+                    Loading option chain...
+                  </div>
+                ) : loadError ? (
+                  <div className="flex flex-col items-center justify-center min-h-[400px] text-sm text-[#777] gap-2 text-center px-6">
+                    <div className="text-slate-200 font-semibold">Options Watch data is unavailable</div>
+                    <div className="text-xs text-[#666] font-mono">{loadError}</div>
+                  </div>
+                ) : (
+                currentData.map((row) => {
                   const isMaxSupport = row.strike === maxSupport.strike;
                   const isMaxResist  = row.strike === maxResistance.strike;
 
@@ -395,7 +479,7 @@ const OptionsWatch: React.FC = () => {
                           {/* Inner bar representing total OI */}
                           <div 
                             className="bg-gradient-to-l from-rose-500 to-red-600 h-full flex items-center justify-start relative shadow-[0_0_15px_rgba(244,63,94,0.15)] opacity-90 rounded-l cursor-crosshair hover:opacity-100 transition-all border border-red-500/50 hover:border-red-400" 
-                            style={{ width: `${(row.bears / maxBarValue) * 100}%` }}
+                            style={{ width: `${maxBarValue > 0 ? (row.bears / maxBarValue) * 100 : 0}%` }}
                           >
                              {/* Change indicator inside or next to the bar */}
                              <span className="absolute -left-12 text-[#666] group-hover:text-rose-300 font-mono text-[8px] transition-colors whitespace-nowrap opacity-0 group-hover:opacity-100">
@@ -415,7 +499,7 @@ const OptionsWatch: React.FC = () => {
                         <div className="w-1/2 flex justify-start pl-1 h-full relative">
                           <div 
                             className="bg-gradient-to-r from-emerald-500 to-green-400 h-full flex items-center justify-end relative shadow-[0_0_15px_rgba(52,211,153,0.15)] opacity-90 rounded-r cursor-crosshair hover:opacity-100 transition-all border border-emerald-500/50 hover:border-emerald-300" 
-                            style={{ width: `${(row.bulls / maxBarValue) * 100}%` }}
+                            style={{ width: `${maxBarValue > 0 ? (row.bulls / maxBarValue) * 100 : 0}%` }}
                           >
                              {/* Change indicator */}
                              <span className="absolute -right-12 text-[#666] group-hover:text-emerald-300 font-mono text-[8px] transition-colors whitespace-nowrap opacity-0 group-hover:opacity-100">
@@ -433,7 +517,7 @@ const OptionsWatch: React.FC = () => {
                       </div>
                     </div>
                   );
-                })}
+                }))}
               </div>
 
               {/* X Axis labels */}
