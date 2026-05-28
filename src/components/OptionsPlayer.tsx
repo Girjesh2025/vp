@@ -350,16 +350,48 @@ const OptionsPlayer = () => {
       }
     };
 
-    if (!document.getElementById(scriptId)) {
-      const script = document.createElement('script');
-      script.id = scriptId;
-      script.src = 'https://s3.tradingview.com/tv.js';
-      script.async = true;
-      script.onload = initWidget;
-      document.body.appendChild(script);
-    } else {
-      initWidget();
-    }
+    let cancelled = false;
+
+    const ensureTradingViewLoaded = async () => {
+      if (typeof window !== 'undefined' && (window as any).TradingView) return;
+
+      const existing = document.getElementById(scriptId) as HTMLScriptElement | null;
+      if (existing) {
+        await new Promise<void>((resolve, reject) => {
+          const onLoad = () => resolve();
+          const onError = () => reject(new Error('TradingView script failed to load'));
+          existing.addEventListener('load', onLoad, { once: true });
+          existing.addEventListener('error', onError, { once: true });
+          setTimeout(() => {
+            if ((window as any).TradingView) resolve();
+          }, 50);
+        });
+        return;
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const script = document.createElement('script');
+        script.id = scriptId;
+        script.src = 'https://s3.tradingview.com/tv.js';
+        script.async = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('TradingView script failed to load'));
+        document.body.appendChild(script);
+      });
+    };
+
+    (async () => {
+      try {
+        await ensureTradingViewLoaded();
+        if (cancelled) return;
+        initWidget();
+      } catch (_) {
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [chartConfig, chartMode]);
 
   useEffect(() => {
