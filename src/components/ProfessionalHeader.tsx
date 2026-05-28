@@ -37,6 +37,7 @@ const ProfessionalHeader: React.FC<ProfessionalHeaderProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showResults, setShowResults] = useState(false);
+  const [marketOpen, setMarketOpen] = useState<boolean>(isMarketOpen());
   const searchRef = useRef<HTMLDivElement>(null);
 
   // Handle search input changes
@@ -81,6 +82,13 @@ const ProfessionalHeader: React.FC<ProfessionalHeaderProps> = ({
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
+  }, []);
+
+  useEffect(() => {
+    const update = () => setMarketOpen(isMarketOpen());
+    update();
+    const id = window.setInterval(update, 60 * 1000);
+    return () => window.clearInterval(id);
   }, []);
 
   return (
@@ -171,19 +179,19 @@ const ProfessionalHeader: React.FC<ProfessionalHeaderProps> = ({
             )}
 
             {/* Market Status */}
-            <div className={`hidden md:flex items-center space-x-2 px-3 py-1.5 rounded-full border ${isMarketOpen() 
+            <div className={`hidden md:flex items-center space-x-2 px-3 py-1.5 rounded-full border ${marketOpen 
               ? 'bg-emerald-500/10 border-emerald-500/20' 
               : 'bg-red-500/10 border-red-500/20'
             }`}>
-              <div className={`w-2 h-2 rounded-full ${isMarketOpen() 
+              <div className={`w-2 h-2 rounded-full ${marketOpen 
                 ? 'bg-emerald-500 animate-pulse' 
                 : 'bg-red-500'
               }`}></div>
-              <span className={`text-xs font-bold tracking-wider uppercase ${isMarketOpen() 
+              <span className={`text-xs font-bold tracking-wider uppercase ${marketOpen 
                 ? 'text-emerald-400' 
                 : 'text-red-400'
               }`}>
-                {isMarketOpen() ? 'MARKET OPEN • LIVE' : 'MARKET CLOSED'}
+                {marketOpen ? 'MARKET OPEN' : 'MARKET CLOSE'}
               </span>
             </div>
 
