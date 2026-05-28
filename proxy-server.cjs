@@ -54,6 +54,10 @@ const CHART_CACHE_STALE_TTL_MS = 10 * 60 * 1000;
 const CHART_CACHE_INTRADAY_TTL_MS = 60 * 1000;
 const CHART_CACHE_LONG_TTL_MS = 6 * 60 * 60 * 1000;
 
+const optionsCache = new Map();
+const OPTIONS_CACHE_TTL_MS = 30 * 1000;
+const OPTIONS_CACHE_STALE_TTL_MS = 10 * 60 * 1000;
+
 const brokerSessions = new Map();
 const pendingBrokerLogins = new Map();
 const BROKER_FLOW_TTL_MS = 10 * 60 * 1000;
@@ -788,6 +792,58 @@ app.post('/api/fundamentals/batch', async (req, res) => {
 const { NseIndia } = require('stock-nse-india');
 const nseIndia = new NseIndia();
 
+const buildNseCookieHeader = (setCookieHeaders) => {
+  if (!Array.isArray(setCookieHeaders) || setCookieHeaders.length === 0) return '';
+  return setCookieHeaders
+    .map((c) => c.split(';')[0])
+    .filter(Boolean)
+    .join('; ');
+};
+
+const fetchWithTimeout = async (url, options = {}, timeoutMs = 8000) => {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(t);
+  }
+};
+
+const fetchNseOptionChainDirect = async (symbol, isIndex) => {
+  const base = 'https://www.nseindia.com';
+  const apiPath = isIndex ? '/api/option-chain-indices' : '/api/option-chain-equities';
+  const apiUrl = `${base}${apiPath}?symbol=${encodeURIComponent(symbol)}`;
+
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Accept': 'application/json,text/plain,*/*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'DNT': '1',
+    'Connection': 'keep-alive',
+    'Referer': `${base}/option-chain`,
+  };
+
+  const homeRes = await fetchWithTimeout(base, { headers }, 8000);
+  if (!homeRes.ok) throw new Error(`NSE homepage failed: ${homeRes.status}`);
+  const cookieHeader = buildNseCookieHeader(homeRes.headers.raw()['set-cookie']);
+  if (!cookieHeader) throw new Error('NSE cookie missing');
+
+  const apiRes = await fetchWithTimeout(apiUrl, { headers: { ...headers, Cookie: cookieHeader } }, 8000);
+  const bodyText = await apiRes.text();
+  if (!apiRes.ok) throw new Error(`NSE option chain failed: ${apiRes.status}`);
+
+  let data;
+  try {
+    data = JSON.parse(bodyText);
+  } catch (e) {
+    throw new Error('NSE option chain invalid JSON');
+  }
+
+  if (!data || !data.records) throw new Error('NSE option chain missing records');
+  return data;
+};
+
 let cachedNseHighLow = null;
 let lastNseHighLowFetch = 0;
 
@@ -865,22 +921,47 @@ app.get('/api/options/:symbol', async (req, res) => {
   const symbol = req.params.symbol.toUpperCase();
 
   try {
+    const now = Date.now();
+    const cacheKey = symbol;
+    const cached = optionsCache.get(cacheKey);
+    if (cached && (now - cached.fetchedAt) < OPTIONS_CACHE_TTL_MS) {
+      res.setHeader('x-cache', 'hit');
+      return res.json(cached.data);
+    }
+
     console.log(`fetching options data for ${symbol}...`);
     
     const isIndex = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY'].includes(symbol);
-    
-    const data = isIndex 
-      ? await nseIndia.getIndexOptionChain(symbol)
-      : await nseIndia.getEquityOptionChain(symbol);
+
+    let data;
+    try {
+      data = isIndex
+        ? await nseIndia.getIndexOptionChain(symbol)
+        : await nseIndia.getEquityOptionChain(symbol);
+    } catch (libErr) {
+      try {
+        data = await fetchNseOptionChainDirect(symbol, isIndex);
+      } catch (directErr) {
+        console.error(`Options chain fetch failed for ${symbol}: lib=${libErr?.message} direct=${directErr?.message}`);
+        throw libErr;
+      }
+    }
 
     if (!data || !data.records) {
       throw new Error("Invalid response from NSE API");
     }
 
+    optionsCache.set(cacheKey, { data, fetchedAt: now });
+    res.setHeader('x-cache', 'miss');
     return res.json(data);
   } catch (err) {
     console.error(`Error fetching Options data for ${symbol}:`, err.message);
-    return res.status(500).json({ error: `Failed to fetch Options data for ${symbol}` });
+    const cached = optionsCache.get(symbol);
+    if (cached && (Date.now() - cached.fetchedAt) < OPTIONS_CACHE_STALE_TTL_MS) {
+      res.setHeader('x-cache', 'stale');
+      return res.json(cached.data);
+    }
+    return res.status(503).json({ error: `Options data unavailable for ${symbol}` });
   }
 });
 
