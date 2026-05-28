@@ -34,48 +34,54 @@ const OptionsWatch: React.FC = () => {
 
   // Set the slider to reflect the current real-world time between 9:15 AM and 3:30 PM
   useEffect(() => {
-    const istParts = new Intl.DateTimeFormat('en-IN', {
-      timeZone: 'Asia/Kolkata',
-      weekday: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }).formatToParts(new Date());
+    const compute = () => {
+      const istParts = new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        weekday: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).formatToParts(new Date());
 
-    const weekday = istParts.find((p) => p.type === 'weekday')?.value ?? '';
-    const hourStr = istParts.find((p) => p.type === 'hour')?.value ?? '0';
-    const minuteStr = istParts.find((p) => p.type === 'minute')?.value ?? '0';
+      const weekday = istParts.find((p) => p.type === 'weekday')?.value ?? '';
+      const hourStr = istParts.find((p) => p.type === 'hour')?.value ?? '0';
+      const minuteStr = istParts.find((p) => p.type === 'minute')?.value ?? '0';
 
-    const currentHours = Number(hourStr);
-    const currentMinutes = Number(minuteStr);
+      const currentHours = Number(hourStr);
+      const currentMinutes = Number(minuteStr);
 
-    const isWeekday = weekday !== 'Sat' && weekday !== 'Sun';
-    const openMinutes = 9 * 60 + 15;
-    const closeMinutes = 15 * 60 + 30;
-    const nowMinutes = currentHours * 60 + currentMinutes;
+      const isWeekday = weekday !== 'Sat' && weekday !== 'Sun';
+      const openMinutes = 9 * 60 + 15;
+      const closeMinutes = 15 * 60 + 30;
+      const nowMinutes = currentHours * 60 + currentMinutes;
 
-    const openNow = isWeekday && nowMinutes >= openMinutes && nowMinutes <= closeMinutes;
-    setIsMarketOpen(openNow);
+      const openNow = isWeekday && nowMinutes >= openMinutes && nowMinutes <= closeMinutes;
+      setIsMarketOpen(openNow);
 
-    if (!isWeekday) {
-      setTimeProgress(0);
-      setMaxTimeProgress(0);
-      return;
-    }
+      if (!isWeekday) {
+        setTimeProgress(0);
+        setMaxTimeProgress(0);
+        return;
+      }
 
-    if (!openNow) {
-      const progress = nowMinutes < openMinutes ? 0 : 100;
+      if (!openNow) {
+        const progress = nowMinutes < openMinutes ? 0 : 100;
+        setTimeProgress(progress);
+        setMaxTimeProgress(progress);
+        return;
+      }
+
+      const totalMarketMinutes = closeMinutes - openMinutes;
+      const elapsedMinutes = Math.max(0, Math.min(totalMarketMinutes, nowMinutes - openMinutes));
+      const progress = (elapsedMinutes / totalMarketMinutes) * 100;
+
       setTimeProgress(progress);
       setMaxTimeProgress(progress);
-      return;
-    }
+    };
 
-    const totalMarketMinutes = closeMinutes - openMinutes;
-    const elapsedMinutes = Math.max(0, Math.min(totalMarketMinutes, nowMinutes - openMinutes));
-    const progress = (elapsedMinutes / totalMarketMinutes) * 100;
-
-    setTimeProgress(progress);
-    setMaxTimeProgress(progress);
+    compute();
+    const intervalId = window.setInterval(compute, 60 * 1000);
+    return () => window.clearInterval(intervalId);
   }, []);
 
   // --- Formatters ---
