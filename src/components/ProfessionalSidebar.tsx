@@ -18,6 +18,7 @@ import {
   Sparkles,
   Target
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface MenuItem {
   id: string;
@@ -43,6 +44,7 @@ const ProfessionalSidebar: React.FC<ProfessionalSidebarProps> = ({
   onToggleCollapse,
   portfolioCount = 0
 }) => {
+  const { signOut } = useAuth();
   const menuItems: MenuItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'portfolio', label: 'Portfolio', icon: Briefcase, badge: portfolioCount > 0 ? portfolioCount : undefined },
@@ -67,9 +69,11 @@ const ProfessionalSidebar: React.FC<ProfessionalSidebarProps> = ({
     { id: 'logout', label: 'Sign Out', icon: LogOut },
   ];
 
-  const handleMenuClick = (itemId: string) => {
+  const handleMenuClick = async (itemId: string) => {
     if (itemId === 'logout') {
-      console.log('Logout clicked');
+      try {
+        await signOut();
+      } catch (e) {}
       return;
     }
     onTabChange(itemId);
