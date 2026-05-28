@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Info, PlayCircle, Edit } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Info } from 'lucide-react';
 import { ResponsiveContainer, Treemap, Tooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { fetchStockPrice, fetchHistoricalPrices } from '../utils/priceApi';
+import { fetchStockPrice, fetchHistoricalPrices, getApiBaseUrl } from '../utils/priceApi';
 
 // Nifty 50 subset for the Money Flux Treemap
 const NIFTY_50_SYMBOLS = [
@@ -37,10 +37,9 @@ const CustomizedContent = (props: any) => {
 };
 
 // Custom Gauge component — premium redesign
-const Gauge = ({ value, title, minLabel, maxLabel, displayValue, id }: { value: number, title: string, minLabel: string, maxLabel: string, displayValue?: string | number, id: string }) => {
+const Gauge = ({ value, title, displayValue, id }: { value: number, title: string, displayValue?: string | number, id: string }) => {
   const clampedValue = Math.max(0, Math.min(100, value));
   const rotation = (clampedValue / 100) * 180 - 90;
-  const isBullish = clampedValue >= 50;
 
   // Dynamic zone based on value
   const getZone = (v: number) => {
@@ -465,7 +464,8 @@ const OptionsPlayer = () => {
         // 3. Fetch Real Options Chain for PCR
         try {
           const indexSymbol = chartConfig.symbol.replace('NSE:', '').replace('BSE:', '').replace('1!', '');
-          const optionsResponse = await fetch(`/api/options/${indexSymbol}`);
+          const baseUrl = getApiBaseUrl();
+          const optionsResponse = await fetch(`${baseUrl}/api/options/${indexSymbol}`);
           if (optionsResponse.ok) {
             const optionsData = await optionsResponse.json();
             if (optionsData && optionsData.filtered) {
@@ -523,8 +523,26 @@ const OptionsPlayer = () => {
       {/* Top Control Bar */}
       <div className="flex items-center px-6 py-3 gap-6 bg-[#0f1520] border-b border-slate-800 shrink-0">
         <div className="flex bg-[#1e293b] rounded-lg p-1">
-          <button className="px-4 py-1.5 bg-blue-500 text-white text-sm font-medium rounded-md shadow-sm">Candlestick Chart</button>
-          <button className="px-4 py-1.5 text-slate-400 hover:text-slate-200 text-sm font-medium rounded-md transition-colors">Line Chart</button>
+          <button
+            onClick={() => setChartMode('tradingview')}
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              chartMode === 'tradingview'
+                ? 'bg-blue-500 text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Candlestick Chart
+          </button>
+          <button
+            onClick={() => setChartMode('internal')}
+            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              chartMode === 'internal'
+                ? 'bg-blue-500 text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Line Chart
+          </button>
         </div>
         <div className="flex-1"></div>
         <div className="flex items-center gap-6">
@@ -740,8 +758,8 @@ const OptionsPlayer = () => {
               <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl px-4 pt-4 pb-3 shadow-[0_8px_32px_0_rgba(0,0,0,0.4)] relative overflow-hidden shrink-0">
                 <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-white/5 to-transparent pointer-events-none rounded-2xl" />
                 <div className="grid grid-cols-2 gap-2">
-                  <Gauge id="sentiment" value={sentimentValue} title="Sentiment Bias" minLabel="F.EXT" maxLabel="F.EXT" />
-                  <Gauge id="pcr"       value={pcrValue}       title="PCR"            minLabel="F.EXT" maxLabel="F.EXT" displayValue={rawPcr} />
+                  <Gauge id="sentiment" value={sentimentValue} title="Sentiment Bias" />
+                  <Gauge id="pcr"       value={pcrValue}       title="PCR" displayValue={rawPcr} />
                 </div>
               </div>
 

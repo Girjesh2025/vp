@@ -103,6 +103,8 @@ const resolveBaseUrl = (): string => {
   return '';
 };
 
+export const getApiBaseUrl = (): string => resolveBaseUrl();
+
 // Removed broker fetching completely
 
 // Check if a symbol is a global index or futures symbol (e.g. ^DJI, ^NSEI, YM=F)
