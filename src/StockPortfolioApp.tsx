@@ -11,7 +11,6 @@ import ProfessionalHeader from './components/ProfessionalHeader';
 import ProfessionalSidebar from './components/ProfessionalSidebar';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import AlertsPage from './components/AlertsPage';
-import AITradingSuggestions from './components/AITradingSuggestions';
 import ToolsDashboard from './components/ToolsDashboard';
 import MarketAnalysis from './components/MarketAnalysis';
 import MarketAnalysisTools from './components/MarketAnalysisTools';
@@ -135,7 +134,6 @@ const StockPortfolioApp: React.FC = () => {
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(getNotificationSettings());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{isOpen: boolean, stock: Stock | null}>({isOpen: false, stock: null});
-  const [allPortfolioSymbols, setAllPortfolioSymbols] = useState<string[]>([]);
 
   const [stocks, setStocks] = useState<StockWithPrice[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -444,31 +442,6 @@ const StockPortfolioApp: React.FC = () => {
   useEffect(() => { localStorage.setItem("priceAlerts", JSON.stringify(priceAlerts)); }, [priceAlerts]);
 
   const memoPortfolioSymbols = useMemo(() => [...new Set(portfolioStocks.map(stock => stock.symbol))], [portfolioStocks]);
-
-  // Fetch symbols from ALL portfolios for AI Trading (not just current one)
-  const allPortfoliosRef = useRef<string>('[]');
-  useEffect(() => {
-    if (!portfolios || portfolios.length === 0) { setAllPortfolioSymbols(memoPortfolioSymbols); return; }
-    const portfolioIds = portfolios.map(p => p.id).filter(id => !id.startsWith('demo-portfolio'));
-    if (portfolioIds.length === 0) { setAllPortfolioSymbols(memoPortfolioSymbols); return; }
-    const key = JSON.stringify([...portfolioIds].sort());
-    if (key === allPortfoliosRef.current) return;
-    allPortfoliosRef.current = key;
-    import('./lib/supabase').then(({ supabase }) => {
-      supabase
-        .from('stocks')
-        .select('symbol')
-        .in('portfolio_id', portfolioIds)
-        .then(({ data }: { data: Array<{ symbol: string }> | null }) => {
-          if (data && data.length > 0) {
-            const symbols: string[] = [...new Set(data.map(s => s.symbol))];
-            setAllPortfolioSymbols(symbols);
-          } else {
-            setAllPortfolioSymbols(memoPortfolioSymbols);
-          }
-        });
-    });
-  }, [portfolios, memoPortfolioSymbols]);
 
 
 
@@ -1596,11 +1569,6 @@ const StockPortfolioApp: React.FC = () => {
                   getStockInfo={(symbol) => getStockBySymbol(symbol) || null}
                 />
               )}
-          {activeTab === 'ai-trading' && (
-            <AITradingSuggestions 
-              portfolioSymbols={allPortfolioSymbols.length > 0 ? allPortfolioSymbols : memoPortfolioSymbols}
-            />
-          )}
           {activeTab === 'tools' && (
             <MarketAnalysisTools />
           )}
