@@ -90,8 +90,16 @@ const PROXY_SERVICES = [
 ];
 
 const resolveBaseUrl = (): string => {
-  // Always use relative paths for API calls so they work seamlessly on Vercel (Serverless Functions) 
-  // and locally (via Vite's proxy to localhost:3001).
+  const envBase = (import.meta as any)?.env?.VITE_API_BASE_URL;
+  if (typeof envBase === 'string' && envBase.trim().length > 0) {
+    return envBase.replace(/\/+$/, '');
+  }
+
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname.toLowerCase();
+    if (host.endsWith('.vercel.app')) return 'https://first-nivesh.onrender.com';
+  }
+
   return '';
 };
 
