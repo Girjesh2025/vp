@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Info } from 'lucide-react';
 import { ResponsiveContainer, Treemap, Tooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { fetchStockPrice, fetchHistoricalPrices, getApiBaseUrl } from '../utils/priceApi';
+import { fetchStockPrice, fetchHistoricalPrices } from '../utils/priceApi';
 
 // Nifty 50 subset for the Money Flux Treemap
 const NIFTY_50_SYMBOLS = [
@@ -496,8 +496,7 @@ const OptionsPlayer = () => {
         // 3. Fetch Real Options Chain for PCR
         try {
           const indexSymbol = chartConfig.symbol.replace('NSE:', '').replace('BSE:', '').replace('1!', '');
-          const baseUrl = getApiBaseUrl();
-          const optionsResponse = await fetch(`${baseUrl}/api/options/${indexSymbol}`);
+          const optionsResponse = await fetch(`/api/options/${indexSymbol}`);
           if (optionsResponse.ok) {
             const optionsData = await optionsResponse.json();
             if (optionsData && optionsData.filtered) {

@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Zap, BarChart3, Activity, Target } from 'lucide-react';
-import { getApiBaseUrl } from '../utils/priceApi';
 
 type IndexName = 'NIFTY 50' | 'BANK NIFTY' | 'FINNIFTY' | 'SENSEX';
 
@@ -146,8 +145,7 @@ const OptionsWatch: React.FC = () => {
       setLoadError(null);
 
       try {
-        const apiBase = getApiBaseUrl();
-        const res = await fetch(`${apiBase}/api/options/${encodeURIComponent(apiSymbol)}`);
+        const res = await fetch(`/api/options/${encodeURIComponent(apiSymbol)}`);
         if (!res.ok) {
           throw new Error(`API error ${res.status}`);
         }
