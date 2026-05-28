@@ -279,8 +279,7 @@ export interface StockFundamentals {
 
 export const fetchGuruFundamentals = async (symbols: string[]): Promise<Record<string, StockFundamentals>> => {
   try {
-    const API_BASE = resolveBaseUrl();
-    const response = await fetch(`${API_BASE}/api/fundamentals/batch`, {
+    const response = await fetch(`/api/fundamentals/batch`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ symbols })

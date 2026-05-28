@@ -444,7 +444,7 @@ const SectoralFlow: React.FC = () => {
                               hoveredHeatmapTile === s.name ? 'ring-2 ring-white/50 z-10 scale-[1.02] shadow-2xl' : 'hover:ring-1 hover:ring-white/20'
                             }`}
                             style={{ 
-                              background: `linear-gradient(135deg, ${getHeatmapColor(s.value)}dd, ${getHeatmapColor(s.value)}99)`,
+                              background: `linear-gradient(135deg, ${s.loadedCount > 0 ? getHeatmapColor(s.value) : '#334155'}dd, ${s.loadedCount > 0 ? getHeatmapColor(s.value) : '#334155'}99)`,
                               boxShadow: hoveredHeatmapTile === s.name ? `0 0 30px ${getHeatmapGlow(s.value)}` : 'none'
                             }}
                           >
@@ -452,7 +452,7 @@ const SectoralFlow: React.FC = () => {
                             <span className="relative text-white font-black text-xl tracking-wider drop-shadow-md z-10">{s.name}</span>
                             <div className="relative mt-2 flex items-center gap-1 z-10">
                               <span className="text-white/90 text-sm font-bold bg-black/20 px-2 py-0.5 rounded-md backdrop-blur-sm">
-                                {s.value >= 0 ? '+' : ''}{s.value.toFixed(2)}%
+                                {s.loadedCount > 0 ? `${s.value >= 0 ? '+' : ''}${s.value.toFixed(2)}%` : '--'}
                               </span>
                             </div>
                           </button>
@@ -460,7 +460,7 @@ const SectoralFlow: React.FC = () => {
                       </div>
 
                       {/* Bottom rows - smaller tiles */}
-                      <div className="grid grid-cols-4 gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {sectoralFlowData.slice(0, -3).reverse().map((s) => (
                           <button
                             key={s.name}
@@ -471,14 +471,14 @@ const SectoralFlow: React.FC = () => {
                               hoveredHeatmapTile === s.name ? 'ring-2 ring-white/50 z-10 scale-105 shadow-xl' : 'hover:ring-1 hover:ring-white/20'
                             }`}
                             style={{ 
-                              background: `linear-gradient(135deg, ${getHeatmapColor(s.value)}dd, ${getHeatmapColor(s.value)}99)`,
+                              background: `linear-gradient(135deg, ${s.loadedCount > 0 ? getHeatmapColor(s.value) : '#334155'}dd, ${s.loadedCount > 0 ? getHeatmapColor(s.value) : '#334155'}99)`,
                               boxShadow: hoveredHeatmapTile === s.name ? `0 0 20px ${getHeatmapGlow(s.value)}` : 'none'
                             }}
                           >
                             <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors" />
                             <span className="relative text-white/90 font-bold text-xs tracking-wider drop-shadow-md z-10">{s.name}</span>
                             <span className="relative mt-1 text-white/80 text-[10px] font-bold bg-black/20 px-1.5 py-0.5 rounded backdrop-blur-sm z-10">
-                              {s.value >= 0 ? '+' : ''}{s.value.toFixed(2)}%
+                              {s.loadedCount > 0 ? `${s.value >= 0 ? '+' : ''}${s.value.toFixed(2)}%` : '--'}
                             </span>
                           </button>
                         ))}
