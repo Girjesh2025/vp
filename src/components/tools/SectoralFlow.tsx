@@ -7,11 +7,6 @@ import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, 
 import { fetchStockPrice } from '../../utils/priceApi';
 import StockLogo from '../StockLogo';
 
-const PROXY_URLS = [
-  'https://api.allorigins.win/get?url=',
-  'https://api.codetabs.com/v1/proxy?quest='
-];
-
 /** Fetch Real 20-Day Average % Change via Yahoo Spark API */
 const fetchRealSparkData = async (symbols: string[]): Promise<Record<string, number>> => {
   if (symbols.length === 0) return {};
@@ -25,40 +20,30 @@ const fetchRealSparkData = async (symbols: string[]): Promise<Record<string, num
 
   for (const chunk of chunkedSymbols) {
     const query = chunk.map(s => `${s}.NS`).join(',');
-    const targetUrl = `https://query1.finance.yahoo.com/v7/finance/spark?symbols=${query}&range=1mo&interval=1d`;
-    
-    let success = false;
-    for (const proxy of PROXY_URLS) {
-      if (success) break;
-      try {
-        const res = await fetch(`${proxy}${encodeURIComponent(targetUrl)}`);
-        if (!res.ok) continue;
-        
-        const data = await res.json();
-        const parsedData = proxy.includes('allorigins') ? JSON.parse(data.contents) : data;
-        
-        if (parsedData?.spark?.result) {
-          parsedData.spark.result.forEach((item: any) => {
-            const sym = item.symbol.replace('.NS', '');
-            const closes = item.response?.[0]?.indicators?.quote?.[0]?.close;
-            if (closes && Array.isArray(closes) && closes.length >= 2) {
-              const validCloses = closes.filter(c => typeof c === 'number' && c > 0);
-              let totalPercentChange = 0;
-              let count = 0;
-              for (let i = 1; i < validCloses.length; i++) {
-                const pctChange = Math.abs((validCloses[i] - validCloses[i-1]) / validCloses[i-1]) * 100;
-                totalPercentChange += pctChange;
-                count++;
-              }
-              results[sym] = count > 0 ? (totalPercentChange / count) : 0.8;
+    try {
+      const res = await fetch(`/api/yahoo/spark?symbols=${encodeURIComponent(query)}&range=1mo&interval=1d`);
+      if (!res.ok) continue;
+
+      const parsedData = await res.json();
+
+      if (parsedData?.spark?.result) {
+        parsedData.spark.result.forEach((item: any) => {
+          const sym = item.symbol.replace('.NS', '');
+          const closes = item.response?.[0]?.indicators?.quote?.[0]?.close;
+          if (closes && Array.isArray(closes) && closes.length >= 2) {
+            const validCloses = closes.filter((c: any) => typeof c === 'number' && c > 0) as number[];
+            let totalPercentChange = 0;
+            let count = 0;
+            for (let i = 1; i < validCloses.length; i++) {
+              const pctChange = Math.abs((validCloses[i] - validCloses[i - 1]) / validCloses[i - 1]) * 100;
+              totalPercentChange += pctChange;
+              count++;
             }
-          });
-          success = true;
-        }
-      } catch (e) {
-        // Continue to next proxy
+            results[sym] = count > 0 ? totalPercentChange / count : 0.8;
+          }
+        });
       }
-    }
+    } catch (e) {}
   }
 
   return results;
