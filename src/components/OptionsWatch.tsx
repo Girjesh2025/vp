@@ -232,6 +232,7 @@ const OptionsWatch: React.FC = () => {
   }, [selectedIndex]);
 
   const currentData = chainData;
+  const hasLiveData = !isLoading && !loadError && currentData.length > 0;
 
   const emptyStrike: StrikeData = useMemo(
     () => ({ strike: 0, bulls: 0, bears: 0, bullsChange: 0, bearsChange: 0 }),
@@ -270,13 +271,19 @@ const OptionsWatch: React.FC = () => {
   let marketBias = 'Neutral';
   let biasColor = 'text-yellow-400';
   let biasBg = 'bg-yellow-500/10 border-yellow-500/20';
+
+  if (!hasLiveData) {
+    marketBias = 'No Data';
+    biasColor = 'text-[#bbb]';
+    biasBg = 'bg-white/5 border-white/10';
+  }
   
   // Momentum logic based on today's change vs absolute PCR
-  if (pcrVal > 1.2 || (pcrVal > 1.0 && totalBullsChg > totalBearsChg * 1.5)) {
+  if (hasLiveData && (pcrVal > 1.2 || (pcrVal > 1.0 && totalBullsChg > totalBearsChg * 1.5))) {
     marketBias = 'Bullish';
     biasColor = 'text-emerald-400';
     biasBg = 'bg-emerald-500/10 border-emerald-500/20';
-  } else if (pcrVal < 0.8 || (pcrVal < 1.0 && totalBearsChg > totalBullsChg * 1.5)) {
+  } else if (hasLiveData && (pcrVal < 0.8 || (pcrVal < 1.0 && totalBearsChg > totalBullsChg * 1.5))) {
     marketBias = 'Bearish';
     biasColor = 'text-rose-400';
     biasBg = 'bg-rose-500/10 border-rose-500/20';
@@ -344,8 +351,17 @@ const OptionsWatch: React.FC = () => {
               <div>
                  <div className="text-[10px] text-[#888] tracking-widest font-black uppercase mb-0.5">Trader Insight • {selectedIndex}</div>
                  <div className="text-sm font-medium text-slate-200">
-                    Market bias is currently <span className={`font-black uppercase tracking-wide ${biasColor}`}>{marketBias}</span>. 
-                    Immediate Support lies at <strong className="text-emerald-400 font-mono">{maxSupport.strike}</strong> while Resistance is fierce at <strong className="text-rose-400 font-mono">{maxResistance.strike}</strong>.
+                    {hasLiveData ? (
+                      <>
+                        Market bias is currently <span className={`font-black uppercase tracking-wide ${biasColor}`}>{marketBias}</span>. 
+                        Immediate Support lies at <strong className="text-emerald-400 font-mono">{maxSupport.strike}</strong> while Resistance is fierce at <strong className="text-rose-400 font-mono">{maxResistance.strike}</strong>.
+                      </>
+                    ) : (
+                      <>
+                        Option chain is currently <span className={`font-black uppercase tracking-wide ${biasColor}`}>{marketBias}</span>. 
+                        Please retry in a moment.
+                      </>
+                    )}
                  </div>
               </div>
            </div>
@@ -354,7 +370,7 @@ const OptionsWatch: React.FC = () => {
               {/* Micro-stat blocks */}
               <div className="bg-black/20 border border-white/5 rounded-lg px-4 py-2 text-center shadow-inner">
                  <div className="text-[9px] text-[#666] uppercase font-bold">ATM Strike</div>
-                 <div className="text-sky-400 font-mono font-bold text-sm tracking-wide">{atmStrikeData.strike}</div>
+                 <div className="text-sky-400 font-mono font-bold text-sm tracking-wide">{hasLiveData ? atmStrikeData.strike : '--'}</div>
               </div>
               <div className="bg-black/20 border border-white/5 rounded-lg px-4 py-2 text-center shadow-inner">
                  <div className="text-[9px] text-[#666] uppercase font-bold">Spot</div>
@@ -365,8 +381,12 @@ const OptionsWatch: React.FC = () => {
               <div className="bg-black/20 border border-white/5 rounded-lg px-4 py-2 text-center shadow-inner">
                  <div className="text-[9px] text-[#666] uppercase font-bold">Today's OI Shift</div>
                  <div className="text-sm font-mono font-bold tracking-wide flex gap-2">
-                    <span className={totalBullsChg > 0 ? 'text-emerald-400' : 'text-[#888]'}>{totalBullsChg > 0 ? '+' : ''}{formatNumber(totalBullsChg)} Puts</span>
-                    <span className={totalBearsChg > 0 ? 'text-rose-400' : 'text-[#888]'}>{totalBearsChg > 0 ? '+' : ''}{formatNumber(totalBearsChg)} Calls</span>
+                    <span className={hasLiveData && totalBullsChg > 0 ? 'text-emerald-400' : 'text-[#888]'}>
+                      {hasLiveData ? `${totalBullsChg > 0 ? '+' : ''}${formatNumber(totalBullsChg)} Puts` : '--'}
+                    </span>
+                    <span className={hasLiveData && totalBearsChg > 0 ? 'text-rose-400' : 'text-[#888]'}>
+                      {hasLiveData ? `${totalBearsChg > 0 ? '+' : ''}${formatNumber(totalBearsChg)} Calls` : '--'}
+                    </span>
                  </div>
               </div>
            </div>
