@@ -31,31 +31,50 @@ const OptionsWatch: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
+  const [isMarketOpen, setIsMarketOpen] = useState<boolean>(false);
 
   // Set the slider to reflect the current real-world time between 9:15 AM and 3:30 PM
   useEffect(() => {
-    const now = new Date();
-    const currentHours = now.getHours();
-    const currentMinutes = now.getMinutes();
-    
-    // Market open: 9:15 AM
+    const istParts = new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).formatToParts(new Date());
+
+    const weekday = istParts.find((p) => p.type === 'weekday')?.value ?? '';
+    const hourStr = istParts.find((p) => p.type === 'hour')?.value ?? '0';
+    const minuteStr = istParts.find((p) => p.type === 'minute')?.value ?? '0';
+
+    const currentHours = Number(hourStr);
+    const currentMinutes = Number(minuteStr);
+
+    const isWeekday = weekday !== 'Sat' && weekday !== 'Sun';
     const openMinutes = 9 * 60 + 15;
-    // Market close: 3:30 PM
     const closeMinutes = 15 * 60 + 30;
-    
     const nowMinutes = currentHours * 60 + currentMinutes;
-    
-    let progress = 100;
-    if (nowMinutes <= openMinutes) {
-      progress = 0;
-    } else if (nowMinutes >= closeMinutes) {
-      progress = 100;
-    } else {
-      const totalMarketMinutes = closeMinutes - openMinutes;
-      const elapsedMinutes = nowMinutes - openMinutes;
-      progress = (elapsedMinutes / totalMarketMinutes) * 100;
+
+    const openNow = isWeekday && nowMinutes >= openMinutes && nowMinutes <= closeMinutes;
+    setIsMarketOpen(openNow);
+
+    if (!isWeekday) {
+      setTimeProgress(0);
+      setMaxTimeProgress(0);
+      return;
     }
-    
+
+    if (!openNow) {
+      const progress = nowMinutes < openMinutes ? 0 : 100;
+      setTimeProgress(progress);
+      setMaxTimeProgress(progress);
+      return;
+    }
+
+    const totalMarketMinutes = closeMinutes - openMinutes;
+    const elapsedMinutes = Math.max(0, Math.min(totalMarketMinutes, nowMinutes - openMinutes));
+    const progress = (elapsedMinutes / totalMarketMinutes) * 100;
+
     setTimeProgress(progress);
     setMaxTimeProgress(progress);
   }, []);
@@ -300,12 +319,18 @@ const OptionsWatch: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
              <span
-               className={`w-2 h-2 rounded-full ${loadError ? 'bg-rose-500' : 'bg-emerald-500'} ${
-                 isLoading ? '' : 'animate-pulse'
-               }`}
+               className={`w-2 h-2 rounded-full ${
+                 loadError ? 'bg-rose-500' : isMarketOpen ? 'bg-emerald-500' : 'bg-[#555]'
+               } ${!isLoading && !loadError && isMarketOpen ? 'animate-pulse' : ''}`}
              />
              <div className="text-xs text-[#666] font-mono tracking-widest uppercase">
-                {isLoading ? 'Loading Live Data' : loadError ? 'Live Data Unavailable' : `Live Data • ${lastUpdatedLabel ?? ''}`}
+                {isLoading
+                  ? 'Loading Data'
+                  : loadError
+                    ? 'Data Unavailable'
+                    : isMarketOpen
+                      ? `Market Live • ${lastUpdatedLabel ?? ''}`
+                      : `Market Closed • ${lastUpdatedLabel ?? ''}`}
              </div>
           </div>
         </div>
