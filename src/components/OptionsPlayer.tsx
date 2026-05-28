@@ -320,10 +320,10 @@ const OptionsPlayer = () => {
     container.innerHTML = '';
 
     const getTVSymbol = (sym: string) => {
-      if (sym === 'NSE:NIFTY' || sym === 'NSE:NIFTY50') return 'INDEX:NIFTY_50';
-      if (sym === 'NSE:BANKNIFTY') return 'INDEX:BANKNIFTY';
-      if (sym === 'NSE:FINNIFTY') return 'INDEX:FINNIFTY';
-      if (sym === 'NSE:MIDCPNIFTY') return 'INDEX:NIFTY_MID_SELECT'; // Might not work, but fallback
+      if (sym === 'NSE:NIFTY' || sym === 'NSE:NIFTY50') return 'NSE:NIFTY';
+      if (sym === 'NSE:BANKNIFTY') return 'NSE:BANKNIFTY';
+      if (sym === 'NSE:FINNIFTY') return 'NSE:FINNIFTY';
+      if (sym === 'NSE:MIDCPNIFTY') return 'NSE:MIDCPNIFTY';
       if (sym === 'BSE:SENSEX') return 'BSE:SENSEX';
       return sym;
     };
