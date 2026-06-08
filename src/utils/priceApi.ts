@@ -432,28 +432,30 @@ export const fetchHistoricalOHLCV = async (
  */
 export const fetchIntradayPrices = async (symbol: string): Promise<number[]> => {
   const yahooSymbol = toYahooSymbol(symbol);
+  const requestBases = isGlobalOrIndexSymbol(symbol) ? ['', resolveBaseUrl()].filter((v, i, arr) => arr.indexOf(v) === i) : [resolveBaseUrl()];
   
   // Use our backend proxy if available to avoid CORS/Cloudflare issues
-  try {
-    const baseUrl = resolveBaseUrl();
-    const apiUrl = `${baseUrl}/api/stock/${encodeURIComponent(yahooSymbol)}?historical=true&range=1d&interval=5m`;
-    
-    const r = await fetch(apiUrl);
-    if (r.ok) {
-      const data = await r.json();
-      const result = data?.chart?.result?.[0];
-      if (result) {
-        const closes: number[] = result.indicators?.quote?.[0]?.close ?? [];
-        const validCloses = closes.filter((c: number | null) => typeof c === 'number' && c > 0) as number[];
-        
-        if (validCloses.length > 0) {
-          console.log(`✅ [Intraday] Got ${validCloses.length} data points for ${symbol} via backend proxy`);
-          return validCloses;
+  for (const baseUrl of requestBases) {
+    try {
+      const apiUrl = `${baseUrl}/api/stock/${encodeURIComponent(yahooSymbol)}?historical=true&range=1d&interval=5m`;
+      
+      const r = await fetch(apiUrl);
+      if (r.ok) {
+        const data = await r.json();
+        const result = data?.chart?.result?.[0];
+        if (result) {
+          const closes: number[] = result.indicators?.quote?.[0]?.close ?? [];
+          const validCloses = closes.filter((c: number | null) => typeof c === 'number' && c > 0) as number[];
+          
+          if (validCloses.length > 0) {
+            console.log(`✅ [Intraday] Got ${validCloses.length} data points for ${symbol} via backend proxy`);
+            return validCloses;
+          }
         }
       }
+    } catch (e) {
+      console.warn(`[Intraday] Backend proxy failed for ${symbol}:`, e);
     }
-  } catch (e) {
-    console.warn(`[Intraday] Backend proxy failed for ${symbol}:`, e);
   }
 
   // Fallback to PROXY_SERVICES
@@ -653,37 +655,41 @@ export const fetchMultipleStockPrices = async (symbols: string[]): Promise<Recor
 export const fetchStockPrice = async (symbol: string): Promise<PriceData | null> => {
   try {
     const baseUrl = resolveBaseUrl();
+    const requestBases = isGlobalOrIndexSymbol(symbol) ? ['', baseUrl].filter((v, i, arr) => arr.indexOf(v) === i) : [baseUrl];
 
     // For global indices / futures, send the symbol directly to the proxy (URL-encoded)
     if (isGlobalOrIndexSymbol(symbol)) {
-      try {
-        const response = await fetch(`${baseUrl}/api/stock/${encodeURIComponent(symbol)}?source=yahoo`, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-          },
-          mode: 'cors'
-        });
-        if (response.ok) {
-          const ct = response.headers.get('content-type') || '';
-          if (ct.includes('application/json')) {
-            const data = await response.json();
-            if (data && typeof data.close === 'number' && data.close > 0) {
-              const prevClose = data.previousClose || data.open || data.close;
-              const change = prevClose ? ((data.close - prevClose) / prevClose) * 100 : 0;
-              return {
-                price: Number(data.close.toFixed(2)),
-                change: Number(change.toFixed(2)),
-                previousClose: data.previousClose !== undefined ? data.previousClose : undefined,
-                high52: data.high52 !== undefined ? data.high52 : undefined,
-                low52: data.low52 !== undefined ? data.low52 : undefined,
-              };
+      for (const requestBase of requestBases) {
+        try {
+          const response = await fetch(`${requestBase}/api/stock/${encodeURIComponent(symbol)}?source=yahoo`, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+            },
+            mode: 'cors'
+          });
+          if (response.ok) {
+            const ct = response.headers.get('content-type') || '';
+            if (ct.includes('application/json')) {
+              const data = await response.json();
+              if (data?.source === 'Mock Data') continue;
+              if (data && typeof data.close === 'number' && data.close > 0) {
+                const prevClose = data.previousClose || data.open || data.close;
+                const change = prevClose ? ((data.close - prevClose) / prevClose) * 100 : 0;
+                return {
+                  price: Number(data.close.toFixed(2)),
+                  change: Number(change.toFixed(2)),
+                  previousClose: data.previousClose !== undefined ? data.previousClose : undefined,
+                  high52: data.high52 !== undefined ? data.high52 : undefined,
+                  low52: data.low52 !== undefined ? data.low52 : undefined,
+                };
+              }
             }
           }
+        } catch (err) {
+          console.warn(`⚠️ [DEBUG] Direct proxy fetch failed for ${symbol}:`, err);
         }
-      } catch (err) {
-        console.warn(`⚠️ [DEBUG] Direct proxy fetch failed for ${symbol}:`, err);
       }
 
       // Fallback for global indices: try Yahoo via CORS proxies
