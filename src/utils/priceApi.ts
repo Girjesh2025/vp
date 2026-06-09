@@ -94,12 +94,6 @@ const resolveBaseUrl = (): string => {
     return envBase.replace(/\/+$/, '');
   }
 
-  if (typeof window !== 'undefined') {
-    const host = window.location.hostname.toLowerCase();
-    if (host.endsWith('.vercel.app')) return 'https://first-nivesh.onrender.com';
-    if (host === 'paperprofit.in' || host.endsWith('.paperprofit.in')) return 'https://first-nivesh.onrender.com';
-  }
-
   return '';
 };
 
