@@ -241,9 +241,6 @@ const MarketEye = () => {
           fetch('/api/fii-dii').then(r => r.json()).catch(() => null)
         ]);
         if (isMounted) {
-          // #region debug-point C:market-eye-index-state
-          fetch("http://127.0.0.1:7777/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"index-fallback-data",runId:"post-fix",hypothesisId:"C",location:"src/components/MarketEye.tsx:244",msg:"[DEBUG] MarketEye index payload applied",data:{niftyPrice:niftyRes?.price??null,niftyChange:niftyRes?.change??null,bankNiftyPrice:bankNiftyRes?.price??null,bankNiftyChange:bankNiftyRes?.change??null,niftyHistPoints:niftyHist?.length??0,bankNiftyHistPoints:bankNiftyHist?.length??0},ts:Date.now()})}).catch(()=>{});
-          // #endregion
           baselineNiftyChange = niftyRes?.change || 0;
           baselineBankNiftyChange = bankNiftyRes?.change || 0;
           setIndicesData({

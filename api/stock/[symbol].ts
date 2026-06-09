@@ -222,9 +222,6 @@ export default async function handler(req: any, res: any) {
   for (const fn of chain) {
     try {
       const data = await fn();
-      // #region debug-point D:stock-api-success
-      fetch("http://127.0.0.1:7777/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"index-fallback-data",runId:"post-fix",hypothesisId:"D",location:"api/stock/[symbol].ts:196",msg:"[DEBUG] stock api success response",data:{symbol,sourceRequested:source||"auto",responseSource:data?.source||null,close:data?.close||null,previousClose:data?.previousClose??null,isHistorical},ts:Date.now()})}).catch(()=>{});
-      // #endregion
       res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=300');
       res.json(data);
       return;
@@ -237,10 +234,6 @@ export default async function handler(req: any, res: any) {
     res.status(502).json({ error: `Unable to fetch live index data for ${symbol}` });
     return;
   }
-
-  // #region debug-point E:stock-api-mock
-  fetch("http://127.0.0.1:7777/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"index-fallback-data",runId:"post-fix",hypothesisId:"E",location:"api/stock/[symbol].ts:205",msg:"[DEBUG] stock api returning mock fallback",data:{symbol,sourceRequested:source||"auto",isHistorical},ts:Date.now()})}).catch(()=>{});
-  // #endregion
   res.setHeader('Cache-Control', 's-maxage=10');
   res.json(generateMock());
 }

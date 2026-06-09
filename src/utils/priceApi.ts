@@ -674,9 +674,6 @@ export const fetchStockPrice = async (symbol: string): Promise<PriceData | null>
             const ct = response.headers.get('content-type') || '';
             if (ct.includes('application/json')) {
               const data = await response.json();
-              // #region debug-point A:index-api-response
-              fetch("http://127.0.0.1:7777/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"index-fallback-data",runId:"post-fix",hypothesisId:"A",location:"src/utils/priceApi.ts:675",msg:"[DEBUG] index api response received",data:{symbol,requestBase:requestBase||"same-origin",ok:response.ok,source:data?.source||null,close:data?.close||null,previousClose:data?.previousClose||null},ts:Date.now()})}).catch(()=>{});
-              // #endregion
               if (data?.source === 'Mock Data') continue;
               if (data && typeof data.close === 'number' && data.close > 0) {
                 const prevClose = data.previousClose || data.open || data.close;
@@ -697,9 +694,6 @@ export const fetchStockPrice = async (symbol: string): Promise<PriceData | null>
       }
 
       // Fallback for global indices: try Yahoo via CORS proxies
-      // #region debug-point B:index-api-fallback
-      fetch("http://127.0.0.1:7777/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"index-fallback-data",runId:"post-fix",hypothesisId:"B",location:"src/utils/priceApi.ts:698",msg:"[DEBUG] falling back after index api attempts",data:{symbol,requestBases},ts:Date.now()})}).catch(()=>{});
-      // #endregion
       const yahooFallback = await fetchDirectFallback(symbol);
       if (yahooFallback) return yahooFallback;
 
