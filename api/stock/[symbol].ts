@@ -100,6 +100,33 @@ export default async function handler(req: any, res: any) {
     };
   };
 
+  const fetchIndexChartFromYahoo = async () => {
+    if (!symbol.startsWith('^')) throw new Error('not index symbol');
+    const formatted = formatSymbolForAPI(symbol, 'yahoo');
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(formatted)}?range=5d&interval=1d`;
+    const r = await fetch(url, {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'Mozilla/5.0',
+      },
+    });
+    if (!r.ok) throw new Error(`yahoo chart ${r.status}`);
+    const data = await r.json();
+    const meta = data?.chart?.result?.[0]?.meta;
+    if (!meta || typeof meta.regularMarketPrice !== 'number') throw new Error('yahoo chart invalid');
+    return {
+      close: meta.regularMarketPrice,
+      open: meta.regularMarketDayOpen ?? meta.chartPreviousClose ?? meta.regularMarketPrice,
+      high: meta.regularMarketDayHigh,
+      low: meta.regularMarketDayLow,
+      volume: meta.regularMarketVolume ?? 0,
+      previousClose: meta.chartPreviousClose ?? meta.previousClose ?? meta.regularMarketPrice,
+      high52: meta.fiftyTwoWeekHigh,
+      low52: meta.fiftyTwoWeekLow,
+      source: 'Yahoo Chart Direct'
+    };
+  };
+
   const fetchFromAlpha = async () => {
     if (!alphaKey) throw new Error('alpha missing');
     const formatted = formatSymbolForAPI(symbol, 'alpha');
@@ -177,6 +204,7 @@ export default async function handler(req: any, res: any) {
   const chain: Array<() => Promise<any>> = [];
   if (source === 'yahoo') {
     chain.push(fetchFromYahoo);
+    if (symbol.startsWith('^')) chain.push(fetchIndexChartFromYahoo);
   } else if (source === 'eodhd') {
     chain.push(fetchFromEodhd);
   } else if (source === 'alpha') {
@@ -185,6 +213,7 @@ export default async function handler(req: any, res: any) {
     chain.push(fetchFromFinnhub);
   } else {
     chain.push(fetchFromYahoo);
+    if (symbol.startsWith('^')) chain.push(fetchIndexChartFromYahoo);
     if (alphaKey) chain.push(fetchFromAlpha);
     if (finnhubKey) chain.push(fetchFromFinnhub);
     if (eodhdKey) chain.push(fetchFromEodhd);
@@ -193,6 +222,9 @@ export default async function handler(req: any, res: any) {
   for (const fn of chain) {
     try {
       const data = await fn();
+      // #region debug-point D:stock-api-success
+      fetch("http://127.0.0.1:7777/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"index-fallback-data",runId:"post-fix",hypothesisId:"D",location:"api/stock/[symbol].ts:196",msg:"[DEBUG] stock api success response",data:{symbol,sourceRequested:source||"auto",responseSource:data?.source||null,close:data?.close||null,previousClose:data?.previousClose??null,isHistorical},ts:Date.now()})}).catch(()=>{});
+      // #endregion
       res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=300');
       res.json(data);
       return;
@@ -200,6 +232,15 @@ export default async function handler(req: any, res: any) {
     }
   }
 
+  if (symbol.startsWith('^')) {
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(502).json({ error: `Unable to fetch live index data for ${symbol}` });
+    return;
+  }
+
+  // #region debug-point E:stock-api-mock
+  fetch("http://127.0.0.1:7777/event",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId:"index-fallback-data",runId:"post-fix",hypothesisId:"E",location:"api/stock/[symbol].ts:205",msg:"[DEBUG] stock api returning mock fallback",data:{symbol,sourceRequested:source||"auto",isHistorical},ts:Date.now()})}).catch(()=>{});
+  // #endregion
   res.setHeader('Cache-Control', 's-maxage=10');
   res.json(generateMock());
 }
