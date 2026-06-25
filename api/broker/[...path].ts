@@ -11,8 +11,14 @@ const getPathSegments = (value: string | string[] | undefined): string[] => {
 };
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
-  const path = getPathSegments(req.query.path);
-  const joined = path.join('/');
+  let joined = getPathSegments(req.query.path).join('/');
+  
+  if (!joined && req.url) {
+    const match = req.url.match(/\/api\/broker\/([^?]+)/);
+    if (match) {
+      joined = match[1];
+    }
+  }
 
   if (joined === 'status') {
     res.setHeader('Cache-Control', 's-maxage=30, stale-while-revalidate=300');
