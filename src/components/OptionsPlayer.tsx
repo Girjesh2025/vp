@@ -285,6 +285,37 @@ const OptionsPlayer = () => {
     return chartMode === 'tradingview' && isIndexSymbol;
   }, [chartMode, isIndexSymbol]);
 
+  const tradingViewSymbol = useMemo(() => {
+    if (chartConfig.symbol === 'NSE:NIFTY' || chartConfig.symbol === 'NSE:NIFTY50') return 'NSE:NIFTY';
+    if (chartConfig.symbol === 'NSE:BANKNIFTY') return 'NSE:BANKNIFTY';
+    if (chartConfig.symbol === 'NSE:FINNIFTY') return 'NSE:FINNIFTY';
+    if (chartConfig.symbol === 'NSE:MIDCPNIFTY') return 'NSE:MIDCPNIFTY';
+    if (chartConfig.symbol === 'BSE:SENSEX') return 'BSE:SENSEX';
+    return chartConfig.symbol;
+  }, [chartConfig.symbol]);
+
+  const tradingViewEmbedUrl = useMemo(() => {
+    const params = new URLSearchParams({
+      symbol: tradingViewSymbol,
+      interval: chartConfig.interval,
+      theme: 'dark',
+      style: '1',
+      locale: 'in',
+      timezone: 'Asia/Kolkata',
+      withdateranges: '1',
+      hide_side_toolbar: '1',
+      allow_symbol_change: '0',
+      saveimage: '0',
+      details: '0',
+      hotlist: '0',
+      calendar: '0',
+      toolbarbg: '#0f1520',
+      hide_top_toolbar: '0',
+      isTransparent: '1',
+    });
+    return `https://s.tradingview.com/widgetembed/?${params.toString()}`;
+  }, [chartConfig.interval, tradingViewSymbol]);
+
   useEffect(() => {
     if (isLocalHost && isIndexSymbol) setChartMode('internal');
   }, [isIndexSymbol, isLocalHost]);
@@ -308,91 +339,6 @@ const OptionsPlayer = () => {
     BAJAJFINSV: 'bajajfinserv.in', NESTLEIND: 'nestle.in', POWERGRID: 'powergridindia.com',
     'M&M': 'mahindra.com', NTPC: 'ntpc.co.in', JSWSTEEL: 'jsw.in',
   };
-
-  // Initialize TradingView Widget via official tv.js script
-  useEffect(() => {
-    if (chartMode !== 'tradingview') return;
-    const scriptId = 'tradingview-widget-script';
-    const containerId = 'tradingview_nifty_chart';
-    const container = document.getElementById(containerId);
-    
-    if (!container) return;
-    container.innerHTML = '';
-
-    const getTVSymbol = (sym: string) => {
-      if (sym === 'NSE:NIFTY' || sym === 'NSE:NIFTY50') return 'NSE:NIFTY';
-      if (sym === 'NSE:BANKNIFTY') return 'NSE:BANKNIFTY';
-      if (sym === 'NSE:FINNIFTY') return 'NSE:FINNIFTY';
-      if (sym === 'NSE:MIDCPNIFTY') return 'NSE:MIDCPNIFTY';
-      if (sym === 'BSE:SENSEX') return 'BSE:SENSEX';
-      return sym;
-    };
-
-    const initWidget = () => {
-      const container = document.getElementById(containerId);
-      if (container) container.innerHTML = '';
-
-      if (typeof window !== 'undefined' && (window as any).TradingView) {
-        new (window as any).TradingView.widget({
-          "autosize": true,
-          "symbol": getTVSymbol(chartConfig.symbol),
-          "interval": chartConfig.interval,
-          "timezone": "Asia/Kolkata",
-          "theme": "dark",
-          "style": "1",
-          "locale": "in",
-          "enable_publishing": false,
-          "hide_side_toolbar": true,
-          "allow_symbol_change": false,
-          "container_id": containerId,
-          "backgroundColor": "rgba(0, 0, 0, 0)"
-        });
-      }
-    };
-
-    let cancelled = false;
-
-    const ensureTradingViewLoaded = async () => {
-      if (typeof window !== 'undefined' && (window as any).TradingView) return;
-
-      const existing = document.getElementById(scriptId) as HTMLScriptElement | null;
-      if (existing) {
-        await new Promise<void>((resolve, reject) => {
-          const onLoad = () => resolve();
-          const onError = () => reject(new Error('TradingView script failed to load'));
-          existing.addEventListener('load', onLoad, { once: true });
-          existing.addEventListener('error', onError, { once: true });
-          setTimeout(() => {
-            if ((window as any).TradingView) resolve();
-          }, 50);
-        });
-        return;
-      }
-
-      await new Promise<void>((resolve, reject) => {
-        const script = document.createElement('script');
-        script.id = scriptId;
-        script.src = 'https://s3.tradingview.com/tv.js';
-        script.async = true;
-        script.onload = () => resolve();
-        script.onerror = () => reject(new Error('TradingView script failed to load'));
-        document.body.appendChild(script);
-      });
-    };
-
-    (async () => {
-      try {
-        await ensureTradingViewLoaded();
-        if (cancelled) return;
-        initWidget();
-      } catch (_) {
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [chartConfig, chartMode]);
 
   useEffect(() => {
     if (chartMode !== 'internal') return;
@@ -714,7 +660,16 @@ const OptionsPlayer = () => {
               </div>
               <div className="flex-1 w-full relative min-h-[400px]">
                 {chartMode === 'tradingview' ? (
-                  <div className="absolute inset-0" id="tradingview_nifty_chart" />
+                  <div className="absolute inset-0">
+                    <iframe
+                      key={`${tradingViewSymbol}-${chartConfig.interval}`}
+                      src={tradingViewEmbedUrl}
+                      title={`TradingView ${tradingViewSymbol}`}
+                      className="w-full h-full border-0"
+                      loading="lazy"
+                      allowTransparency={true}
+                    />
+                  </div>
                 ) : (
                   <div className="absolute inset-0 p-4">
                     {internalLoading ? (
