@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Info } from 'lucide-react';
 import { ResponsiveContainer, Treemap, Tooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { fetchStockPrice, fetchHistoricalPrices } from '../utils/priceApi';
@@ -261,6 +261,7 @@ const OptionsPlayer = () => {
   const [internalSeries, setInternalSeries] = useState<Array<{ i: number; price: number }>>([]);
   const [internalLoading, setInternalLoading] = useState(false);
   const [internalError, setInternalError] = useState<string | null>(null);
+  const tradingViewContainerRef = useRef<HTMLDivElement | null>(null);
 
   const isLocalHost = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -286,35 +287,59 @@ const OptionsPlayer = () => {
   }, [chartMode, isIndexSymbol]);
 
   const tradingViewSymbol = useMemo(() => {
-    if (chartConfig.symbol === 'NSE:NIFTY' || chartConfig.symbol === 'NSE:NIFTY50') return 'NSE:NIFTY';
-    if (chartConfig.symbol === 'NSE:BANKNIFTY') return 'NSE:BANKNIFTY';
-    if (chartConfig.symbol === 'NSE:FINNIFTY') return 'NSE:FINNIFTY';
-    if (chartConfig.symbol === 'NSE:MIDCPNIFTY') return 'NSE:MIDCPNIFTY';
-    if (chartConfig.symbol === 'BSE:SENSEX') return 'BSE:SENSEX';
+    // TradingView widgets handle Indian index continuous futures more reliably than cash index symbols.
+    if (chartConfig.symbol === 'NSE:NIFTY' || chartConfig.symbol === 'NSE:NIFTY50') return 'NSE:NIFTY1!';
+    if (chartConfig.symbol === 'NSE:BANKNIFTY') return 'NSE:BANKNIFTY1!';
+    if (chartConfig.symbol === 'NSE:FINNIFTY') return 'NSE:FINNIFTY1!';
+    if (chartConfig.symbol === 'NSE:MIDCPNIFTY') return 'NSE:MIDCPNIFTY1!';
+    if (chartConfig.symbol === 'BSE:SENSEX') return 'BSE:BSX1!';
     return chartConfig.symbol;
   }, [chartConfig.symbol]);
 
-  const tradingViewEmbedUrl = useMemo(() => {
-    const params = new URLSearchParams({
+  useEffect(() => {
+    if (chartMode !== 'tradingview') return;
+    const host = tradingViewContainerRef.current;
+    if (!host) return;
+
+    host.innerHTML = '';
+
+    const widget = document.createElement('div');
+    widget.className = 'tradingview-widget-container__widget';
+    widget.style.height = '100%';
+    widget.style.width = '100%';
+
+    const script = document.createElement('script');
+    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+    script.type = 'text/javascript';
+    script.async = true;
+    script.innerHTML = JSON.stringify({
+      autosize: true,
       symbol: tradingViewSymbol,
       interval: chartConfig.interval,
+      timezone: 'Asia/Kolkata',
       theme: 'dark',
       style: '1',
       locale: 'in',
-      timezone: 'Asia/Kolkata',
-      withdateranges: '1',
-      hide_side_toolbar: '1',
-      allow_symbol_change: '0',
-      saveimage: '0',
-      details: '0',
-      hotlist: '0',
-      calendar: '0',
-      toolbarbg: '#0f1520',
-      hide_top_toolbar: '0',
-      isTransparent: '1',
+      backgroundColor: '#0f1520',
+      gridColor: 'rgba(255,255,255,0.06)',
+      withdateranges: true,
+      hide_side_toolbar: false,
+      hide_top_toolbar: false,
+      allow_symbol_change: false,
+      save_image: false,
+      details: false,
+      calendar: false,
+      hotlist: false,
+      support_host: 'https://www.tradingview.com',
     });
-    return `https://s.tradingview.com/widgetembed/?${params.toString()}`;
-  }, [chartConfig.interval, tradingViewSymbol]);
+
+    host.appendChild(widget);
+    host.appendChild(script);
+
+    return () => {
+      host.innerHTML = '';
+    };
+  }, [chartConfig.interval, chartMode, tradingViewSymbol]);
 
   useEffect(() => {
     if (isLocalHost && isIndexSymbol) setChartMode('internal');
@@ -660,16 +685,7 @@ const OptionsPlayer = () => {
               </div>
               <div className="flex-1 w-full relative min-h-[400px]">
                 {chartMode === 'tradingview' ? (
-                  <div className="absolute inset-0">
-                    <iframe
-                      key={`${tradingViewSymbol}-${chartConfig.interval}`}
-                      src={tradingViewEmbedUrl}
-                      title={`TradingView ${tradingViewSymbol}`}
-                      className="w-full h-full border-0"
-                      loading="lazy"
-                      allowTransparency={true}
-                    />
-                  </div>
+                  <div ref={tradingViewContainerRef} className="absolute inset-0" />
                 ) : (
                   <div className="absolute inset-0 p-4">
                     {internalLoading ? (
