@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Info } from 'lucide-react';
 import { ResponsiveContainer, Treemap, Tooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { fetchStockPrice, fetchHistoricalPrices } from '../utils/priceApi';
@@ -261,7 +261,6 @@ const OptionsPlayer = () => {
   const [internalSeries, setInternalSeries] = useState<Array<{ i: number; price: number }>>([]);
   const [internalLoading, setInternalLoading] = useState(false);
   const [internalError, setInternalError] = useState<string | null>(null);
-  const tradingViewContainerRef = useRef<HTMLDivElement | null>(null);
 
   const isLocalHost = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -297,62 +296,25 @@ const OptionsPlayer = () => {
     return chartConfig.symbol;
   }, [chartConfig.symbol]);
 
-  useEffect(() => {
-    if (chartMode !== 'tradingview') return;
-    const host = tradingViewContainerRef.current;
-    if (!host) return;
-
-    // #region debug-point A:tv-init
-    if (isLocalHost) fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"options-player-tradingview",runId:"pre-fix",hypothesisId:"A",location:"OptionsPlayer.tsx:299",msg:"[DEBUG] TradingView init",data:{chartMode,symbol:chartConfig.symbol,tradingViewSymbol,interval:chartConfig.interval,hostChildren:host.childElementCount},ts:Date.now()})}).catch(()=>{});
-    // #endregion
-
-    host.innerHTML = '';
-
-    const widget = document.createElement('div');
-    widget.className = 'tradingview-widget-container__widget';
-    widget.style.height = '100%';
-    widget.style.width = '100%';
-
-    const script = document.createElement('script');
-    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
-    script.type = 'text/javascript';
-    script.async = true;
-    // #region debug-point B:tv-script-events
-    script.addEventListener('load', () => { if (isLocalHost) fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"options-player-tradingview",runId:"pre-fix",hypothesisId:"B",location:"OptionsPlayer.tsx:314",msg:"[DEBUG] TradingView script loaded",data:{tradingViewSymbol,interval:chartConfig.interval,hostChildren:host.childElementCount},ts:Date.now()})}).catch(()=>{}); });
-    script.addEventListener('error', () => { if (isLocalHost) fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"options-player-tradingview",runId:"pre-fix",hypothesisId:"B",location:"OptionsPlayer.tsx:315",msg:"[DEBUG] TradingView script failed",data:{tradingViewSymbol,interval:chartConfig.interval},ts:Date.now()})}).catch(()=>{}); });
-    // #endregion
-    script.innerHTML = JSON.stringify({
-      autosize: true,
-      symbol: tradingViewSymbol,
+  const tradingViewEmbedUrl = useMemo(() => {
+    const params = new URLSearchParams({
+      tvwidgetsymbol: tradingViewSymbol,
       interval: chartConfig.interval,
-      timezone: 'Asia/Kolkata',
       theme: 'dark',
-      style: '1',
       locale: 'in',
+      timezone: 'Asia/Kolkata',
       backgroundColor: '#0f1520',
       gridColor: 'rgba(255,255,255,0.06)',
-      withdateranges: true,
-      hide_side_toolbar: false,
-      hide_top_toolbar: false,
-      allow_symbol_change: false,
-      save_image: false,
-      details: false,
-      calendar: false,
-      hotlist: false,
-      support_host: 'https://www.tradingview.com',
     });
 
-    host.appendChild(widget);
-    host.appendChild(script);
-
-    // #region debug-point C:tv-dom-snapshot
-    window.setTimeout(() => { if (isLocalHost) fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"options-player-tradingview",runId:"pre-fix",hypothesisId:"C",location:"OptionsPlayer.tsx:339",msg:"[DEBUG] TradingView DOM snapshot",data:{tradingViewSymbol,hostChildren:host.childElementCount,iframeCount:host.querySelectorAll('iframe').length,textSample:(host.textContent || '').trim().slice(0,200)},ts:Date.now()})}).catch(()=>{}); }, 2500);
+    // #region debug-point D:tv-iframe-url
+    if (isLocalHost && typeof window !== 'undefined') {
+      fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"options-player-tradingview",runId:"post-fix",hypothesisId:"D",location:"OptionsPlayer.tsx:300",msg:"[DEBUG] TradingView iframe url",data:{symbol:chartConfig.symbol,tradingViewSymbol,interval:chartConfig.interval,src:`/tradingview-embed.html?${params.toString()}`},ts:Date.now()})}).catch(()=>{});
+    }
     // #endregion
 
-    return () => {
-      host.innerHTML = '';
-    };
-  }, [chartConfig.interval, chartMode, isLocalHost, tradingViewSymbol]);
+    return `/tradingview-embed.html?${params.toString()}`;
+  }, [chartConfig.interval, chartConfig.symbol, isLocalHost, tradingViewSymbol]);
 
   useEffect(() => {
     if (isLocalHost && isIndexSymbol) setChartMode('internal');
@@ -698,7 +660,13 @@ const OptionsPlayer = () => {
               </div>
               <div className="flex-1 w-full relative min-h-[400px]">
                 {chartMode === 'tradingview' ? (
-                  <div ref={tradingViewContainerRef} className="absolute inset-0" />
+                  <iframe
+                    key={tradingViewEmbedUrl}
+                    src={tradingViewEmbedUrl}
+                    title={`TradingView ${tradingViewSymbol}`}
+                    className="absolute inset-0 h-full w-full border-0 bg-[#0f1520]"
+                    loading="lazy"
+                  />
                 ) : (
                   <div className="absolute inset-0 p-4">
                     {internalLoading ? (
