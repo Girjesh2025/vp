@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Info } from 'lucide-react';
 import { ResponsiveContainer, Treemap, Tooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { fetchStockPrice, fetchHistoricalPrices } from '../utils/priceApi';
+import { createChart, CandlestickSeries, ColorType, CrosshairMode, type CandlestickData, type UTCTimestamp } from 'lightweight-charts';
+import { fetchStockPrice, fetchHistoricalPrices, fetchHistoricalOHLCV } from '../utils/priceApi';
 
 // Nifty 50 subset for the Money Flux Treemap
 const NIFTY_50_SYMBOLS = [
@@ -261,6 +262,10 @@ const OptionsPlayer = () => {
   const [internalSeries, setInternalSeries] = useState<Array<{ i: number; price: number }>>([]);
   const [internalLoading, setInternalLoading] = useState(false);
   const [internalError, setInternalError] = useState<string | null>(null);
+  const [candles, setCandles] = useState<CandlestickData<UTCTimestamp>[]>([]);
+  const [candlesLoading, setCandlesLoading] = useState(false);
+  const [candlesError, setCandlesError] = useState<string | null>(null);
+  const tradingViewChartRef = useRef<HTMLDivElement | null>(null);
 
   const isLocalHost = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -286,35 +291,113 @@ const OptionsPlayer = () => {
   }, [chartMode, isIndexSymbol]);
 
   const tradingViewSymbol = useMemo(() => {
-    // Embedded TradingView widgets reject some Indian continuous futures symbols;
-    // use the corresponding cash/index symbols that TradingView exposes publicly.
+    // Keep the label aligned with the selected market instrument even though
+    // the candlestick renderer now uses our own verified Yahoo OHLC feed.
     if (chartConfig.symbol === 'NSE:NIFTY' || chartConfig.symbol === 'NSE:NIFTY50') return 'NSE:NIFTY';
     if (chartConfig.symbol === 'NSE:BANKNIFTY') return 'NSE:BANKNIFTY';
-    if (chartConfig.symbol === 'NSE:FINNIFTY') return 'NSE:CNXFINANCE';
-    if (chartConfig.symbol === 'NSE:MIDCPNIFTY') return 'NSE:NIFTY_MID_SELECT';
+    if (chartConfig.symbol === 'NSE:FINNIFTY') return 'NSE:FINNIFTY';
+    if (chartConfig.symbol === 'NSE:MIDCPNIFTY') return 'NSE:MIDCPNIFTY';
     if (chartConfig.symbol === 'BSE:SENSEX') return 'BSE:SENSEX';
     return chartConfig.symbol;
   }, [chartConfig.symbol]);
 
-  const tradingViewEmbedUrl = useMemo(() => {
-    const params = new URLSearchParams({
-      tvwidgetsymbol: tradingViewSymbol,
-      interval: chartConfig.interval,
-      theme: 'dark',
-      locale: 'in',
-      timezone: 'Asia/Kolkata',
-      backgroundColor: '#0f1520',
-      gridColor: 'rgba(255,255,255,0.06)',
+  const candleRequestConfig = useMemo(() => {
+    if (chartConfig.interval === 'W') return { range: '3y', interval: '1wk', bars: 180 };
+    if (chartConfig.interval === 'M') return { range: '10y', interval: '1mo', bars: 180 };
+    return { range: '1y', interval: '1d', bars: 240 };
+  }, [chartConfig.interval]);
+
+  useEffect(() => {
+    if (chartMode !== 'tradingview') return;
+    const yahooSymbol = indexYahooMap[chartConfig.symbol] ?? chartConfig.symbol;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        setCandlesLoading(true);
+        setCandlesError(null);
+        const bars = await fetchHistoricalOHLCV(yahooSymbol, candleRequestConfig);
+        if (cancelled) return;
+
+        const nextCandles = bars.map((bar) => ({
+          time: bar.timestamp as UTCTimestamp,
+          open: bar.open,
+          high: bar.high,
+          low: bar.low,
+          close: bar.close,
+        }));
+
+        setCandles(nextCandles);
+
+        // #region debug-point E:tv-candle-data
+        if (isLocalHost) fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"options-player-tradingview",runId:"post-fix",hypothesisId:"E",location:"OptionsPlayer.tsx:332",msg:"[DEBUG] TradingView candle data ready",data:{symbol:chartConfig.symbol,tradingViewSymbol,yahooSymbol,interval:chartConfig.interval,bars:nextCandles.length,firstBar:nextCandles[0] ?? null,lastBar:nextCandles[nextCandles.length - 1] ?? null},ts:Date.now()})}).catch(()=>{});
+        // #endregion
+      } catch (e: any) {
+        if (cancelled) return;
+        setCandles([]);
+        setCandlesError(e?.message || 'Failed to load candlestick data');
+      } finally {
+        if (!cancelled) setCandlesLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [candleRequestConfig, chartConfig.interval, chartConfig.symbol, chartMode, indexYahooMap, isLocalHost, tradingViewSymbol]);
+
+  useEffect(() => {
+    if (chartMode !== 'tradingview') return;
+    const host = tradingViewChartRef.current;
+    if (!host || candles.length === 0) return;
+
+    const chart = createChart(host, {
+      autoSize: true,
+      layout: {
+        background: { type: ColorType.Solid, color: '#0f1520' },
+        textColor: '#94a3b8',
+        attributionLogo: false,
+      },
+      grid: {
+        vertLines: { color: 'rgba(255,255,255,0.06)' },
+        horzLines: { color: 'rgba(255,255,255,0.06)' },
+      },
+      crosshair: {
+        mode: CrosshairMode.MagnetOHLC,
+      },
+      rightPriceScale: {
+        borderColor: 'rgba(255,255,255,0.08)',
+      },
+      timeScale: {
+        borderColor: 'rgba(255,255,255,0.08)',
+        timeVisible: chartConfig.interval === 'D',
+        secondsVisible: false,
+      },
     });
 
-    // #region debug-point D:tv-iframe-url
-    if (isLocalHost && typeof window !== 'undefined') {
-      fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"options-player-tradingview",runId:"post-fix",hypothesisId:"D",location:"OptionsPlayer.tsx:300",msg:"[DEBUG] TradingView iframe url",data:{symbol:chartConfig.symbol,tradingViewSymbol,interval:chartConfig.interval,src:`/tradingview-embed.html?${params.toString()}`},ts:Date.now()})}).catch(()=>{});
-    }
-    // #endregion
+    const series = chart.addSeries(CandlestickSeries, {
+      upColor: '#10b981',
+      downColor: '#f43f5e',
+      wickUpColor: '#10b981',
+      wickDownColor: '#f43f5e',
+      borderVisible: false,
+      priceLineVisible: true,
+      lastValueVisible: true,
+    });
 
-    return `/tradingview-embed.html?${params.toString()}`;
-  }, [chartConfig.interval, chartConfig.symbol, isLocalHost, tradingViewSymbol]);
+    series.setData(candles);
+    chart.timeScale().fitContent();
+
+    const resizeObserver = new ResizeObserver(() => {
+      chart.timeScale().fitContent();
+    });
+    resizeObserver.observe(host);
+
+    return () => {
+      resizeObserver.disconnect();
+      chart.remove();
+    };
+  }, [candles, chartConfig.interval, chartMode]);
 
   useEffect(() => {
     if (isLocalHost && isIndexSymbol) setChartMode('internal');
@@ -660,13 +743,28 @@ const OptionsPlayer = () => {
               </div>
               <div className="flex-1 w-full relative min-h-[400px]">
                 {chartMode === 'tradingview' ? (
-                  <iframe
-                    key={tradingViewEmbedUrl}
-                    src={tradingViewEmbedUrl}
-                    title={`TradingView ${tradingViewSymbol}`}
-                    className="absolute inset-0 h-full w-full border-0 bg-[#0f1520]"
-                    loading="lazy"
-                  />
+                  <div className="absolute inset-0">
+                    {candlesLoading ? (
+                      <div className="flex items-center justify-center h-full">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                      </div>
+                    ) : candles.length > 0 ? (
+                      <>
+                        <div ref={tradingViewChartRef} className="h-full w-full" />
+                        <div className="absolute left-4 top-4 z-10 rounded-lg border border-white/10 bg-black/35 px-3 py-2 backdrop-blur">
+                          <div className="text-[10px] font-bold tracking-[0.18em] text-slate-400 uppercase">TradingView Candles</div>
+                          <div className="mt-1 text-xs font-semibold text-slate-200">{tradingViewSymbol}</div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full text-center">
+                        <div className="text-sm font-bold text-slate-200">Candlestick chart unavailable</div>
+                        <div className="mt-1 text-xs text-slate-400 max-w-[360px]">
+                          {candlesError || 'Unable to load candlestick data for this symbol.'}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <div className="absolute inset-0 p-4">
                     {internalLoading ? (
