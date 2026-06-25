@@ -267,11 +267,6 @@ const OptionsPlayer = () => {
   const [candlesError, setCandlesError] = useState<string | null>(null);
   const tradingViewChartRef = useRef<HTMLDivElement | null>(null);
 
-  const isLocalHost = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return /^localhost$/i.test(window.location.hostname) || /^127\.0\.0\.1$/.test(window.location.hostname);
-  }, []);
-
   const indexYahooMap = useMemo<Record<string, string>>(() => {
     return {
       'NSE:NIFTY': '^NSEI',
@@ -328,10 +323,6 @@ const OptionsPlayer = () => {
         }));
 
         setCandles(nextCandles);
-
-        // #region debug-point E:tv-candle-data
-        if (isLocalHost) fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"options-player-tradingview",runId:"post-fix",hypothesisId:"E",location:"OptionsPlayer.tsx:332",msg:"[DEBUG] TradingView candle data ready",data:{symbol:chartConfig.symbol,tradingViewSymbol,yahooSymbol,interval:chartConfig.interval,bars:nextCandles.length,firstBar:nextCandles[0] ?? null,lastBar:nextCandles[nextCandles.length - 1] ?? null},ts:Date.now()})}).catch(()=>{});
-        // #endregion
       } catch (e: any) {
         if (cancelled) return;
         setCandles([]);
@@ -344,7 +335,7 @@ const OptionsPlayer = () => {
     return () => {
       cancelled = true;
     };
-  }, [candleRequestConfig, chartConfig.interval, chartConfig.symbol, chartMode, indexYahooMap, isLocalHost, tradingViewSymbol]);
+  }, [candleRequestConfig, chartConfig.interval, chartConfig.symbol, chartMode, indexYahooMap, tradingViewSymbol]);
 
   useEffect(() => {
     if (chartMode !== 'tradingview') return;
@@ -398,10 +389,6 @@ const OptionsPlayer = () => {
       chart.remove();
     };
   }, [candles, chartConfig.interval, chartMode]);
-
-  useEffect(() => {
-    if (isLocalHost && isIndexSymbol) setChartMode('internal');
-  }, [isIndexSymbol, isLocalHost]);
 
   useEffect(() => {
     if (!isTradingViewIndex) return;
