@@ -287,12 +287,13 @@ const OptionsPlayer = () => {
   }, [chartMode, isIndexSymbol]);
 
   const tradingViewSymbol = useMemo(() => {
-    // TradingView widgets handle Indian index continuous futures more reliably than cash index symbols.
-    if (chartConfig.symbol === 'NSE:NIFTY' || chartConfig.symbol === 'NSE:NIFTY50') return 'NSE:NIFTY1!';
-    if (chartConfig.symbol === 'NSE:BANKNIFTY') return 'NSE:BANKNIFTY1!';
-    if (chartConfig.symbol === 'NSE:FINNIFTY') return 'NSE:FINNIFTY1!';
-    if (chartConfig.symbol === 'NSE:MIDCPNIFTY') return 'NSE:MIDCPNIFTY1!';
-    if (chartConfig.symbol === 'BSE:SENSEX') return 'BSE:BSX1!';
+    // Embedded TradingView widgets reject some Indian continuous futures symbols;
+    // use the corresponding cash/index symbols that TradingView exposes publicly.
+    if (chartConfig.symbol === 'NSE:NIFTY' || chartConfig.symbol === 'NSE:NIFTY50') return 'NSE:NIFTY';
+    if (chartConfig.symbol === 'NSE:BANKNIFTY') return 'NSE:BANKNIFTY';
+    if (chartConfig.symbol === 'NSE:FINNIFTY') return 'NSE:CNXFINANCE';
+    if (chartConfig.symbol === 'NSE:MIDCPNIFTY') return 'NSE:NIFTY_MID_SELECT';
+    if (chartConfig.symbol === 'BSE:SENSEX') return 'BSE:SENSEX';
     return chartConfig.symbol;
   }, [chartConfig.symbol]);
 
@@ -300,6 +301,10 @@ const OptionsPlayer = () => {
     if (chartMode !== 'tradingview') return;
     const host = tradingViewContainerRef.current;
     if (!host) return;
+
+    // #region debug-point A:tv-init
+    if (isLocalHost) fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"options-player-tradingview",runId:"pre-fix",hypothesisId:"A",location:"OptionsPlayer.tsx:299",msg:"[DEBUG] TradingView init",data:{chartMode,symbol:chartConfig.symbol,tradingViewSymbol,interval:chartConfig.interval,hostChildren:host.childElementCount},ts:Date.now()})}).catch(()=>{});
+    // #endregion
 
     host.innerHTML = '';
 
@@ -312,6 +317,10 @@ const OptionsPlayer = () => {
     script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
     script.type = 'text/javascript';
     script.async = true;
+    // #region debug-point B:tv-script-events
+    script.addEventListener('load', () => { if (isLocalHost) fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"options-player-tradingview",runId:"pre-fix",hypothesisId:"B",location:"OptionsPlayer.tsx:314",msg:"[DEBUG] TradingView script loaded",data:{tradingViewSymbol,interval:chartConfig.interval,hostChildren:host.childElementCount},ts:Date.now()})}).catch(()=>{}); });
+    script.addEventListener('error', () => { if (isLocalHost) fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"options-player-tradingview",runId:"pre-fix",hypothesisId:"B",location:"OptionsPlayer.tsx:315",msg:"[DEBUG] TradingView script failed",data:{tradingViewSymbol,interval:chartConfig.interval},ts:Date.now()})}).catch(()=>{}); });
+    // #endregion
     script.innerHTML = JSON.stringify({
       autosize: true,
       symbol: tradingViewSymbol,
@@ -336,10 +345,14 @@ const OptionsPlayer = () => {
     host.appendChild(widget);
     host.appendChild(script);
 
+    // #region debug-point C:tv-dom-snapshot
+    window.setTimeout(() => { if (isLocalHost) fetch("http://127.0.0.1:7777/event",{method:"POST",body:JSON.stringify({sessionId:"options-player-tradingview",runId:"pre-fix",hypothesisId:"C",location:"OptionsPlayer.tsx:339",msg:"[DEBUG] TradingView DOM snapshot",data:{tradingViewSymbol,hostChildren:host.childElementCount,iframeCount:host.querySelectorAll('iframe').length,textSample:(host.textContent || '').trim().slice(0,200)},ts:Date.now()})}).catch(()=>{}); }, 2500);
+    // #endregion
+
     return () => {
       host.innerHTML = '';
     };
-  }, [chartConfig.interval, chartMode, tradingViewSymbol]);
+  }, [chartConfig.interval, chartMode, isLocalHost, tradingViewSymbol]);
 
   useEffect(() => {
     if (isLocalHost && isIndexSymbol) setChartMode('internal');
@@ -674,7 +687,7 @@ const OptionsPlayer = () => {
                     TradingView
                   </button>
                   <a
-                    href={`https://in.tradingview.com/chart/?symbol=${encodeURIComponent(chartConfig.symbol)}`}
+                    href={`https://in.tradingview.com/chart/?symbol=${encodeURIComponent(tradingViewSymbol)}`}
                     target="_blank"
                     rel="noreferrer"
                     className="px-3 py-1.5 rounded-lg text-xs font-bold border bg-transparent text-slate-300 border-white/10 hover:bg-white/5 transition-colors"
