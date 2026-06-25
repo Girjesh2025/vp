@@ -221,10 +221,10 @@ const ProfessionalHeader: React.FC<ProfessionalHeaderProps> = ({
                 <div className="flex items-center space-x-3">
                   <div className="hidden sm:block">
                     <p className="text-sm font-medium text-slate-200 text-right">
-                      {localStorage.getItem('pp_broker_user_id') || user?.user_metadata?.full_name || 'User'}
+                      {user?.user_metadata?.full_name || 'User'}
                     </p>
                     <p className="text-xs text-slate-500 text-right truncate max-w-[120px]">
-                      {brokerStatus?.connected && brokerStatus.broker ? `${brokerStatus.broker.charAt(0).toUpperCase() + brokerStatus.broker.slice(1)} Account` : user?.email}
+                      {user?.email}
                     </p>
                   </div>
                   <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg">

@@ -53,51 +53,21 @@ interface StockWithPrice extends Stock {
   priceChangePercent?: number;
 }
 
-const BROKER_SESSION_STORAGE_KEY = 'pp_broker_session';
-const BROKER_FLOW_STORAGE_KEY = 'pp_broker_flow';
-
-const getStoredBrokerSessionToken = (): string | null => {
+const clearLegacyBrokerStorage = () => {
   try {
-    return localStorage.getItem(BROKER_SESSION_STORAGE_KEY);
-  } catch (e) {
-    return null;
-  }
-};
-
-const setStoredBrokerSessionToken = (token: string | null) => {
-  try {
-    if (token) localStorage.setItem(BROKER_SESSION_STORAGE_KEY, token);
-    else localStorage.removeItem(BROKER_SESSION_STORAGE_KEY);
+    localStorage.removeItem('pp_data_source');
+    localStorage.removeItem('pp_broker');
+    localStorage.removeItem('pp_broker_pending');
+    localStorage.removeItem('pp_broker_session');
+    localStorage.removeItem('pp_broker_flow');
+    localStorage.removeItem('pp_broker_user_id');
   } catch (e) {}
-};
-
-const getStoredBrokerFlowToken = (): string | null => {
-  try {
-    return localStorage.getItem(BROKER_FLOW_STORAGE_KEY);
-  } catch (e) {
-    return null;
-  }
-};
-
-const setStoredBrokerFlowToken = (token: string | null) => {
-  try {
-    if (token) localStorage.setItem(BROKER_FLOW_STORAGE_KEY, token);
-    else localStorage.removeItem(BROKER_FLOW_STORAGE_KEY);
-  } catch (e) {}
-};
-
-const buildBrokerHeaders = (): HeadersInit => {
-  const headers: HeadersInit = { 'Content-Type': 'application/json' };
-  const sessionToken = getStoredBrokerSessionToken();
-  if (sessionToken) headers['x-broker-session'] = sessionToken;
-  return headers;
 };
 
 
 
 const StockPortfolioApp: React.FC = () => {
   const { user } = useAuth();
-  const apiBaseUrl = '';
   const { 
     portfolios,
     currentPortfolio,
@@ -114,11 +84,9 @@ const StockPortfolioApp: React.FC = () => {
     switchPortfolio
   } = usePortfolio();
 
-  const [brokerStatus, setBrokerStatus] = useState<{ connected: boolean; broker?: string } | null>(null);
-  const [brokerLoading, setBrokerLoading] = useState(false);
-  const [brokerError, setBrokerError] = useState<string | null>(null);
-  const [useBrokerData, setUseBrokerData] = useState(() => localStorage.getItem('pp_data_source') === 'broker');
-  const [selectedBroker, setSelectedBroker] = useState<'zerodha' | 'fyers'>(() => (localStorage.getItem('pp_broker') === 'fyers' ? 'fyers' : 'zerodha'));
+  const brokerStatus: { connected: boolean; broker?: string } | null = null;
+  const brokerHoldings: any[] = [];
+  const brokerHoldingsLoading = false;
 
   const [isLoading, setIsLoading] = useState(false);
   const [priceUpdateTime, setPriceUpdateTime] = useState<Date | null>(null);
@@ -144,49 +112,10 @@ const StockPortfolioApp: React.FC = () => {
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [transactionModalType, setTransactionModalType] = useState<'buy' | 'sell'>('buy');
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
-  
-  // Real Broker Holdings state
-  const [brokerHoldings, setBrokerHoldings] = useState<any[]>([]);
-  const [brokerHoldingsLoading, setBrokerHoldingsLoading] = useState(false);
-
   const location = useLocation();
   const [activeTab, setActiveTab] = useState(() => {
     return (location.state as any)?.activeTab || localStorage.getItem('lastActiveTab') || 'dashboard';
   });
-
-  // Fetch Real Broker Holdings
-  useEffect(() => {
-    // We want to fetch broker holdings anytime brokerStatus is connected, 
-    // regardless of the active tab, so it's ready when the user navigates.
-    if (!brokerStatus?.connected || brokerStatus.broker !== 'fyers') return;
-    
-    let isMounted = true;
-    const fetchBrokerHoldings = async () => {
-      // If we don't have a user ID but we are in broker mode, use local storage fallback
-      const userId = user?.id || localStorage.getItem('pp_user_id');
-      if (!userId) return;
-      
-      try {
-        setBrokerHoldingsLoading(true);
-        const res = await fetch(`${apiBaseUrl}/api/broker/fyers/holdings?userId=${encodeURIComponent(userId)}`, {
-          headers: buildBrokerHeaders(),
-        });
-        if (!res.ok) throw new Error('Failed to fetch broker holdings');
-        const data = await res.json();
-        
-        if (isMounted && data && data.holdings && Array.isArray(data.holdings)) {
-          setBrokerHoldings(data.holdings);
-        }
-      } catch (err) {
-        console.warn('Could not fetch broker holdings', err);
-      } finally {
-        if (isMounted) setBrokerHoldingsLoading(false);
-      }
-    };
-    
-    fetchBrokerHoldings();
-    return () => { isMounted = false; };
-  }, [brokerStatus?.connected, brokerStatus?.broker, user?.id]);
 
   useEffect(() => {
     localStorage.setItem('lastActiveTab', activeTab);
@@ -197,6 +126,10 @@ const StockPortfolioApp: React.FC = () => {
   }, [user?.id]);
 
   useEffect(() => {
+    clearLegacyBrokerStorage();
+  }, []);
+
+  useEffect(() => {
 
     if ((location.state as any)?.activeTab) {
       setActiveTab((location.state as any).activeTab);
@@ -205,236 +138,6 @@ const StockPortfolioApp: React.FC = () => {
     }
   }, [(location.state as any)?.activeTab]);
 
-  useEffect(() => {
-    const st = location.state as any;
-    if (!st?.openBroker) return;
-    if (!user?.id) return;
-    if (brokerStatus?.connected) return;
-    setTimeout(() => {
-      const preferred = st?.broker === 'fyers' || st?.broker === 'zerodha' ? st.broker : selectedBroker;
-      if (preferred === 'fyers') connectFyers();
-      else connectZerodha();
-    }, 0);
-  }, [brokerStatus?.connected, location.state, selectedBroker, user?.id]);
-
-  // Restore broker connection status on mount
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('auth_code') || params.get('code') || params.get('request_token')) {
-      // We are in the middle of an OAuth redirect. Do not fetch status yet, let the exchange handle it!
-      return;
-    }
-
-    if (localStorage.getItem('pp_data_source') === 'broker' || localStorage.getItem('pp_broker')) {
-      refreshBrokerStatus();
-    }
-  }, [user?.id]);
-
-  const refreshBrokerStatus = async () => {
-    const userId = user?.id || localStorage.getItem('pp_user_id');
-    if (!userId) return;
-    try {
-      setBrokerLoading(true);
-      setBrokerError(null);
-      const res = await fetch(`${apiBaseUrl}/api/broker/status?userId=${encodeURIComponent(userId)}`, {
-        headers: buildBrokerHeaders(),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error || 'Failed to load broker status');
-      setBrokerStatus(data);
-      if (data?.connected && (data?.broker === 'fyers' || data?.broker === 'zerodha')) {
-        setSelectedBroker(data.broker);
-        localStorage.setItem('pp_broker', data.broker);
-      }
-    } catch (e: any) {
-      setBrokerStatus({ connected: false });
-      setBrokerError(e?.message || 'Failed to load broker status');
-    } finally {
-      setBrokerLoading(false);
-    }
-  };
-
-  const connectZerodha = async () => {
-    if (!user?.id) return;
-    try {
-      setBrokerLoading(true);
-      setBrokerError(null);
-      localStorage.setItem('pp_broker_pending', 'zerodha');
-      localStorage.setItem('pp_broker', 'zerodha');
-      const res = await fetch(`${apiBaseUrl}/api/broker/zerodha/login-url`, {
-        method: 'POST',
-        headers: buildBrokerHeaders(),
-        body: JSON.stringify({ userId: user.id }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error || 'Failed to get login URL');
-      if (data?.flowToken) setStoredBrokerFlowToken(data.flowToken);
-      if (data?.loginUrl) {
-        window.location.href = data.loginUrl;
-      } else {
-        throw new Error('Missing loginUrl');
-      }
-    } catch (e: any) {
-      setBrokerError(e?.message || 'Broker connect failed');
-    } finally {
-      setBrokerLoading(false);
-    }
-  };
-
-  const connectFyers = async () => {
-    if (!user?.id) return;
-    try {
-      setBrokerLoading(true);
-      setBrokerError(null);
-      localStorage.setItem('pp_broker_pending', 'fyers');
-      localStorage.setItem('pp_broker', 'fyers');
-      const res = await fetch(`${apiBaseUrl}/api/broker/fyers/login-url`, {
-        method: 'POST',
-        headers: buildBrokerHeaders(),
-        body: JSON.stringify({ userId: user.id }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error || 'Failed to get login URL');
-      if (data?.flowToken) setStoredBrokerFlowToken(data.flowToken);
-      if (data?.loginUrl) {
-        window.location.href = data.loginUrl;
-      } else {
-        throw new Error('Missing loginUrl');
-      }
-    } catch (e: any) {
-      setBrokerError(e?.message || 'Broker connect failed');
-    } finally {
-      setBrokerLoading(false);
-    }
-  };
-
-  const disconnectBroker = async () => {
-    if (!user?.id) return;
-    try {
-      setBrokerLoading(true);
-      setBrokerError(null);
-      const res = await fetch(`${apiBaseUrl}/api/broker/disconnect`, {
-        method: 'POST',
-        headers: buildBrokerHeaders(),
-        body: JSON.stringify({ userId: user.id }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error || 'Failed to disconnect');
-      setBrokerStatus({ connected: false });
-      setStoredBrokerSessionToken(null);
-      setStoredBrokerFlowToken(null);
-      localStorage.removeItem('pp_data_source');
-      localStorage.removeItem('pp_broker_pending');
-      setUseBrokerData(false);
-    } catch (e: any) {
-      setBrokerError(e?.message || 'Failed to disconnect broker');
-    } finally {
-      setBrokerLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    refreshBrokerStatus();
-  }, [user?.id]);
-
-  useEffect(() => {
-    const userId = user?.id || localStorage.getItem('pp_user_id');
-    if (!userId) return;
-    const params = new URLSearchParams(window.location.search);
-    const requestToken = params.get('request_token');
-    const status = params.get('status');
-    const authCode = params.get('auth_code') || params.get('code');
-    const pending = localStorage.getItem('pp_broker_pending');
-    const flowToken = getStoredBrokerFlowToken();
-    const shouldHandleZerodha = pending === 'zerodha' || (!!requestToken && status === 'success');
-    const shouldHandleFyers = pending === 'fyers' || (!!authCode && !requestToken);
-    if (!shouldHandleZerodha && !shouldHandleFyers) return;
-
-    (async () => {
-      try {
-        setBrokerLoading(true);
-        setBrokerError(null);
-        if (shouldHandleZerodha) {
-          const res = await fetch(`${apiBaseUrl}/api/broker/zerodha/exchange`, {
-            method: 'POST',
-            headers: buildBrokerHeaders(),
-            body: JSON.stringify({ userId: user?.id || localStorage.getItem('pp_user_id'), requestToken, flowToken }),
-          });
-          const data = await res.json().catch(() => null);
-          if (!res.ok) throw new Error(data?.error || 'Broker connection failed');
-          if (data?.sessionToken) setStoredBrokerSessionToken(data.sessionToken);
-          setBrokerStatus({ connected: true, broker: 'zerodha' });
-          setSelectedBroker('zerodha');
-          localStorage.setItem('pp_broker', 'zerodha');
-          localStorage.setItem('pp_data_source', 'broker');
-          setUseBrokerData(true);
-          params.delete('request_token');
-          params.delete('status');
-        } else if (shouldHandleFyers) {
-          // Decode the Fyers auth_code (JWT) to extract the Client ID
-          try {
-            if (authCode && authCode.includes('.')) {
-              const payloadBase64 = authCode.split('.')[1];
-              const payloadJson = atob(payloadBase64.replace(/-/g, '+').replace(/_/g, '/'));
-              const payload = JSON.parse(payloadJson);
-              if (payload && payload.display_name) {
-                localStorage.setItem('pp_broker_user_id', payload.display_name);
-              }
-            }
-          } catch (decodeErr) {
-            console.warn('Could not decode Fyers auth_code', decodeErr);
-          }
-
-          const res = await fetch(`${apiBaseUrl}/api/broker/fyers/exchange`, {
-            method: 'POST',
-            headers: buildBrokerHeaders(),
-            body: JSON.stringify({ userId: user?.id || localStorage.getItem('pp_user_id'), authCode, flowToken }),
-          });
-          const data = await res.json().catch(() => null);
-          if (!res.ok) {
-            alert(`Fyers Login Failed!\nReason: ${data?.error || 'Unknown Error'}\nDetails: ${JSON.stringify(data?.details || {})}`);
-            throw new Error(data?.error || 'Broker connection failed');
-          }
-          if (data?.sessionToken) setStoredBrokerSessionToken(data.sessionToken);
-          
-          // Instantly populate the holdings from the exchange response
-          if (data && data.holdings && Array.isArray(data.holdings)) {
-            setBrokerHoldings(data.holdings);
-          }
-          
-          setBrokerStatus({ connected: true, broker: 'fyers' });
-          setSelectedBroker('fyers');
-          localStorage.setItem('pp_broker', 'fyers');
-          localStorage.setItem('pp_data_source', 'broker');
-          setUseBrokerData(true);
-          params.delete('auth_code');
-          params.delete('code');
-        }
-        localStorage.removeItem('pp_broker_pending');
-        setStoredBrokerFlowToken(null);
-        const newSearch = params.toString();
-        const newUrl = `${window.location.pathname}${newSearch ? `?${newSearch}` : ''}${window.location.hash || ''}`;
-        window.history.replaceState({}, document.title, newUrl);
-        // After successful login, make sure we show the dashboard instead of settings
-        setActiveTab('dashboard');
-      } catch (e: any) {
-        setBrokerError(e?.message || 'Broker connection failed');
-      } finally {
-        setBrokerLoading(false);
-        localStorage.removeItem('pp_broker_pending');
-        setStoredBrokerFlowToken(null);
-        params.delete('auth_code');
-        params.delete('code');
-        params.delete('request_token');
-        params.delete('status');
-        const newSearch = params.toString();
-        const newUrl = `${window.location.pathname}${newSearch ? `?${newSearch}` : ''}${window.location.hash || ''}`;
-        window.history.replaceState({}, document.title, newUrl);
-        // Always go to dashboard after login attempt, whether success or fail
-        setActiveTab('dashboard');
-      }
-    })();
-  }, [user?.id]);
   // Use a ref to always have the latest stocks list inside price-fetch without triggering re-renders
   const stocksRef = React.useRef<StockWithPrice[]>([]);
   const stockPricesRef = React.useRef<Record<string, PriceData>>({});
