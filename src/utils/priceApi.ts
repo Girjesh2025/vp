@@ -107,10 +107,20 @@ const isGlobalOrIndexSymbol = (symbol: string): boolean => {
   return symbol.startsWith('^') || symbol.includes('=');
 };
 
+const YAHOO_SYMBOL_ALIASES: Record<string, string> = {
+  SBI: 'SBIN',
+  'L&T': 'LT',
+};
+
+const normalizeYahooBaseSymbol = (symbol: string): string => {
+  const clean = symbol.replace(/\.(NS|BO|NSE|BSE)$/i, '');
+  return YAHOO_SYMBOL_ALIASES[clean] ?? clean;
+};
+
 const toYahooSymbol = (symbol: string): string => {
-  const clean = symbol.replace(/\.(NSE|BSE)$/i, '');
-  if (/\.NSE$/i.test(symbol)) return `${clean}.NS`;
-  if (/\.BSE$/i.test(symbol)) return `${clean}.BO`;
+  const clean = normalizeYahooBaseSymbol(symbol);
+  if (/\.NSE$/i.test(symbol) || /\.NS$/i.test(symbol)) return `${clean}.NS`;
+  if (/\.BSE$/i.test(symbol) || /\.BO$/i.test(symbol)) return `${clean}.BO`;
   
   // If it's a raw symbol without suffix and not a global index, intelligently guess
   if (!clean.includes('.') && !isGlobalOrIndexSymbol(clean)) {
@@ -131,7 +141,6 @@ const fetchDirectFallback = async (symbol: string): Promise<PriceData | null> =>
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout per proxy
       
-      const queryPart = yahooUrl.includes('?') ? yahooUrl.substring(yahooUrl.indexOf('?')) : '';
       const targetUrl = p.name === 'vite-proxy' 
         ? `${p.url}${encodeURIComponent(yahooSymbol)}?source=yahoo` 
         : `${p.url}${encodeURIComponent(yahooUrl)}`;
@@ -365,7 +374,7 @@ export const fetchHistoricalOHLCV = async (
     try {
       const queryPart = yahooUrl.includes('?') ? yahooUrl.substring(yahooUrl.indexOf('?')) : '';
       const targetUrl = p.name === 'vite-proxy'
-        ? `${p.url}${yahooSymbol}${queryPart}`
+        ? `${p.url}${encodeURIComponent(yahooSymbol)}${queryPart}`
         : `${p.url}${encodeURIComponent(yahooUrl)}`;
 
       const r = await fetch(targetUrl, { method: 'GET' });
@@ -622,7 +631,7 @@ export const fetchSectorRawMonthly = async (symbol: string): Promise<SectorRawMo
 
 // Convert to candidate symbols
 const toEODHDSymbols = (symbol: string): string[] => {
-  const cleanSymbol = symbol.replace(/\.(NS|BO|NSE|BSE)$/i, '');
+  const cleanSymbol = normalizeYahooBaseSymbol(symbol);
   const usStocks = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'TSLA', 'META', 'NVDA', 'NFLX', 'ADBE', 'CRM', 'ORCL', 'IBM', 'INTC', 'AMD', 'UBER', 'LYFT', 'SNAP', 'TWTR', 'SPOT', 'SQ', 'PYPL', 'V', 'MA', 'JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'AXP', 'BRK.A', 'BRK.B', 'JNJ', 'PFE', 'MRK', 'ABBV', 'UNH', 'CVS', 'WMT', 'TGT', 'HD', 'LOW', 'NKE', 'SBUX', 'MCD', 'KO', 'PEP', 'DIS', 'CMCSA', 'VZ', 'T'];
   if (usStocks.includes(cleanSymbol)) return [`${cleanSymbol}.US`];
   

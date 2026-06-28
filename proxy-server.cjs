@@ -164,16 +164,26 @@ const GIFT_NIFTY_CONFIG = {
 let cachedGiftNifty = null;
 let lastGiftNiftyFetch = 0;
 
+const YAHOO_SYMBOL_ALIASES = {
+  SBI: 'SBIN',
+  'L&T': 'LT',
+};
+
+const normalizeYahooBaseSymbol = (symbol) => {
+  const cleanSymbol = symbol.replace(/\.(NS|BO|NSE|BSE)$/i, '');
+  return YAHOO_SYMBOL_ALIASES[cleanSymbol] || cleanSymbol;
+};
+
 // Convert symbol format for different APIs
 function formatSymbolForAPI(symbol, apiSource) {
   // Remove .NSE, .BSE suffixes for most APIs
-  const cleanSymbol = symbol.replace(/\.(NSE|BSE)$/, '');
+  const cleanSymbol = normalizeYahooBaseSymbol(symbol);
   
   switch (apiSource) {
     case API_SOURCES.YAHOO:
       // Yahoo Finance uses .NS for NSE, .BO for BSE
-      if (symbol.includes('.NSE')) return `${cleanSymbol}.NS`;
-      if (symbol.includes('.BSE')) return `${cleanSymbol}.BO`;
+      if (/\.NSE$/i.test(symbol) || /\.NS$/i.test(symbol)) return `${cleanSymbol}.NS`;
+      if (/\.BSE$/i.test(symbol) || /\.BO$/i.test(symbol)) return `${cleanSymbol}.BO`;
       return cleanSymbol;
     case API_SOURCES.ALPHA_VANTAGE:
     case API_SOURCES.FINNHUB:
@@ -409,6 +419,28 @@ function generateSyntheticChart(symbol, range, interval) {
   };
 }
 
+async function fetchDirectYahooChart(symbol, range, interval) {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${encodeURIComponent(range)}&interval=${encodeURIComponent(interval)}`;
+  const response = await fetch(url, {
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': 'Mozilla/5.0',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`direct yahoo chart ${response.status}`);
+  }
+
+  const data = await response.json();
+  const timestamps = data?.chart?.result?.[0]?.timestamp;
+  if (!Array.isArray(timestamps) || timestamps.length === 0) {
+    throw new Error('direct yahoo chart invalid');
+  }
+
+  return data;
+}
+
 // Main endpoint with fallback system
 app.get('/api/stock/:symbol', async (req, res) => {
   const { symbol } = req.params;
@@ -428,36 +460,44 @@ app.get('/api/stock/:symbol', async (req, res) => {
 
     try {
       const period1 = resolvePeriod1FromRange(range);
+      let payload;
       const chartData = await yahooFinance.chart(formatted, { period1, interval });
 
-      const timestamps = chartData.quotes.map(q => Math.floor(new Date(q.date).getTime() / 1000));
-      const opens = chartData.quotes.map(q => q.open);
-      const highs = chartData.quotes.map(q => q.high);
-      const lows = chartData.quotes.map(q => q.low);
-      const closes = chartData.quotes.map(q => q.close);
-      const volumes = chartData.quotes.map(q => q.volume);
+      if (symbol.startsWith('^') && (!Array.isArray(chartData?.quotes) || chartData.quotes.length === 0)) {
+        payload = await fetchDirectYahooChart(formatted, range, interval);
+      } else {
+        const timestamps = chartData.quotes.map(q => Math.floor(new Date(q.date).getTime() / 1000));
+        if (!timestamps.length) {
+          throw new Error('empty yahoo chart');
+        }
+        const opens = chartData.quotes.map(q => q.open);
+        const highs = chartData.quotes.map(q => q.high);
+        const lows = chartData.quotes.map(q => q.low);
+        const closes = chartData.quotes.map(q => q.close);
+        const volumes = chartData.quotes.map(q => q.volume);
 
-      const payload = {
-        chart: {
-          result: [
-            {
-              timestamp: timestamps,
-              indicators: {
-                quote: [
-                  {
-                    open: opens,
-                    high: highs,
-                    low: lows,
-                    close: closes,
-                    volume: volumes,
-                  },
-                ],
+        payload = {
+          chart: {
+            result: [
+              {
+                timestamp: timestamps,
+                indicators: {
+                  quote: [
+                    {
+                      open: opens,
+                      high: highs,
+                      low: lows,
+                      close: closes,
+                      volume: volumes,
+                    },
+                  ],
+                },
               },
-            },
-          ],
-          error: null,
-        },
-      };
+            ],
+            error: null,
+          },
+        };
+      }
 
       const ttl = getChartCacheTtlMs(interval);
       chartCache.set(cacheKey, {
@@ -473,6 +513,21 @@ app.get('/api/stock/:symbol', async (req, res) => {
       if (stale && stale.staleExpiresAt > now) {
         res.setHeader('X-Cache', 'stale');
         return res.json(stale.data);
+      }
+
+      if (symbol.startsWith('^')) {
+        try {
+          const payload = await fetchDirectYahooChart(formatted, range, interval);
+          const ttl = getChartCacheTtlMs(interval);
+          chartCache.set(cacheKey, {
+            data: payload,
+            expiresAt: now + ttl,
+            staleExpiresAt: now + ttl + CHART_CACHE_STALE_TTL_MS,
+          });
+          res.setHeader('X-Cache', 'direct');
+          return res.json(payload);
+        } catch (directErr) {
+        }
       }
 
       const payload = generateSyntheticChart(formatted, range, interval);

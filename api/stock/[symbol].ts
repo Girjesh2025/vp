@@ -2,6 +2,16 @@ import { default as YahooFinance } from 'yahoo-finance2';
 
 const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 
+const YAHOO_SYMBOL_ALIASES: Record<string, string> = {
+  SBI: 'SBIN',
+  'L&T': 'LT',
+};
+
+const normalizeYahooBaseSymbol = (symbol: string): string => {
+  const clean = symbol.replace(/\.(NS|BO|NSE|BSE)$/i, '');
+  return YAHOO_SYMBOL_ALIASES[clean] ?? clean;
+};
+
 export default async function handler(req: any, res: any) {
   const symbol = (req.query?.symbol || req.query?.params?.symbol || '').toString();
   const source = (req.query?.source || '').toString().toLowerCase();
@@ -20,10 +30,10 @@ export default async function handler(req: any, res: any) {
   const eodhdKey = process.env.EODHD_API_TOKEN || '';
 
   const formatSymbolForAPI = (s: string, api: string) => {
-    const clean = s.replace(/\.(NSE|BSE)$/i, '');
+    const clean = normalizeYahooBaseSymbol(s);
     if (api === 'yahoo') {
-      if (/\.NSE$/i.test(s)) return `${clean}.NS`;
-      if (/\.BSE$/i.test(s)) return `${clean}.BO`;
+      if (/\.NSE$/i.test(s) || /\.NS$/i.test(s)) return `${clean}.NS`;
+      if (/\.BSE$/i.test(s) || /\.BO$/i.test(s)) return `${clean}.BO`;
       return clean;
     }
     if (api === 'eodhd') return s;
@@ -51,6 +61,10 @@ export default async function handler(req: any, res: any) {
           period1: queryOptions.period1,
           interval: i as any
         });
+
+        if (symbol.startsWith('^') && (!Array.isArray(chartData?.quotes) || chartData.quotes.length === 0)) {
+          return await fetchIndexHistoricalChartFromYahoo(formatted, r, i);
+        }
         
         // Format it exactly as Yahoo's raw API so the frontend parsing doesn't break
         const timestamps = chartData.quotes.map(q => Math.floor(new Date(q.date).getTime() / 1000));
@@ -81,6 +95,9 @@ export default async function handler(req: any, res: any) {
           }
         };
       } catch (err: any) {
+        if (symbol.startsWith('^')) {
+          return await fetchIndexHistoricalChartFromYahoo(formatted, range || '6mo', interval || '1d');
+        }
         throw new Error(`yahoo chart invalid: ${err.message}`);
       }
     }
@@ -98,6 +115,26 @@ export default async function handler(req: any, res: any) {
       low52: quote.fiftyTwoWeekLow,
       source: 'Yahoo Finance'
     };
+  };
+
+  const fetchIndexHistoricalChartFromYahoo = async (formatted: string, r: string, i: string) => {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(formatted)}?range=${encodeURIComponent(r)}&interval=${encodeURIComponent(i)}`;
+    const response = await fetch(url, {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'Mozilla/5.0',
+      },
+    });
+
+    if (!response.ok) throw new Error(`yahoo direct chart ${response.status}`);
+    const data = await response.json();
+    const result = data?.chart?.result?.[0];
+    const timestamps = result?.timestamp ?? [];
+    if (!result || !Array.isArray(timestamps) || timestamps.length === 0) {
+      throw new Error('yahoo direct chart invalid');
+    }
+
+    return data;
   };
 
   const fetchIndexChartFromYahoo = async () => {

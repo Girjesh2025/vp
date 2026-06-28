@@ -13,24 +13,84 @@ const NIFTY_50_SYMBOLS = [
   'NTPC', 'JSWSTEEL'
 ];
 
-// Custom Treemap Content
-const CustomizedContent = (props: any) => {
-  const { depth, x, y, width, height, name, fill } = props;
+const formatFluxChange = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const mixChannel = (from: number, to: number, weight: number) => Math.round(from + (to - from) * weight);
+
+const mixColor = (from: [number, number, number], to: [number, number, number], weight: number, alpha: number) =>
+  `rgba(${mixChannel(from[0], to[0], weight)}, ${mixChannel(from[1], to[1], weight)}, ${mixChannel(from[2], to[2], weight)}, ${alpha})`;
+
+const getFluxPalette = (change: number, strength?: number) => {
+  const intensity = typeof strength === 'number' ? clamp(strength, 0, 1) : clamp(Math.abs(change) / 3.5, 0, 1);
+
+  if (change > 0) {
+    return {
+      outer: mixColor([134, 239, 172], [34, 197, 94], intensity, 0.95),
+      inner: mixColor([220, 252, 231], [110, 231, 183], intensity, 0.9),
+      edge: mixColor([187, 247, 208], [74, 222, 128], intensity, 0.45),
+      glow: mixColor([74, 222, 128], [22, 163, 74], intensity, 0.22),
+      text: '#f0fdf4',
+      accent: '#14532d',
+    };
+  }
+
+  if (change < 0) {
+    return {
+      outer: mixColor([253, 164, 175], [244, 63, 94], intensity, 0.95),
+      inner: mixColor([255, 228, 230], [251, 113, 133], intensity, 0.9),
+      edge: mixColor([254, 205, 211], [251, 113, 133], intensity, 0.42),
+      glow: mixColor([251, 113, 133], [225, 29, 72], intensity, 0.2),
+      text: '#fff1f2',
+      accent: '#881337',
+    };
+  }
+
+  return {
+    outer: 'rgba(71,85,105,0.92)',
+    inner: 'rgba(100,116,139,0.88)',
+    edge: 'rgba(148,163,184,0.32)',
+    glow: 'rgba(51,65,85,0.18)',
+    text: '#f8fafc',
+    accent: '#cbd5e1',
+  };
+};
+
+const SimpleFluxTile = (props: any) => {
+  const { depth, x, y, width, height, name, change = 0, strength } = props;
   if (depth < 1) return null;
+
+  const palette = getFluxPalette(change, strength);
+  const showLabel = width > 48 && height > 24;
+  const displayName = name.length > 10 && width < 88 ? `${name.slice(0, 8)}..` : name;
+
   return (
     <g>
       <rect
-        x={x}
-        y={y}
-        width={width}
-        height={height}
-        fill={fill}
-        stroke="#111827"
+        x={x + 1}
+        y={y + 1}
+        width={Math.max(width - 2, 0)}
+        height={Math.max(height - 2, 0)}
+        rx={4}
+        ry={4}
+        fill={palette.outer}
+        stroke={palette.edge}
         strokeWidth={1}
       />
-      {width > 60 && height > 30 && (
-        <text x={x + width / 2} y={y + height / 2} fill="#ffffff" fontSize={10} textAnchor="middle" dominantBaseline="middle" fontWeight="600" className="tracking-wide">
-          {name.length > 8 && width < 90 ? name.substring(0, 6) + '..' : name}
+      {showLabel && (
+        <text
+          x={x + width / 2}
+          y={y + height / 2}
+          fill="rgba(255,255,255,0.92)"
+          stroke="none"
+          fontSize={width > 95 && height > 42 ? 11 : 9}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fontWeight="700"
+          paintOrder="stroke"
+        >
+          {displayName}
         </text>
       )}
     </g>
@@ -277,13 +337,7 @@ const OptionsPlayer = () => {
     };
   }, []);
 
-  const isIndexSymbol = useMemo(() => {
-    return Object.prototype.hasOwnProperty.call(indexYahooMap, chartConfig.symbol);
-  }, [chartConfig.symbol, indexYahooMap]);
-
-  const isTradingViewIndex = useMemo(() => {
-    return chartMode === 'tradingview' && isIndexSymbol;
-  }, [chartMode, isIndexSymbol]);
+  const supportsCandlestickIntraday = chartMode === 'tradingview';
 
   const tradingViewSymbol = useMemo(() => {
     // Keep the label aligned with the selected market instrument even though
@@ -297,6 +351,11 @@ const OptionsPlayer = () => {
   }, [chartConfig.symbol]);
 
   const candleRequestConfig = useMemo(() => {
+    if (chartConfig.interval === '1') return { range: '1d', interval: '1m', bars: 360 };
+    if (chartConfig.interval === '5') return { range: '5d', interval: '5m', bars: 390 };
+    if (chartConfig.interval === '15') return { range: '1mo', interval: '15m', bars: 420 };
+    if (chartConfig.interval === '30') return { range: '1mo', interval: '30m', bars: 420 };
+    if (chartConfig.interval === '60') return { range: '3mo', interval: '60m', bars: 420 };
     if (chartConfig.interval === 'W') return { range: '3y', interval: '1wk', bars: 180 };
     if (chartConfig.interval === 'M') return { range: '10y', interval: '1mo', bars: 180 };
     return { range: '1y', interval: '1d', bars: 240 };
@@ -361,7 +420,7 @@ const OptionsPlayer = () => {
       },
       timeScale: {
         borderColor: 'rgba(255,255,255,0.08)',
-        timeVisible: chartConfig.interval === 'D',
+        timeVisible: ['1', '5', '15', '30', '60'].includes(chartConfig.interval),
         secondsVisible: false,
       },
     });
@@ -391,11 +450,11 @@ const OptionsPlayer = () => {
   }, [candles, chartConfig.interval, chartMode]);
 
   useEffect(() => {
-    if (!isTradingViewIndex) return;
+    if (chartMode === 'tradingview') return;
     if (['1', '5', '15', '30', '60'].includes(chartConfig.interval)) {
       setChartConfig((prev) => ({ ...prev, interval: 'D' }));
     }
-  }, [chartConfig.interval, isTradingViewIndex]);
+  }, [chartConfig.interval, chartMode]);
 
   // NSE symbol → company website for logo fetching
   const STOCK_DOMAINS: Record<string, string> = {
@@ -498,13 +557,28 @@ const OptionsPlayer = () => {
       }
 
       if (isMounted && results.length > 0) {
+        const maxAbsChange = Math.max(...results.map((item) => Math.abs(item.change)), 0.01);
+        const maxAbsPts = Math.max(...results.map((item) => Math.abs(item.pts)), 0.01);
+        const maxSize = Math.max(...results.map((item) => item.size), 1);
+        const enrichedResults = results.map((item) => {
+          const percentScore = Math.abs(item.change) / maxAbsChange;
+          const pointsScore = Math.abs(item.pts) / maxAbsPts;
+          const sizeScore = item.size / maxSize;
+          const strength = clamp((percentScore * 0.35) + (pointsScore * 0.35) + (sizeScore * 0.3), 0.18, 1);
+
+          return {
+            ...item,
+            strength: Number(strength.toFixed(3)),
+          };
+        });
+
         setMoneyFluxData([{
           name: 'NIFTY50',
-          children: [...results].sort((a, b) => b.size - a.size)
+          children: [...enrichedResults].sort((a, b) => b.size - a.size)
         }]);
         
-        const advances = results.filter(r => r.change > 0).length;
-        const total = results.length;
+        const advances = enrichedResults.filter(r => r.change > 0).length;
+        const total = enrichedResults.length;
         const advanceRatio = advances / total;
         
         setSentimentValue(advanceRatio * 100);
@@ -534,7 +608,7 @@ const OptionsPlayer = () => {
         }
 
         // Top Movers: Sort by absolute change points and take top 10
-        const sortedMovers = [...results].sort((a, b) => Math.abs(b.change) - Math.abs(a.change)).slice(0, 10);
+        const sortedMovers = [...enrichedResults].sort((a, b) => Math.abs(b.change) - Math.abs(a.change)).slice(0, 10);
         
         const formattedMovers = sortedMovers.map(m => {
           const isPos = m.change > 0;
@@ -564,6 +638,33 @@ const OptionsPlayer = () => {
   const topMovers = liveMovers.length > 0 ? liveMovers : [
     { symbol: 'Loading...', pts: 0, icon: 'loading', color: 'text-slate-400', logoColor: 'text-slate-600' }
   ];
+
+  const moneyFluxChildren = useMemo(() => moneyFluxData[0]?.children ?? [], [moneyFluxData]);
+  const moneyFluxSummary = useMemo(() => {
+    const gainers = moneyFluxChildren.filter((item: any) => item.change > 0).length;
+    const decliners = moneyFluxChildren.filter((item: any) => item.change < 0).length;
+    const strongest = moneyFluxChildren.reduce((best: any, item: any) => {
+      if (!best || item.change > best.change) return item;
+      return best;
+    }, null);
+    const weakest = moneyFluxChildren.reduce((worst: any, item: any) => {
+      if (!worst || item.change < worst.change) return item;
+      return worst;
+    }, null);
+
+    return {
+      gainers,
+      decliners,
+      breadth: moneyFluxChildren.length ? Math.round((gainers / moneyFluxChildren.length) * 100) : 0,
+      strongest,
+      weakest,
+    };
+  }, [moneyFluxChildren]);
+
+  const moneyFluxTreemapData = useMemo(
+    () => [{ name: 'NIFTY50', children: [...moneyFluxChildren].sort((a: any, b: any) => b.size - a.size) }],
+    [moneyFluxChildren]
+  );
 
   return (
     <div className="flex flex-col h-full bg-[#0a0e17] text-slate-300">
@@ -609,11 +710,11 @@ const OptionsPlayer = () => {
             value={chartConfig.interval}
             onChange={(e) => setChartConfig(prev => ({ ...prev, interval: e.target.value }))}
           >
-            {!isTradingViewIndex && <option value="1">Time: 1m</option>}
-            {!isTradingViewIndex && <option value="5">Time: 5m</option>}
-            {!isTradingViewIndex && <option value="15">Time: 15m</option>}
-            {!isTradingViewIndex && <option value="30">Time: 30m</option>}
-            {!isTradingViewIndex && <option value="60">Time: 1H</option>}
+            {supportsCandlestickIntraday && <option value="1">Time: 1m</option>}
+            {supportsCandlestickIntraday && <option value="5">Time: 5m</option>}
+            {supportsCandlestickIntraday && <option value="15">Time: 15m</option>}
+            {supportsCandlestickIntraday && <option value="30">Time: 30m</option>}
+            {supportsCandlestickIntraday && <option value="60">Time: 1H</option>}
             <option value="D">Time: 1D</option>
             <option value="W">Time: 1W</option>
             <option value="M">Time: 1M</option>
@@ -700,9 +801,13 @@ const OptionsPlayer = () => {
           <div className="flex-1 grid grid-cols-1 lg:grid-cols-[60%_1fr] gap-6 min-h-[600px]">
             
             {/* Left Column: Chart */}
-            <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden flex flex-col shadow-[0_8px_32px_0_rgba(0,0,0,0.36)]">
-              <div className="p-4 flex items-center justify-between shrink-0 border-b border-white/5">
-                <h2 className="text-base font-bold text-white tracking-wide">Market Chart</h2>
+            <div className="relative overflow-hidden rounded-2xl border border-cyan-500/10 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.13),transparent_28%),radial-gradient(circle_at_top_right,rgba(14,165,233,0.1),transparent_24%),linear-gradient(180deg,rgba(15,23,42,0.97),rgba(6,11,23,0.98))] flex flex-col shadow-[0_22px_70px_rgba(2,6,23,0.58)]">
+              <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(180deg,rgba(255,255,255,0.05),transparent_24%,transparent_76%,rgba(255,255,255,0.03))]" />
+              <div className="relative p-4 flex items-start justify-between shrink-0 border-b border-white/6 gap-4">
+                <div>
+                  <h2 className="text-base font-bold text-white tracking-wide">Market Chart</h2>
+                  <p className="mt-1 text-[11px] uppercase tracking-[0.24em] text-slate-500">Institutional Price View</p>
+                </div>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
@@ -716,7 +821,7 @@ const OptionsPlayer = () => {
                     onClick={() => setChartMode('tradingview')}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${chartMode === 'tradingview' ? 'bg-white/10 text-white border-white/15' : 'bg-transparent text-slate-300 border-white/10 hover:bg-white/5'}`}
                   >
-                    TradingView
+                    Candles Pro
                   </button>
                   <a
                     href={`https://in.tradingview.com/chart/?symbol=${encodeURIComponent(tradingViewSymbol)}`}
@@ -724,13 +829,33 @@ const OptionsPlayer = () => {
                     rel="noreferrer"
                     className="px-3 py-1.5 rounded-lg text-xs font-bold border bg-transparent text-slate-300 border-white/10 hover:bg-white/5 transition-colors"
                   >
-                    Open
+                    Open TV
                   </a>
                 </div>
               </div>
-              <div className="flex-1 w-full relative min-h-[400px]">
+              <div className="relative px-4 pt-3 pb-0">
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-[0.22em] text-slate-500">Symbol</div>
+                    <div className="mt-1 text-sm font-black text-white truncate">
+                      {chartConfig.symbol.replace('NSE:', '').replace('BSE:', '')}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-[0.22em] text-slate-500">Mode</div>
+                    <div className="mt-1 text-sm font-black text-cyan-300">
+                      {chartMode === 'tradingview' ? 'Candles Pro' : 'Line Flow'}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-[0.22em] text-slate-500">Frame</div>
+                    <div className="mt-1 text-sm font-black text-white">{chartConfig.interval}</div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex-1 w-full relative min-h-[420px] p-4">
                 {chartMode === 'tradingview' ? (
-                  <div className="absolute inset-0">
+                  <div className="absolute inset-4 rounded-2xl border border-white/8 bg-[#07101f]/92 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
                     {candlesLoading ? (
                       <div className="flex items-center justify-center h-full">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -739,8 +864,9 @@ const OptionsPlayer = () => {
                       <>
                         <div ref={tradingViewChartRef} className="h-full w-full" />
                         <div className="absolute left-4 top-4 z-10 rounded-lg border border-white/10 bg-black/35 px-3 py-2 backdrop-blur">
-                          <div className="text-[10px] font-bold tracking-[0.18em] text-slate-400 uppercase">TradingView Candles</div>
+                          <div className="text-[10px] font-bold tracking-[0.18em] text-slate-400 uppercase">Pro Candles</div>
                           <div className="mt-1 text-xs font-semibold text-slate-200">{tradingViewSymbol}</div>
+                          <div className="mt-1 text-[10px] text-slate-500">Powered by TradingView Lightweight Charts</div>
                         </div>
                       </>
                     ) : (
@@ -753,7 +879,7 @@ const OptionsPlayer = () => {
                     )}
                   </div>
                 ) : (
-                  <div className="absolute inset-0 p-4">
+                  <div className="absolute inset-4 rounded-2xl border border-white/8 bg-[#07101f]/92 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
                     {internalLoading ? (
                       <div className="flex items-center justify-center h-full">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -770,7 +896,7 @@ const OptionsPlayer = () => {
                           <AreaChart data={internalSeries} margin={{ top: 16, right: 10, left: 10, bottom: 8 }}>
                           <defs>
                             <linearGradient id="internalChartGrad" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.35} />
+                              <stop offset="0%" stopColor="#38bdf8" stopOpacity={0.42} />
                               <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
                             </linearGradient>
                           </defs>
@@ -802,7 +928,7 @@ const OptionsPlayer = () => {
                             formatter={(value: any) => [`₹${Number(value).toFixed(2)}`, 'Price']}
                             labelFormatter={(label) => `Point ${label}`}
                           />
-                          <Area type="monotone" dataKey="price" stroke="#60a5fa" strokeWidth={2} fill="url(#internalChartGrad)" />
+                          <Area type="monotone" dataKey="price" stroke="#7dd3fc" strokeWidth={2.2} fill="url(#internalChartGrad)" />
                           </AreaChart>
                         </ResponsiveContainer>
                       </div>
@@ -831,40 +957,58 @@ const OptionsPlayer = () => {
                 </div>
               </div>
 
-              {/* Money Flux Treemap */}
-              <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl overflow-hidden shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] flex-1 flex flex-col min-h-[300px]">
-                <div className="p-4 flex items-center gap-2 shrink-0 border-b border-white/5">
-                  <h2 className="text-base font-bold text-white tracking-wide">Money Flux</h2>
-                  <Info className="w-4 h-4 text-slate-400" />
+              {/* Money Flux */}
+              <div className="relative bg-[radial-gradient(circle_at_top_left,rgba(34,197,94,0.12),transparent_28%),radial-gradient(circle_at_top_right,rgba(244,63,94,0.14),transparent_30%),linear-gradient(180deg,rgba(15,23,42,0.96),rgba(8,15,28,0.98))] backdrop-blur-md border border-cyan-500/10 rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(2,6,23,0.55)] flex-1 flex flex-col min-h-[340px]">
+                <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(180deg,rgba(255,255,255,0.05),transparent_26%,transparent_74%,rgba(255,255,255,0.03))]" />
+                <div className="relative p-4 pb-3 flex items-start justify-between gap-3 shrink-0 border-b border-white/6">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-base font-bold text-white tracking-wide">Money Flux</h2>
+                      <Info className="w-4 h-4 text-slate-400" />
+                    </div>
+                    <p className="mt-1 text-[11px] uppercase tracking-[0.24em] text-slate-500">Institutional Heatmap</p>
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px] font-bold">
+                    <span className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-emerald-300">
+                      {moneyFluxSummary.gainers} Green
+                    </span>
+                    <span className="rounded-full border border-rose-500/25 bg-rose-500/10 px-2.5 py-1 text-rose-300">
+                      {moneyFluxSummary.decliners} Red
+                    </span>
+                  </div>
                 </div>
-                <div className="flex-1 w-full p-4 pt-0">
+                <div className="flex-1 w-full px-4 pb-4">
                   {moneyFluxData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <Treemap
-                        data={moneyFluxData}
-                        dataKey="size"
-                        aspectRatio={4 / 3}
-                        stroke="#131722"
-                        content={<CustomizedContent />}
-                      >
-                        <Tooltip 
-                          content={({ active, payload }) => {
-                            if (active && payload && payload.length) {
-                              const data = payload[0].payload;
-                              return (
-                                <div className="bg-white/10 backdrop-blur-xl border border-white/20 p-3 rounded-lg shadow-[0_8px_32px_0_rgba(0,0,0,0.5)]">
-                                  <p className="font-bold text-white drop-shadow-md">{data.name}</p>
-                                  <p className={`text-sm font-bold ${data.change >= 0 ? 'text-emerald-400' : 'text-rose-400'} drop-shadow-md`}>
-                                    {data.change >= 0 ? '+' : ''}{data.change.toFixed(2)}%
-                                  </p>
-                                </div>
-                              );
-                            }
-                            return null;
-                          }}
-                        />
-                      </Treemap>
-                    </ResponsiveContainer>
+                    <div className="h-full min-h-[300px] rounded-2xl border border-white/8 bg-[#07101f]/90 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                      <div className="h-full min-h-[284px] rounded-xl border border-white/8 bg-black/20 p-1.5">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <Treemap
+                            data={moneyFluxTreemapData}
+                            dataKey="size"
+                            aspectRatio={4 / 3}
+                            stroke="rgba(8,15,28,0.95)"
+                            content={<SimpleFluxTile />}
+                          >
+                            <Tooltip
+                              content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  const data = payload[0].payload;
+                                  return (
+                                    <div className="rounded-xl border border-white/10 bg-slate-950/88 px-3 py-2 backdrop-blur-xl">
+                                      <div className="text-sm font-black text-white">{data.name}</div>
+                                      <div className={`mt-1 text-xs font-bold ${data.change >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                        {formatFluxChange(data.change)}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              }}
+                            />
+                          </Treemap>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
                   ) : (
                     <div className="flex items-center justify-center h-full">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>

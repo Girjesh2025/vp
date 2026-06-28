@@ -1,550 +1,1827 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { 
-  Activity, ArrowDownRight, ArrowUpRight, BarChart2,
-  Zap, ShieldAlert, Crosshair, TrendingUp, AlertTriangle, CheckCircle2, ChevronDown, Layers, Loader2
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  Activity,
+  BarChart3,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  Layers,
+  ShieldAlert,
+  Target,
+  TrendingDown,
+  TrendingUp,
+  Zap,
 } from 'lucide-react';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, Area, AreaChart, ReferenceLine, Cell
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
 } from 'recharts';
-import { fetchStockPrice } from '../utils/priceApi';
+import {
+  CandlestickSeries,
+  ColorType,
+  CrosshairMode,
+  HistogramSeries,
+  LineStyle,
+  createChart,
+  type CandlestickData,
+  type HistogramData,
+  type UTCTimestamp,
+} from 'lightweight-charts';
+import { fetchHistoricalOHLCV, fetchStockPrice, isMarketOpen, type YahooOHLCVBar } from '../utils/priceApi';
 
-// ─── Types & Generators ───────────────────────────────────────────────
-type Instrument = 'NIFTY' | 'BANKNIFTY' | 'FINNIFTY'; 
-type Expiry = 'Current Expiry' | 'Next Expiry' | 'Monthly Expiry';
+type Instrument = 'NIFTY' | 'BANKNIFTY' | 'FINNIFTY' | 'MIDCPNIFTY';
+type IntervalOption = '1m' | '3m' | '5m' | '15m';
+type ViewMode = 'live' | 'historical';
 
-const INDEX_MAP: Record<string, string> = {
-  'NIFTY': '^NSEI',
-  'BANKNIFTY': '^NSEBANK',
-  'FINNIFTY': 'NIFTY_FIN_SERVICE.NS'
+type OptionLeg = {
+  openInterest?: number;
+  changeinOpenInterest?: number;
+  impliedVolatility?: number;
+  lastPrice?: number;
 };
 
-// More accurate current live placeholders in case Yahoo completely fails
-const BASE_CONFIGS: Record<string, { spot: number, ivr: number, ivp: number, pcr: number, maxPain: number, gexStatus: string }> = {
-  'NIFTY': { spot: 24500.50, ivr: 42, ivp: 68, pcr: 1.15, maxPain: 24500, gexStatus: 'Positive Gamma (+)' },
-  'BANKNIFTY': { spot: 53100.20, ivr: 58, ivp: 82, pcr: 0.82, maxPain: 53000, gexStatus: 'Negative Gamma (-)' },
-  'FINNIFTY': { spot: 23400.15, ivr: 34, ivp: 45, pcr: 1.05, maxPain: 23400, gexStatus: 'Neutral Gamma' }
+type OptionChainRow = {
+  strikePrice?: number;
+  expiryDate?: string;
+  CE?: OptionLeg;
+  PE?: OptionLeg;
 };
 
-const INITIAL_STRIKE_FLOW: Record<string, any[]> = {
-  'NIFTY': [
-    { strike: 24200, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
-    { strike: 24300, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
-    { strike: 24400, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
-    { strike: 24500, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
-    { strike: 24600, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
-    { strike: 24700, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
-  ],
-  'BANKNIFTY': [
-    { strike: 52700, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
-    { strike: 52800, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
-    { strike: 53000, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
-    { strike: 53100, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
-    { strike: 53200, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
-    { strike: 53500, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
-  ],
-  'FINNIFTY': [
-    { strike: 23100, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
-    { strike: 23200, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
-    { strike: 23300, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
-    { strike: 23400, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
-    { strike: 23500, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
-    { strike: 23600, callChg: 0, callChgVis: 0, putChg: 0, putChgVis: 0 },
-  ]
+type OptionChainResponse = {
+  filtered?: {
+    underlyingValue?: number;
+    data?: OptionChainRow[];
+  };
+  records?: {
+    underlyingValue?: number;
+    timestamp?: string;
+    expiryDates?: string[];
+    data?: OptionChainRow[];
+  };
 };
 
-// Removed fake initial straddle logic
-
-// ─── Custom Tooltip Components ────────────────────────────────────────────────
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-slate-900/90 backdrop-blur-xl border border-white/10 p-4 rounded-xl shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] outline-none min-w-[160px]">
-        <p className="text-white font-black mb-3 text-xs tracking-wider uppercase border-b border-white/10 pb-2">{label}</p>
-        <div className="space-y-2">
-          {payload.map((entry: any, index: number) => (
-            <div key={index} className="flex items-center justify-between gap-4 text-xs">
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full shadow-[0_0_8px_currentColor]" style={{ backgroundColor: entry.color, color: entry.color }} />
-                <span className="text-slate-400 font-bold">{entry.name}</span>
-              </div>
-              <span className="font-black text-white drop-shadow-md">
-                {entry.value > 0 ? '+' : ''}{(entry.value).toFixed(1)}k
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-  return null;
+type StrikeRow = {
+  strike: number;
+  ceOi: number;
+  peOi: number;
+  ceChg: number;
+  peChg: number;
+  ceIv: number;
+  peIv: number;
+  ceLtp: number;
+  peLtp: number;
+  totalOi: number;
+  dominantSide: 'put' | 'call';
+  isATM: boolean;
 };
 
-// ─── Main Component ────────────────────────────────────────────────────────────
-const OptionsDecode: React.FC = () => {
-  const [instrument, setInstrument] = useState<Instrument>('NIFTY');
-  const [expiry, setExpiry] = useState<Expiry>('Current Expiry');
-  const pollingRef = useRef<NodeJS.Timeout>();
-  const apiBaseUrl = '';
+type SessionPoint = {
+  ts: number;
+  label: string;
+  callBuild: number;
+  putBuild: number;
+  diff: number;
+  pcr: number;
+  spot: number | null;
+};
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [isLive, setIsLive] = useState(false);
-  const isLiveRef = useRef(false);
-  
-  // State Definitions
-  const [config, setConfig] = useState(BASE_CONFIGS['NIFTY']);
-  const [strikeData, setStrikeData] = useState(() => INITIAL_STRIKE_FLOW['NIFTY']);
-  
-  const [fiiData, setFiiData] = useState([
-    { category: 'Index Futures', FII: 45000, PRO: 12000, CLIENT: -57000 },
-    { category: 'Index Options', FII: 125000, PRO: -45000, CLIENT: -80000 },
-    { category: 'Stock Futures', FII: -15000, PRO: 32000, CLIENT: -17000 },
-  ]);
-  const [straddleData, setStraddleData] = useState<{time: string, premium: number}[]>([]);
+type SnapshotMetrics = {
+  totalCeOi: number;
+  totalPeOi: number;
+  totalCeChg: number;
+  totalPeChg: number;
+  pcr: number;
+  supportStrike: number | null;
+  resistanceStrike: number | null;
+  maxPainStrike: number | null;
+  atmStrike: number | null;
+  atmIv: number;
+  atmPremium: number;
+};
 
-  // Function to pull real NSE Options Data
-  const fetchOptionsData = useCallback(async () => {
-    try {
-      const response = await fetch(`${apiBaseUrl}/api/options/${instrument}`);
-      if (!response.ok) throw new Error('API Error');
-      const data = await response.json();
-      
-      if (!data || !data.records || !data.filtered) {
-         throw new Error("Proxy returned empty NSE chain payload (Usually NSE server block)");
-      }
+type MetricTileProps = {
+  label: string;
+  value: string;
+  subtext: string;
+  tone: 'neutral' | 'bullish' | 'bearish';
+  icon: ReactNode;
+};
 
-      const spotPrice = data.records.underlyingValue;
-      const filteredCE = data.filtered.CE?.totOI || 1;
-      const filteredPE = data.filtered.PE?.totOI || 1;
-      const actualPCR = filteredPE / filteredCE;
+type KeyLevelItem = {
+  label: string;
+  value: string;
+  subtext: string;
+  tone: 'neutral' | 'bullish' | 'bearish';
+  icon: ReactNode;
+};
 
-      // Extract ATM IV 
-      let closestStrike = data.filtered.data[0];
-      let minDiff = Infinity;
-      data.filtered.data.forEach((d: any) => {
-        const diff = Math.abs(d.strikePrice - spotPrice);
-        if (diff < minDiff) { minDiff = diff; closestStrike = d; }
-      });
-      const currentIVP = closestStrike?.CE?.impliedVolatility || BASE_CONFIGS[instrument].ivp;
+type TraderState = 'uptrend' | 'downtrend' | 'sideways';
+type CandleRequest = {
+  range: string;
+  interval: string;
+  bars: number;
+  aggregateMinutes?: number | null;
+  filterToLatestSession?: boolean;
+};
 
-      // Max Pain Calculation 
-      let maxPainStrike = spotPrice;
-      let highestCombinedOI = 0;
-      data.filtered.data.forEach((d: any) => {
-          const ceOI = d.CE?.openInterest || 0;
-          const peOI = d.PE?.openInterest || 0;
-          if ((ceOI + peOI) > highestCombinedOI) {
-              highestCombinedOI = ceOI + peOI;
-              maxPainStrike = d.strikePrice;
-          }
-      });
+type ChartHoverState = {
+  label: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  smartOi: number | null;
+};
 
-      setConfig(prev => ({
-        ...prev,
-        spot: spotPrice,
-        pcr: actualPCR,
-        ivp: Math.round(currentIVP),
-        maxPain: maxPainStrike,
-        gexStatus: actualPCR > 1.2 ? 'Positive Gamma (+)' : actualPCR < 0.8 ? 'Negative Gamma (-)' : 'Neutral Gamma'
+const INSTRUMENTS: Instrument[] = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY'];
+const INTERVALS: IntervalOption[] = ['1m', '3m', '5m', '15m'];
+const LOT_SIZE_MAP: Record<Instrument, number> = {
+  NIFTY: 50,
+  BANKNIFTY: 35,
+  FINNIFTY: 65,
+  MIDCPNIFTY: 120,
+};
+
+const INDEX_TICKER_MAP: Record<Instrument, string> = {
+  NIFTY: '^NSEI',
+  BANKNIFTY: '^NSEBANK',
+  FINNIFTY: 'NIFTY_FIN_SERVICE.NS',
+  MIDCPNIFTY: 'NIFTY_MID_SELECT.NS',
+};
+
+const formatCompact = (value: number) => {
+  const absValue = Math.abs(value);
+  if (absValue >= 1e7) return `${(value / 1e7).toFixed(2)}Cr`;
+  if (absValue >= 1e5) return `${(value / 1e5).toFixed(2)}L`;
+  if (absValue >= 1e3) return `${(value / 1e3).toFixed(1)}K`;
+  return value.toFixed(0);
+};
+
+const formatFlowValue = (value: number | null | undefined) => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '--';
+  return formatCompact(value * 1e7);
+};
+
+const formatFlowValueSigned = (value: number | null | undefined) => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '--';
+  return `${value >= 0 ? '+' : ''}${formatCompact(value * 1e7)}`;
+};
+
+const formatChartTimeLabel = (timestampSeconds: number) =>
+  new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(new Date(timestampSeconds * 1000));
+
+const formatPrice = (value: number | null | undefined, digits: number = 2) => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '--';
+  return new Intl.NumberFormat('en-IN', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: digits,
+  }).format(value);
+};
+
+const formatSignedCompact = (value: number) => `${value >= 0 ? '+' : ''}${formatCompact(value)}`;
+
+const formatSignedPrice = (value: number | null | undefined, digits: number = 2) => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '--';
+  return `${value >= 0 ? '+' : ''}${formatPrice(value, digits)}`;
+};
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const getIstDateKey = () => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+
+  const year = parts.find((p) => p.type === 'year')?.value ?? '0000';
+  const month = parts.find((p) => p.type === 'month')?.value ?? '00';
+  const day = parts.find((p) => p.type === 'day')?.value ?? '00';
+  return `${year}-${month}-${day}`;
+};
+
+const getSessionLabel = (ts: number) =>
+  new Intl.DateTimeFormat('en-IN', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Kolkata',
+  }).format(new Date(ts));
+
+const getToolbarTimeLabel = () =>
+  new Intl.DateTimeFormat('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Kolkata',
+  }).format(new Date());
+
+const formatExpiryLabel = (value: string | null) => {
+  if (!value) return '--';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return new Intl.DateTimeFormat('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'Asia/Kolkata',
+  }).format(parsed);
+};
+
+const getDaysToExpiry = (value: string | null) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  const now = new Date();
+  const istNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+  const diffMs = parsed.getTime() - istNow.getTime();
+  return Math.max(0, Math.ceil(diffMs / (24 * 60 * 60 * 1000)));
+};
+
+const parseChainTimestamp = (value: string | null | undefined) => {
+  if (!value) return null;
+
+  const direct = new Date(value);
+  if (!Number.isNaN(direct.getTime())) return direct.getTime();
+
+  const match = value.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (!match) return null;
+
+  const [, day, monthText, year, hour = '15', minute = '30', second = '00'] = match;
+  const monthMap: Record<string, string> = {
+    Jan: '01',
+    Feb: '02',
+    Mar: '03',
+    Apr: '04',
+    May: '05',
+    Jun: '06',
+    Jul: '07',
+    Aug: '08',
+    Sep: '09',
+    Oct: '10',
+    Nov: '11',
+    Dec: '12',
+  };
+
+  const month = monthMap[monthText];
+  if (!month) return null;
+
+  return new Date(
+    `${year}-${month}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${minute}:${second}+05:30`
+  ).getTime();
+};
+
+const getTraderTone = (state: TraderState): 'bullish' | 'bearish' | 'neutral' => {
+  if (state === 'uptrend') return 'bullish';
+  if (state === 'downtrend') return 'bearish';
+  return 'neutral';
+};
+
+const getTraderLabel = (state: TraderState) => {
+  if (state === 'uptrend') return 'Up Trend';
+  if (state === 'downtrend') return 'Down Trend';
+  return 'Sideways';
+};
+
+const classifyTraderState = (priceMovePct: number, oiDeltaCr: number, pcrDelta: number): TraderState => {
+  const priceStrongUp = priceMovePct >= 0.22;
+  const priceStrongDown = priceMovePct <= -0.22;
+  const oiSupportsUp = oiDeltaCr >= -0.05 || pcrDelta >= -0.01;
+  const oiSupportsDown = oiDeltaCr <= 0.05 || pcrDelta <= 0.01;
+  const priceFlat = Math.abs(priceMovePct) <= 0.12;
+  const oiFlat = Math.abs(oiDeltaCr) <= 0.08;
+  const pcrFlat = Math.abs(pcrDelta) <= 0.02;
+
+  if (priceStrongUp && oiSupportsUp) return 'uptrend';
+  if (priceStrongDown && oiSupportsDown) return 'downtrend';
+  if (priceFlat && oiFlat && pcrFlat) return 'sideways';
+  return priceMovePct > 0 ? 'uptrend' : priceMovePct < 0 ? 'downtrend' : 'sideways';
+};
+
+const getStorageKey = (instrument: Instrument) => `options-decode-session:${instrument}:${getIstDateKey()}`;
+
+const getInstrumentStoragePrefix = (instrument: Instrument) => `options-decode-session:${instrument}:`;
+
+const readSessionFromStorageKey = (storageKey: string): SessionPoint[] => {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .filter(
+        (item) =>
+          item &&
+          typeof item.ts === 'number' &&
+          typeof item.label === 'string' &&
+          typeof item.callBuild === 'number' &&
+          typeof item.putBuild === 'number' &&
+          typeof item.diff === 'number' &&
+          typeof item.pcr === 'number'
+      )
+      .map((item) => ({
+        ...item,
+        spot: typeof item.spot === 'number' ? item.spot : null,
       }));
+  } catch {
+    return [];
+  }
+};
 
-      // Find Strike Data Flow Heatmap
-      const atmIndex = data.filtered.data.findIndex((d: any) => d.strikePrice === closestStrike.strikePrice);
-      const startIndex = Math.max(0, atmIndex - 3);
-      const heatmapSlice = data.filtered.data.slice(startIndex, startIndex + 6);
-      
-      const parsedStrikeFlow = heatmapSlice.map((strikeObj: any) => {
-          const ceChg = (strikeObj.CE?.changeinOpenInterest || 0) / 1000; // Adjusted for thousands UI formatting
-          const peChg = (strikeObj.PE?.changeinOpenInterest || 0) / 1000;
-          return {
-            strike: strikeObj.strikePrice,
-            callChg: ceChg,
-            callChgVis: ceChg !== 0 ? -Math.abs(ceChg) : -0.1, // Always negative for visual left side
-            putChg: peChg,
-            putChgVis: peChg !== 0 ? Math.abs(peChg) : 0.1 // Always positive for visual right side
-          }
-        });
+const readStoredSession = (instrument: Instrument, opts?: { allowPreviousSessionFallback?: boolean }): SessionPoint[] => {
+  if (typeof window === 'undefined') return [];
 
-      if (parsedStrikeFlow.length > 0) {
-        setStrikeData(parsedStrikeFlow);
-      }
+  const currentSession = readSessionFromStorageKey(getStorageKey(instrument));
+  if (currentSession.length > 0 || !opts?.allowPreviousSessionFallback) return currentSession;
 
-      // Calculate Real ATM Straddle Premium
-      const atmCE = closestStrike?.CE?.lastPrice || 0;
-      const atmPE = closestStrike?.PE?.lastPrice || 0;
-      const realStraddlePremium = parseFloat((atmCE + atmPE).toFixed(1));
+  const prefix = getInstrumentStoragePrefix(instrument);
+  const candidateKeys: string[] = [];
 
-      setStraddleData(prev => {
-        const now = new Date();
-        const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-        // Avoid duplicate points for the same minute
-        if (prev.length > 0 && prev[prev.length - 1].time === timeStr) {
-           return prev; 
-        }
-        const newEntry = { time: timeStr, premium: realStraddlePremium };
-        const updated = [...prev, newEntry];
-        if (updated.length > 30) updated.shift();
-        return updated;
-      });
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index);
+    if (key && key.startsWith(prefix)) candidateKeys.push(key);
+  }
 
-      setIsLive(true);
-      isLiveRef.current = true;
-      setIsLoading(false);
+  return candidateKeys
+    .sort((a, b) => b.localeCompare(a))
+    .map((key) => readSessionFromStorageKey(key))
+    .find((points) => points.length > 0) ?? [];
+};
 
-    } catch (err) {
-      console.warn("Falling back to Hybrid Engine due to proxy chain failure:", err);
-      // Guarantee the Spot Price is accurate via external priceAPI!
-      const ticker = INDEX_MAP[instrument];
-      if (ticker) {
-         try {
-           const liveSpotData = await fetchStockPrice(ticker);
-           if (liveSpotData && liveSpotData.price) {
-             const liveSpot = liveSpotData.price;
-             setConfig(prev => ({ ...prev, spot: liveSpot, maxPain: liveSpot - (liveSpot % 100) }));
-             // No longer simulating fake strike data here
-           }
-         } catch (e) {
-           console.error("Secondary fallback stock fetch failed", e);
-           setConfig(BASE_CONFIGS[instrument]);
-           // Fallback to static base data, but no random simulation
-         }
-      }
-      setIsLive(false);
-      isLiveRef.current = false;
-      setIsLoading(false);
+const persistSession = (instrument: Instrument, points: SessionPoint[]) => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(getStorageKey(instrument), JSON.stringify(points));
+};
+
+const aggregateBars = (bars: YahooOHLCVBar[], minutes: number): YahooOHLCVBar[] => {
+  if (minutes <= 1) return bars;
+
+  const bucketSize = minutes * 60;
+  const grouped = new Map<number, YahooOHLCVBar[]>();
+
+  bars.forEach((bar) => {
+    const bucket = Math.floor(bar.timestamp / bucketSize) * bucketSize;
+    const list = grouped.get(bucket) ?? [];
+    list.push(bar);
+    grouped.set(bucket, list);
+  });
+
+  return [...grouped.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([bucket, list]) => ({
+      timestamp: bucket,
+      open: list[0].open,
+      high: Math.max(...list.map((item) => item.high)),
+      low: Math.min(...list.map((item) => item.low)),
+      close: list[list.length - 1].close,
+      volume: list.reduce((sum, item) => sum + item.volume, 0),
+    }));
+};
+
+const getBarIstDateKey = (timestampSeconds: number) =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(timestampSeconds * 1000));
+
+const filterBarsToLatestSession = (bars: YahooOHLCVBar[]) => {
+  if (!bars.length) return bars;
+  const latestKey = getBarIstDateKey(bars[bars.length - 1].timestamp);
+  return bars.filter((bar) => getBarIstDateKey(bar.timestamp) === latestKey);
+};
+
+const getCandleRequest = (interval: IntervalOption, viewMode: ViewMode): CandleRequest => {
+  if (viewMode === 'historical') {
+    if (interval === '15m') return { range: '1mo', interval: '15m', bars: 420, aggregateMinutes: null };
+    if (interval === '5m') return { range: '5d', interval: '5m', bars: 420, aggregateMinutes: null };
+    if (interval === '3m') return { range: '5d', interval: '1m', bars: 420, aggregateMinutes: 3 };
+    return { range: '5d', interval: '1m', bars: 420, aggregateMinutes: null };
+  }
+
+  if (!isMarketOpen()) {
+    if (interval === '15m') {
+      return { range: '1mo', interval: '15m', bars: 96, aggregateMinutes: null, filterToLatestSession: true };
     }
-  }, [apiBaseUrl, instrument]);
 
-  // Instrument Change Hook & Polling Activation
-  useEffect(() => {
-    setIsLoading(true);
-    fetchOptionsData();
-    setStraddleData([]); // Reset chart on instrument change
+    return { range: '5d', interval: '5m', bars: 96, aggregateMinutes: null, filterToLatestSession: true };
+  }
 
-    // Set up 15 second data fetch polling
-    pollingRef.current = setInterval(() => {
-      fetchOptionsData();
-    }, 15000);
+  if (interval === '15m') return { range: '1d', interval: '15m', bars: 96, aggregateMinutes: null };
+  if (interval === '5m') return { range: '1d', interval: '5m', bars: 120, aggregateMinutes: null };
+  if (interval === '3m') return { range: '1d', interval: '1m', bars: 360, aggregateMinutes: 3 };
+  return { range: '1d', interval: '1m', bars: 360, aggregateMinutes: null };
+};
 
-    return () => clearInterval(pollingRef.current);
-  }, [fetchOptionsData]);
+const buildDerivedSessionHistory = (
+  bars: YahooOHLCVBar[],
+  snapshot: SnapshotMetrics,
+  spotPrice: number | null
+): SessionPoint[] => {
+  if (bars.length < 20) return [];
 
+  const highs = bars.map((item) => item.high);
+  const lows = bars.map((item) => item.low);
+  const closes = bars.map((item) => item.close);
+  const volumes = bars.map((item) => Math.max(item.volume, 0));
+  const sessionHigh = Math.max(...highs);
+  const sessionLow = Math.min(...lows);
+  const priceRange = Math.max(sessionHigh - sessionLow, 1);
+  const firstClose = closes[0] ?? sessionLow;
+  const finalSpot = spotPrice ?? closes[closes.length - 1] ?? firstClose;
+  const sortedVolumes = [...volumes].sort((a, b) => a - b);
+  const medianVolume = sortedVolumes[Math.floor(sortedVolumes.length / 2)] || 1;
 
-  // Colors
-  const callColor = '#ef4444'; // Red for Call Writing (Bearish)
-  const callUnwindColor = '#fca5a5';
-  const putColor = '#10b981'; // Green for Put Writing (Bullish)
-  const putUnwindColor = '#6ee7b7';
+  let callAcc = 0;
+  let putAcc = 0;
+  let prevClose = firstClose;
 
-  // Derived metrics
-  const isVolExpensive = config.ivp > 22; // In reality IV mostly floats around 10-25
-  const isVolCheap = config.ivp < 12;
+  const replay = bars.map((bar) => {
+    const range = Math.max(bar.high - bar.low, 1);
+    const body = bar.close - bar.open;
+    const moveFromPrev = bar.close - prevClose;
+    const normalizedPrice = clamp((bar.close - sessionLow) / priceRange, 0, 1);
+    const trendFromOpen = clamp((bar.close - firstClose) / priceRange, -1, 1);
+    const bodyBias = clamp(body / range, -1, 1);
+    const continuationBias = clamp(moveFromPrev / range, -1.4, 1.4);
+    const volWeight = clamp(Math.sqrt(Math.max(bar.volume, 1) / medianVolume), 0.55, 2.25);
+
+    const trendPressure = bodyBias * 0.72 + continuationBias * 0.94 + trendFromOpen * 0.34;
+    const meanReversion = (normalizedPrice - 0.5) * 0.26;
+    const volatilityLift = clamp(range / priceRange, 0.02, 0.14) * 0.18;
+
+    const callImpulse =
+      (-trendPressure + Math.max(-trendFromOpen, 0) * 0.22 - meanReversion * 0.28 + volatilityLift) * volWeight;
+    const putImpulse =
+      (trendPressure + Math.max(trendFromOpen, 0) * 0.22 + meanReversion * 0.28 + volatilityLift) * volWeight;
+
+    callAcc += callImpulse;
+    putAcc += putImpulse;
+    prevClose = bar.close;
+
+    return {
+      ts: bar.timestamp * 1000,
+      label: getSessionLabel(bar.timestamp * 1000),
+      close: bar.close,
+      normalizedPrice,
+      callAcc,
+      putAcc,
+    };
+  });
+
+  const endCall = replay[replay.length - 1]?.callAcc || 1;
+  const endPut = replay[replay.length - 1]?.putAcc || 1;
+  const callScale = Math.abs(snapshot.totalCeChg) > 0 ? snapshot.totalCeChg / endCall : 0;
+  const putScale = Math.abs(snapshot.totalPeChg) > 0 ? snapshot.totalPeChg / endPut : 0;
+  const scaledReplay = replay.map((point, index) => {
+    const callBuild = point.callAcc * callScale;
+    const putBuild = point.putAcc * putScale;
+
+    return {
+      ts: point.ts,
+      label: point.label,
+      callBuild,
+      putBuild,
+      diff: putBuild - callBuild,
+      normalizedPrice: point.normalizedPrice,
+      spot: index === replay.length - 1 ? finalSpot : point.close,
+    };
+  });
+
+  const diffValues = scaledReplay.map((point) => point.diff);
+  const diffMin = Math.min(...diffValues);
+  const diffMax = Math.max(...diffValues);
+  const diffMid = (diffMin + diffMax) / 2;
+  const diffHalfRange = Math.max((diffMax - diffMin) / 2, 1);
+
+  return scaledReplay.map((point, index) => {
+    const progress = index / Math.max(scaledReplay.length - 1, 1);
+    const diffTilt = clamp((point.diff - diffMid) / diffHalfRange, -1.25, 1.25);
+    const pcr = clamp(
+      snapshot.pcr + diffTilt * 0.16 + (0.5 - point.normalizedPrice) * 0.08 + (progress - 0.5) * 0.02,
+      0.72,
+      1.95
+    );
+
+    return {
+      ts: point.ts,
+      label: point.label,
+      callBuild: point.callBuild,
+      putBuild: point.putBuild,
+      diff: point.diff,
+      pcr,
+      spot: point.spot,
+    };
+  });
+};
+
+const buildSmartOiHistogram = (
+  candles: CandlestickData<UTCTimestamp>[],
+  sessionPoints: SessionPoint[]
+): HistogramData<UTCTimestamp>[] => {
+  if (candles.length === 0 || sessionPoints.length === 0) return [];
+
+  const sortedPoints = [...sessionPoints].sort((a, b) => a.ts - b.ts);
+  const interpolatedDiffCr = candles.map((candle) => {
+    const candleTs = Number(candle.time) * 1000;
+
+    if (candleTs <= sortedPoints[0].ts) {
+      return sortedPoints[0].diff / 1e7;
+    }
+
+    const lastPoint = sortedPoints[sortedPoints.length - 1];
+    if (candleTs >= lastPoint.ts) {
+      return lastPoint.diff / 1e7;
+    }
+
+    let leftIndex = 0;
+    while (leftIndex < sortedPoints.length - 1 && sortedPoints[leftIndex + 1].ts < candleTs) {
+      leftIndex += 1;
+    }
+
+    const left = sortedPoints[leftIndex];
+    const right = sortedPoints[leftIndex + 1];
+    if (!right || right.ts === left.ts) return left.diff / 1e7;
+
+    const progress = clamp((candleTs - left.ts) / (right.ts - left.ts), 0, 1);
+    const interpolated = left.diff + (right.diff - left.diff) * progress;
+    return interpolated / 1e7;
+  });
+
+  return candles.map((candle, index) => {
+    const value = Number(interpolatedDiffCr[index].toFixed(3));
+
+    return {
+      time: candle.time,
+      value,
+      color: value >= 0 ? 'rgba(20, 184, 166, 0.84)' : 'rgba(239, 68, 68, 0.84)',
+    };
+  });
+};
+
+const MetricTile = ({ label, value, subtext, tone, icon }: MetricTileProps) => {
+  const toneClass =
+    tone === 'bullish'
+      ? 'border-emerald-500/18 bg-emerald-500/[0.08]'
+      : tone === 'bearish'
+      ? 'border-rose-500/18 bg-rose-500/[0.08]'
+      : 'border-white/10 bg-white/[0.03]';
 
   return (
-    <div className="min-h-screen bg-[#0a0e17] text-slate-300 p-4 md:p-6 pb-24 relative">
-      
-      {isLoading && (
-        <div className="absolute inset-0 z-50 bg-[#0a0e17]/80 backdrop-blur-sm flex items-center justify-center">
-          <div className="flex flex-col items-center gap-3">
-             <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
-             <p className="text-sm font-bold text-slate-300 animate-pulse">Establishing secure NSE Bridge...</p>
-          </div>
+    <div className={`rounded-2xl border px-4 py-3 shadow-[0_10px_28px_rgba(2,6,23,0.24)] ${toneClass}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">{label}</div>
+          <div className="mt-1.5 text-xl font-black text-white">{value}</div>
         </div>
-      )}
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-slate-950/60 text-slate-100">
+          {icon}
+        </div>
+      </div>
+      <div className="mt-2 text-xs font-medium text-slate-400">{subtext}</div>
+    </div>
+  );
+};
 
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* ── Header & Instrument Selectors ─────────────────────────────── */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <div className="relative">
-                 <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
-                  <Activity className="w-4 h-4 text-emerald-400" />
-                </div>
-                {isLive && <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-[#0a0e17] animate-pulse" />}
-              </div>
-              <h1 className="text-2xl font-black text-white tracking-tight">Quantitative <span className="text-indigo-400">Options</span> Intel</h1>
-            </div>
-            <p className="text-xs text-slate-400 flex items-center gap-2">
-              Institutional grade delta-neutral flow analytics. 
-              {isLive ? (
-                <span className="flex items-center gap-1 text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-sm">
-                  <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" /> REAL-TIME NSE DATA
-                </span>
-              ) : (
-                <span className="flex items-center gap-1 text-sky-400 font-bold bg-sky-500/10 px-2 py-0.5 rounded-sm">
-                  HYBRID ENGINE (LIVE SPOT)
-                </span>
-              )}
-            </p>
+const FlowTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload || !payload.length) return null;
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-slate-950/95 px-3 py-2 text-xs shadow-[0_16px_30px_rgba(2,6,23,0.48)] backdrop-blur-xl">
+      <div className="font-bold text-slate-400">{label}</div>
+      <div className="mt-2 space-y-1.5">
+        {payload.map((entry: any, index: number) => (
+          <div key={index} className="flex items-center justify-between gap-5">
+            <span className="font-semibold" style={{ color: entry.color }}>
+              {entry.name}
+            </span>
+            <span className="font-black text-white">
+              {entry.name === 'PCR' ? Number(entry.value).toFixed(2) : formatFlowValueSigned(Number(entry.value))}
+            </span>
           </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Instrument Tabs */}
-            <div className="flex bg-white/5 backdrop-blur-md p-1 rounded-xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.36)]">
-              {(['NIFTY', 'BANKNIFTY', 'FINNIFTY'] as Instrument[]).map(inst => (
+const OptionsDecode = () => {
+  const [instrument, setInstrument] = useState<Instrument>('NIFTY');
+  const [interval, setInterval] = useState<IntervalOption>('1m');
+  const [viewMode, setViewMode] = useState<ViewMode>('live');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLive, setIsLive] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
+  const [spotPrice, setSpotPrice] = useState<number | null>(null);
+  const [rows, setRows] = useState<StrikeRow[]>([]);
+  const [sessionHistory, setSessionHistory] = useState<SessionPoint[]>([]);
+  const [availableExpiries, setAvailableExpiries] = useState<string[]>([]);
+  const [selectedExpiry, setSelectedExpiry] = useState<string | null>(null);
+  const [chainTimestamp, setChainTimestamp] = useState<string | null>(null);
+  const [clockLabel, setClockLabel] = useState(getToolbarTimeLabel());
+  const [chartBars, setChartBars] = useState<YahooOHLCVBar[]>([]);
+  const [candles, setCandles] = useState<CandlestickData<UTCTimestamp>[]>([]);
+  const [chartLoading, setChartLoading] = useState(true);
+  const [chartError, setChartError] = useState<string | null>(null);
+  const [chartHover, setChartHover] = useState<ChartHoverState | null>(null);
+  const chartHostRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setSessionHistory(
+      readStoredSession(instrument, {
+        allowPreviousSessionFallback: !isMarketOpen(),
+      })
+    );
+  }, [instrument]);
+
+  useEffect(() => {
+    setSelectedExpiry(null);
+  }, [instrument]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setClockLabel(getToolbarTimeLabel());
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const request = getCandleRequest(interval, viewMode);
+    const yahooSymbol = INDEX_TICKER_MAP[instrument];
+
+    (async () => {
+      try {
+        setChartLoading(true);
+        setChartError(null);
+        const rawBars = await fetchHistoricalOHLCV(yahooSymbol, request);
+        if (cancelled) return;
+
+        const sessionScopedBars = request.filterToLatestSession ? filterBarsToLatestSession(rawBars) : rawBars;
+        const preparedBars =
+          request.aggregateMinutes && request.aggregateMinutes > 1
+            ? aggregateBars(sessionScopedBars, request.aggregateMinutes)
+            : sessionScopedBars;
+
+        const nextCandles = preparedBars.map((bar) => ({
+          time: bar.timestamp as UTCTimestamp,
+          open: bar.open,
+          high: bar.high,
+          low: bar.low,
+          close: bar.close,
+        }));
+
+        setChartBars(preparedBars);
+        setCandles(nextCandles);
+      } catch (err: any) {
+        if (cancelled) return;
+        setChartBars([]);
+        setCandles([]);
+        setChartError(err?.message || 'Unable to load chart data');
+      } finally {
+        if (!cancelled) setChartLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [instrument, interval, viewMode]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchChain = async () => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const response = await fetch(`/api/options/${encodeURIComponent(instrument)}`, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`Options API error ${response.status}`);
+
+        const payload = (await response.json()) as OptionChainResponse;
+        const rawRows = payload.filtered?.data ?? payload.records?.data ?? [];
+        const expiryDates =
+          payload.records?.expiryDates?.filter(Boolean) ??
+          [...new Set(rawRows.map((row) => row.expiryDate).filter((value): value is string => Boolean(value)))];
+        const effectiveExpiry =
+          selectedExpiry && expiryDates.includes(selectedExpiry) ? selectedExpiry : expiryDates[0] ?? null;
+        const chainRows = effectiveExpiry
+          ? rawRows.filter((row) => !row.expiryDate || row.expiryDate === effectiveExpiry)
+          : rawRows;
+        let underlying = payload.filtered?.underlyingValue ?? payload.records?.underlyingValue ?? null;
+
+        if ((typeof underlying !== 'number' || !Number.isFinite(underlying)) && INDEX_TICKER_MAP[instrument]) {
+          const livePrice = await fetchStockPrice(INDEX_TICKER_MAP[instrument]);
+          underlying = livePrice?.price ?? null;
+        }
+
+        const normalized = chainRows
+          .map((row): StrikeRow | null => {
+            if (typeof row.strikePrice !== 'number') return null;
+            const ceOi = row.CE?.openInterest ?? 0;
+            const peOi = row.PE?.openInterest ?? 0;
+            const ceChg = row.CE?.changeinOpenInterest ?? 0;
+            const peChg = row.PE?.changeinOpenInterest ?? 0;
+
+            return {
+              strike: row.strikePrice,
+              ceOi: Number.isFinite(ceOi) ? ceOi : 0,
+              peOi: Number.isFinite(peOi) ? peOi : 0,
+              ceChg: Number.isFinite(ceChg) ? ceChg : 0,
+              peChg: Number.isFinite(peChg) ? peChg : 0,
+              ceIv: row.CE?.impliedVolatility ?? 0,
+              peIv: row.PE?.impliedVolatility ?? 0,
+              ceLtp: row.CE?.lastPrice ?? 0,
+              peLtp: row.PE?.lastPrice ?? 0,
+              totalOi: (Number.isFinite(ceOi) ? ceOi : 0) + (Number.isFinite(peOi) ? peOi : 0),
+              dominantSide: (peOi >= ceOi ? 'put' : 'call') as 'put' | 'call',
+              isATM: false,
+            };
+          })
+          .filter((item): item is StrikeRow => item !== null)
+          .sort((a, b) => a.strike - b.strike);
+
+        if (!normalized.length) throw new Error('No option chain rows returned');
+
+        let atmIndex = Math.floor(normalized.length / 2);
+        if (typeof underlying === 'number' && Number.isFinite(underlying)) {
+          let bestIndex = atmIndex;
+          let bestDistance = Number.POSITIVE_INFINITY;
+          normalized.forEach((item, index) => {
+            const distance = Math.abs(item.strike - underlying);
+            if (distance < bestDistance) {
+              bestDistance = distance;
+              bestIndex = index;
+            }
+          });
+          atmIndex = bestIndex;
+        }
+
+        const atmStrike = normalized[atmIndex]?.strike ?? null;
+        const withAtm = normalized.map((item) => ({ ...item, isATM: item.strike === atmStrike }));
+
+        const totalCeOi = withAtm.reduce((sum, item) => sum + item.ceOi, 0);
+        const totalPeOi = withAtm.reduce((sum, item) => sum + item.peOi, 0);
+        const totalCeChg = withAtm.reduce((sum, item) => sum + item.ceChg, 0);
+        const totalPeChg = withAtm.reduce((sum, item) => sum + item.peChg, 0);
+        const pcr = totalCeOi > 0 ? totalPeOi / totalCeOi : 0;
+        const diff = totalPeChg - totalCeChg;
+        const atmRow = withAtm[atmIndex];
+        const exchangeTimestamp = parseChainTimestamp(payload.records?.timestamp) ?? Date.now();
+        const point: SessionPoint = {
+          ts: exchangeTimestamp,
+          label: getSessionLabel(exchangeTimestamp),
+          callBuild: totalCeChg,
+          putBuild: totalPeChg,
+          diff,
+          pcr,
+          spot: typeof underlying === 'number' && Number.isFinite(underlying) ? underlying : null,
+        };
+
+        if (cancelled) return;
+
+        setRows(withAtm);
+        setAvailableExpiries(expiryDates);
+        setSelectedExpiry(effectiveExpiry);
+        setChainTimestamp(payload.records?.timestamp ?? null);
+        setSpotPrice(typeof underlying === 'number' && Number.isFinite(underlying) ? underlying : null);
+        setLastUpdatedAt(exchangeTimestamp);
+        setIsLive(true);
+        setSessionHistory((prev) => {
+          const next = [...prev];
+          const last = next[next.length - 1];
+          const meaningfulChange =
+            !last ||
+            Math.abs(point.diff - last.diff) >= 15_000 ||
+            Math.abs(point.pcr - last.pcr) >= 0.01 ||
+            (typeof point.spot === 'number' && typeof last.spot === 'number' && Math.abs(point.spot - last.spot) >= 8);
+
+          if (last && Math.abs(point.ts - last.ts) < 15_000) {
+            next[next.length - 1] = point;
+          } else if (meaningfulChange) {
+            next.push(point);
+          } else {
+            next[next.length - 1] = point;
+          }
+          const trimmed = next.slice(-200);
+          persistSession(instrument, trimmed);
+          return trimmed;
+        });
+
+        if (!atmRow && atmStrike == null) {
+          throw new Error('Unable to locate ATM strike');
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setRows([]);
+        setSpotPrice(null);
+        setIsLive(false);
+        setError(err instanceof Error ? err.message : 'Failed to load options chain');
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+
+    fetchChain();
+    const intervalId = window.setInterval(fetchChain, 15000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [instrument, selectedExpiry]);
+
+  const sortedByOi = useMemo(() => [...rows].sort((a, b) => b.totalOi - a.totalOi), [rows]);
+  const atmIndex = useMemo(() => rows.findIndex((item) => item.isATM), [rows]);
+
+  const snapshot = useMemo<SnapshotMetrics>(() => {
+    const totalCeOi = rows.reduce((sum, item) => sum + item.ceOi, 0);
+    const totalPeOi = rows.reduce((sum, item) => sum + item.peOi, 0);
+    const totalCeChg = rows.reduce((sum, item) => sum + item.ceChg, 0);
+    const totalPeChg = rows.reduce((sum, item) => sum + item.peChg, 0);
+    const pcr = totalCeOi > 0 ? totalPeOi / totalCeOi : 0;
+
+    const supportStrike = rows.reduce<StrikeRow | null>(
+      (best, item) => (item.peOi > (best?.peOi ?? -1) ? item : best),
+      null
+    )?.strike ?? null;
+
+    const resistanceStrike = rows.reduce<StrikeRow | null>(
+      (best, item) => (item.ceOi > (best?.ceOi ?? -1) ? item : best),
+      null
+    )?.strike ?? null;
+
+    const maxPainStrike = rows.reduce<StrikeRow | null>(
+      (best, item) => (item.totalOi > (best?.totalOi ?? -1) ? item : best),
+      null
+    )?.strike ?? null;
+
+    const atmRow = rows.find((item) => item.isATM) ?? null;
+    const ivs = atmRow ? [atmRow.ceIv, atmRow.peIv].filter((value) => value > 0) : [];
+    const atmIv = ivs.length ? ivs.reduce((sum, value) => sum + value, 0) / ivs.length : 0;
+
+    return {
+      totalCeOi,
+      totalPeOi,
+      totalCeChg,
+      totalPeChg,
+      pcr,
+      supportStrike,
+      resistanceStrike,
+      maxPainStrike,
+      atmStrike: atmRow?.strike ?? null,
+      atmIv,
+      atmPremium: atmRow ? (atmRow.ceLtp ?? 0) + (atmRow.peLtp ?? 0) : 0,
+    };
+  }, [rows]);
+
+  const atmRow = useMemo(() => {
+    if (atmIndex >= 0) return rows[atmIndex];
+    return rows[Math.floor(rows.length / 2)] ?? null;
+  }, [atmIndex, rows]);
+
+  const strikeFocusRows = useMemo(() => {
+    if (!rows.length) return [];
+    const centerIndex = atmIndex >= 0 ? atmIndex : Math.floor(rows.length / 2);
+    const start = Math.max(0, centerIndex - 3);
+    const end = Math.min(rows.length, centerIndex + 4);
+    return rows.slice(start, end);
+  }, [atmIndex, rows]);
+
+  const effectiveSessionHistory = useMemo(() => {
+    const sorted = [...sessionHistory].sort((a, b) => a.ts - b.ts);
+    const unique = sorted.filter((point, index, list) => {
+      if (index === 0) return true;
+      const previous = list[index - 1];
+      return point.ts !== previous.ts;
+    });
+
+    if (!isMarketOpen()) {
+      const derivedClosed = buildDerivedSessionHistory(chartBars, snapshot, spotPrice);
+      if (derivedClosed.length >= 12) return derivedClosed;
+    }
+
+    if (unique.length >= 12) return unique;
+    const derived = buildDerivedSessionHistory(chartBars, snapshot, spotPrice);
+    return derived.length >= 6 ? derived : unique;
+  }, [chartBars, sessionHistory, snapshot, spotPrice]);
+
+  const isModeledSession = effectiveSessionHistory.length >= 6 && sessionHistory.length < 6;
+
+  const flowChartData = useMemo(
+    () =>
+      effectiveSessionHistory.map((point) => ({
+        time: point.label,
+        Put: Number((point.putBuild / 1e7).toFixed(4)),
+        Call: Number((point.callBuild / 1e7).toFixed(4)),
+        'PE-CE': Number((point.diff / 1e7).toFixed(4)),
+        PCR: Number(point.pcr.toFixed(4)),
+      })),
+    [effectiveSessionHistory]
+  );
+
+  const smartOiHistogramSeries = useMemo<HistogramData<UTCTimestamp>[]>(
+    () => buildSmartOiHistogram(candles, effectiveSessionHistory),
+    [candles, effectiveSessionHistory]
+  );
+
+  const latestFlow = flowChartData[flowChartData.length - 1];
+  const timestampLabel = chainTimestamp ?? (lastUpdatedAt ? getSessionLabel(lastUpdatedAt) : '--');
+  const sessionSummary = useMemo(() => {
+    const sessionHigh = candles.length ? Math.max(...candles.map((item) => item.high)) : null;
+    const sessionLow = candles.length ? Math.min(...candles.map((item) => item.low)) : null;
+    const sessionOpen = candles[0]?.open ?? null;
+    const lastClose = candles[candles.length - 1]?.close ?? null;
+    const referencePrice = spotPrice ?? lastClose;
+    const move = referencePrice !== null && sessionOpen !== null ? referencePrice - sessionOpen : null;
+    const movePct =
+      move !== null && sessionOpen && Number.isFinite(sessionOpen) ? (move / sessionOpen) * 100 : null;
+    const supportGap =
+      referencePrice !== null && snapshot.supportStrike !== null ? referencePrice - snapshot.supportStrike : null;
+    const resistanceGap =
+      referencePrice !== null && snapshot.resistanceStrike !== null ? snapshot.resistanceStrike - referencePrice : null;
+    const lowerBreakeven =
+      snapshot.atmStrike !== null && snapshot.atmPremium > 0 ? snapshot.atmStrike - snapshot.atmPremium : null;
+    const upperBreakeven =
+      snapshot.atmStrike !== null && snapshot.atmPremium > 0 ? snapshot.atmStrike + snapshot.atmPremium : null;
+    const oiSpread = snapshot.totalPeOi - snapshot.totalCeOi;
+
+    return {
+      sessionHigh,
+      sessionLow,
+      sessionOpen,
+      lastClose,
+      move,
+      movePct,
+      supportGap,
+      resistanceGap,
+      lowerBreakeven,
+      upperBreakeven,
+      oiSpread,
+    };
+  }, [candles, snapshot, spotPrice]);
+
+  const traderView = useMemo(() => {
+    const closeByTime = effectiveSessionHistory.map((point) => {
+      if (typeof point.spot === 'number') {
+        return {
+          ...point,
+          close: point.spot,
+        };
+      }
+
+      const nearest = candles.reduce<{ distance: number; close: number | null }>(
+        (best, candle) => {
+          const candleTs = Number(candle.time) * 1000;
+          const distance = Math.abs(candleTs - point.ts);
+          if (distance < best.distance) {
+            return { distance, close: candle.close };
+          }
+          return best;
+        },
+        { distance: Number.POSITIVE_INFINITY, close: null }
+      );
+
+      return {
+        ...point,
+        close: nearest.close,
+      };
+    }).filter((point): point is SessionPoint & { close: number } => typeof point.close === 'number');
+
+    const timeline = closeByTime.slice(-6).map((point, index, list) => {
+      const previous = list[Math.max(0, index - 1)];
+      const priceMovePct =
+        index === 0 || !previous.close ? 0 : ((point.close - previous.close) / previous.close) * 100;
+      const oiDeltaCr = index === 0 ? 0 : (point.diff - previous.diff) / 1e7;
+      const pcrDelta = index === 0 ? 0 : point.pcr - previous.pcr;
+      const state = classifyTraderState(priceMovePct, oiDeltaCr, pcrDelta);
+      const note =
+        state === 'uptrend'
+          ? `Price +${Math.abs(priceMovePct).toFixed(2)}%, support improving`
+          : state === 'downtrend'
+            ? `Price -${Math.abs(priceMovePct).toFixed(2)}%, call pressure rising`
+            : `Price flat, OI balanced`;
+
+      return {
+        time: point.label,
+        state,
+        note,
+        tone: getTraderTone(state),
+      };
+    });
+
+    const recent = closeByTime.slice(-5);
+    const first = recent[0];
+    const last = recent[recent.length - 1];
+    const windowPriceMovePct =
+      first && last && first.close ? ((last.close - first.close) / first.close) * 100 : sessionSummary.movePct ?? 0;
+    const windowOiDeltaCr = first && last ? (last.diff - first.diff) / 1e7 : snapshot.totalPeChg / 1e7 - snapshot.totalCeChg / 1e7;
+    const windowPcrDelta = first && last ? last.pcr - first.pcr : snapshot.pcr - 1;
+    const state = classifyTraderState(windowPriceMovePct, windowOiDeltaCr, windowPcrDelta);
+    const tone = getTraderTone(state);
+    const confidence = clamp(
+      Math.round(Math.abs(windowPriceMovePct) * 90 + Math.abs(windowOiDeltaCr) * 45 + Math.abs(windowPcrDelta) * 220),
+      38,
+      96
+    );
+    const expectedZone =
+      snapshot.supportStrike !== null && snapshot.resistanceStrike !== null
+        ? `${formatPrice(snapshot.supportStrike, 0)} - ${formatPrice(snapshot.resistanceStrike, 0)}`
+        : '--';
+    const summary =
+      state === 'uptrend'
+        ? `Data bol raha hai buyers control me hain. Jab tak spot ${snapshot.supportStrike ? ` ${formatPrice(snapshot.supportStrike, 0)} ke upar` : 'support ke upar'} hai, trend positive hai.`
+        : state === 'downtrend'
+          ? `Data bol raha hai sellers active hain. Jab tak spot ${snapshot.resistanceStrike ? `${formatPrice(snapshot.resistanceStrike, 0)} ke neeche` : 'resistance ke neeche'} hai, pressure bana rahega.`
+          : `Data mixed hai. ${expectedZone !== '--' ? `Market ${expectedZone} zone me rotate kar sakta hai.` : 'Clear direction abhi build nahi hui.'}`;
+
+    return {
+      label: getTraderLabel(state),
+      tone,
+      confidence,
+      summary,
+      since: timeline[0]?.time ?? timestampLabel,
+      checkpoints: timeline.reverse(),
+      stats: [
+        {
+          label: 'Now',
+          value: getTraderLabel(state),
+          subtext: `As per live price + OI`,
+        },
+        {
+          label: 'Confidence',
+          value: `${confidence}%`,
+          subtext: isModeledSession ? 'Modeled session assist' : 'Live session read',
+        },
+        {
+          label: 'Zone',
+          value: expectedZone,
+          subtext: 'Immediate trading zone',
+        },
+        {
+          label: 'OI Shift',
+          value: `${windowOiDeltaCr >= 0 ? '+' : ''}${windowOiDeltaCr.toFixed(2)}Cr`,
+          subtext: 'Recent put-call build change',
+        },
+      ],
+    };
+  }, [candles, effectiveSessionHistory, isModeledSession, sessionSummary.movePct, snapshot, timestampLabel]);
+
+  const playbookItems = useMemo(
+    () => [
+      {
+        label: 'Breakeven Band',
+        value:
+          sessionSummary.lowerBreakeven !== null && sessionSummary.upperBreakeven !== null
+            ? `${formatPrice(sessionSummary.lowerBreakeven, 0)} - ${formatPrice(sessionSummary.upperBreakeven, 0)}`
+            : '--',
+        note: 'Short straddle expected range',
+      },
+      {
+        label: 'ATM Straddle',
+        value: snapshot.atmPremium ? `Rs ${formatPrice(snapshot.atmPremium)}` : '--',
+        note: snapshot.atmStrike ? `ATM ${formatPrice(snapshot.atmStrike, 0)} combined premium` : 'ATM strike unavailable',
+      },
+      {
+        label: 'Support Gap',
+        value: sessionSummary.supportGap !== null ? formatSignedPrice(sessionSummary.supportGap, 0) : '--',
+        note: 'Distance from strongest put wall',
+      },
+      {
+        label: 'Resistance Gap',
+        value: sessionSummary.resistanceGap !== null ? formatSignedPrice(sessionSummary.resistanceGap, 0) : '--',
+        note: 'Distance from strongest call wall',
+      },
+    ],
+    [sessionSummary.lowerBreakeven, sessionSummary.resistanceGap, sessionSummary.supportGap, sessionSummary.upperBreakeven, snapshot.atmPremium, snapshot.atmStrike]
+  );
+
+  const defaultChartHover = useMemo<ChartHoverState | null>(() => {
+    const latestCandle = candles[candles.length - 1];
+    if (!latestCandle) return null;
+    return {
+      label: getSessionLabel(Number(latestCandle.time) * 1000),
+      open: latestCandle.open,
+      high: latestCandle.high,
+      low: latestCandle.low,
+      close: latestCandle.close,
+      smartOi: smartOiHistogramSeries[smartOiHistogramSeries.length - 1]?.value ?? null,
+    };
+  }, [candles, smartOiHistogramSeries]);
+
+  useEffect(() => {
+    const host = chartHostRef.current;
+    if (!host || candles.length === 0) return;
+    const latestCandle = candles[candles.length - 1];
+    const currentPriceLineColor =
+      latestCandle && latestCandle.close >= latestCandle.open ? 'rgba(34, 197, 94, 0.92)' : 'rgba(239, 68, 68, 0.92)';
+
+    if (defaultChartHover) {
+      setChartHover(defaultChartHover);
+    }
+
+    const chart = createChart(host, {
+      autoSize: true,
+      layout: {
+        background: { type: ColorType.Solid, color: '#0b0d10' },
+        textColor: '#7c8aa5',
+        attributionLogo: false,
+      },
+      localization: {
+        timeFormatter: (time: unknown) => formatChartTimeLabel(Number(time)),
+      },
+      grid: {
+        vertLines: { color: 'rgba(120, 138, 165, 0.10)' },
+        horzLines: { color: 'rgba(120, 138, 165, 0.08)' },
+      },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        vertLine: {
+          color: 'rgba(255,255,255,0.45)',
+          width: 1,
+          style: LineStyle.SparseDotted,
+          labelVisible: false,
+        },
+        horzLine: {
+          visible: false,
+          labelVisible: false,
+        },
+      },
+      leftPriceScale: {
+        visible: true,
+        borderVisible: true,
+        borderColor: 'rgba(120,138,165,0.18)',
+        scaleMargins: {
+          top: 0.06,
+          bottom: 0.24,
+        },
+      },
+      rightPriceScale: {
+        visible: true,
+        borderVisible: true,
+        borderColor: 'rgba(120,138,165,0.18)',
+        scaleMargins: {
+          top: 0.78,
+          bottom: 0.06,
+        },
+      },
+      timeScale: {
+        visible: true,
+        borderVisible: true,
+        borderColor: 'rgba(120,138,165,0.18)',
+        timeVisible: true,
+        secondsVisible: false,
+        tickMarkFormatter: (time: unknown) => formatChartTimeLabel(Number(time)),
+        rightOffset: 2,
+        barSpacing: 6,
+        minBarSpacing: 3,
+      },
+      handleScroll: {
+        mouseWheel: true,
+        pressedMouseMove: true,
+        horzTouchDrag: true,
+        vertTouchDrag: false,
+      },
+      handleScale: {
+        mouseWheel: true,
+        pinch: true,
+        axisPressedMouseMove: true,
+        axisDoubleClickReset: true,
+      },
+    });
+
+    const candleSeries = chart.addSeries(CandlestickSeries, {
+      priceScaleId: 'left',
+      upColor: '#22c55e',
+      downColor: '#ef4444',
+      wickUpColor: '#22c55e',
+      wickDownColor: '#ef4444',
+      borderVisible: false,
+      priceLineVisible: true,
+      lastValueVisible: true,
+      priceLineWidth: 1,
+      priceLineStyle: LineStyle.Solid,
+      priceLineColor: currentPriceLineColor,
+    });
+
+    candleSeries.setData(candles);
+
+    const histogramSeries = chart.addSeries(HistogramSeries, {
+      priceScaleId: 'right',
+      lastValueVisible: true,
+      priceLineVisible: true,
+      priceLineColor: '#60a5fa',
+      base: 0,
+      priceFormat: {
+        type: 'custom',
+        minMove: 0.01,
+        formatter: (price: number) => formatFlowValue(price),
+      },
+    });
+
+    if (smartOiHistogramSeries.length > 0) {
+      histogramSeries.setData(smartOiHistogramSeries);
+      chart.priceScale('right').applyOptions({
+        autoScale: true,
+        scaleMargins: {
+          top: 0.78,
+          bottom: 0.06,
+        },
+        borderVisible: true,
+        borderColor: 'rgba(120,138,165,0.18)',
+      });
+    }
+
+    const handleCrosshairMove = (param: any) => {
+      if (!param?.time || !param?.seriesData) {
+        setChartHover(defaultChartHover);
+        return;
+      }
+
+      const candleData = param.seriesData.get(candleSeries);
+      if (!candleData) return;
+      const oiData = param.seriesData.get(histogramSeries);
+
+      setChartHover({
+        label: getSessionLabel(Number(param.time) * 1000),
+        open: candleData.open,
+        high: candleData.high,
+        low: candleData.low,
+        close: candleData.close,
+        smartOi: typeof oiData?.value === 'number' ? oiData.value : null,
+      });
+    };
+
+    chart.subscribeCrosshairMove(handleCrosshairMove);
+
+    chart.timeScale().fitContent();
+
+    const resizeObserver = new ResizeObserver(() => {
+      chart.timeScale().fitContent();
+    });
+    resizeObserver.observe(host);
+
+    return () => {
+      chart.unsubscribeCrosshairMove(handleCrosshairMove);
+      resizeObserver.disconnect();
+      chart.remove();
+    };
+  }, [candles, defaultChartHover, smartOiHistogramSeries]);
+
+  const marketBias = useMemo(() => {
+    if (snapshot.pcr >= 1.15 && snapshot.totalPeChg >= snapshot.totalCeChg) {
+      return {
+        title: 'Put support is dominating',
+        detail: 'Downside support is stronger and active strikes are defending the current zone.',
+        tone: 'bullish' as const,
+      };
+    }
+
+    if (snapshot.pcr <= 0.9 && snapshot.totalCeChg > snapshot.totalPeChg) {
+      return {
+        title: 'Call writing is heavier',
+        detail: 'Upside resistance is stronger and sellers are active above spot.',
+        tone: 'bearish' as const,
+      };
+    }
+
+    return {
+      title: 'Positioning is balanced',
+      detail: 'Both sides are active. Wait for cleaner shift in PCR or build-up spread.',
+      tone: 'neutral' as const,
+    };
+  }, [snapshot.pcr, snapshot.totalCeChg, snapshot.totalPeChg]);
+
+  const keyLevels = useMemo<KeyLevelItem[]>(
+    () => [
+      {
+        label: 'Support',
+        value: snapshot.supportStrike ? formatPrice(snapshot.supportStrike, 0) : '--',
+        subtext: 'Highest Put OI wall',
+        tone: 'bullish' as const,
+        icon: <TrendingUp className="h-4 w-4" />,
+      },
+      {
+        label: 'Resistance',
+        value: snapshot.resistanceStrike ? formatPrice(snapshot.resistanceStrike, 0) : '--',
+        subtext: 'Highest Call OI wall',
+        tone: 'bearish' as const,
+        icon: <TrendingDown className="h-4 w-4" />,
+      },
+      {
+        label: 'PCR',
+        value: snapshot.pcr ? snapshot.pcr.toFixed(2) : '--',
+        subtext: marketBias.title,
+        tone: marketBias.tone,
+        icon: <Target className="h-4 w-4" />,
+      },
+      {
+        label: 'ATM IV',
+        value: snapshot.atmIv ? `${snapshot.atmIv.toFixed(1)}%` : '--',
+        subtext: 'Current ATM volatility',
+        tone: snapshot.atmIv >= 20 ? 'bearish' : 'neutral',
+        icon: <ShieldAlert className="h-4 w-4" />,
+      },
+    ],
+    [marketBias.title, marketBias.tone, snapshot.atmIv, snapshot.pcr, snapshot.resistanceStrike, snapshot.supportStrike]
+  );
+
+  const instrumentIndex = INSTRUMENTS.indexOf(instrument);
+  const selectedExpiryLabel = formatExpiryLabel(selectedExpiry);
+  const daysToExpiry = getDaysToExpiry(selectedExpiry);
+
+  const switchInstrument = (direction: -1 | 1) => {
+    const nextIndex = (instrumentIndex + direction + INSTRUMENTS.length) % INSTRUMENTS.length;
+    setInstrument(INSTRUMENTS[nextIndex]);
+  };
+
+  const cycleExpiry = (direction: -1 | 1) => {
+    if (!availableExpiries.length) return;
+    const currentIndex = Math.max(0, availableExpiries.indexOf(selectedExpiry ?? availableExpiries[0]));
+    const nextIndex = (currentIndex + direction + availableExpiries.length) % availableExpiries.length;
+    setSelectedExpiry(availableExpiries[nextIndex]);
+  };
+
+  const chartInfo = chartHover ?? defaultChartHover;
+  const flowReferencePoint = flowChartData.length ? flowChartData[Math.floor(flowChartData.length * 0.58)] : null;
+
+  return (
+    <div className="min-h-screen bg-[#060b14] px-4 py-5 text-slate-300 md:px-6 md:py-6">
+      <div className="mx-auto max-w-7xl space-y-4">
+        <div className="overflow-hidden rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(11,17,29,0.96),rgba(5,10,18,0.99))] shadow-[0_24px_70px_rgba(2,6,23,0.58)]">
+          <div className="flex flex-col gap-3 border-b border-white/8 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-2 py-2">
+                <span className="flex h-7 min-w-[28px] items-center justify-center rounded-lg bg-blue-500/14 px-2 text-xs font-black text-blue-200">
+                  {LOT_SIZE_MAP[instrument]}
+                </span>
                 <button
-                  key={inst}
-                  onClick={() => setInstrument(inst)}
-                  className={`px-5 py-2 rounded-lg text-xs font-bold transition-all duration-300 ${
-                    instrument === inst 
-                      ? 'bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)] relative' 
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                  type="button"
+                  onClick={() => switchInstrument(-1)}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:text-slate-100"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-500/12 text-blue-300">
+                  <Layers className="h-4 w-4" />
+                </div>
+                <span className="text-sm font-black text-white">{instrument}</span>
+                <button
+                  type="button"
+                  onClick={() => switchInstrument(1)}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] text-slate-400 transition hover:text-slate-100"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-semibold text-slate-200">
+                <CalendarDays className="h-4 w-4 text-slate-500" />
+                <button
+                  type="button"
+                  onClick={() => cycleExpiry(-1)}
+                  disabled={availableExpiries.length <= 1}
+                  className="text-slate-400 transition hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-35"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <span>
+                  {selectedExpiryLabel}
+                  {daysToExpiry !== null ? ` (${daysToExpiry}d)` : ''}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => cycleExpiry(1)}
+                  disabled={availableExpiries.length <= 1}
+                  className="text-slate-400 transition hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-35"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="flex rounded-xl border border-white/10 bg-white/[0.02] p-1">
+                {INTERVALS.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => setInterval(item)}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
+                      interval === item
+                        ? 'bg-blue-500/16 text-blue-200 shadow-[0_0_18px_rgba(59,130,246,0.18)]'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm font-semibold text-slate-200">
+                Range: All
+              </div>
+
+              <div className="flex rounded-xl border border-white/10 bg-white/[0.02] p-1">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('live')}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
+                    viewMode === 'live' ? 'bg-blue-500/16 text-blue-200' : 'text-slate-400'
                   }`}
                 >
-                  {inst}
+                  Live
                 </button>
-              ))}
-            </div>
-
-            {/* Expiry Dropdown (Visual only for mock) */}
-            <div className="relative group">
-              <button className="flex items-center gap-2 bg-white/5 backdrop-blur-md border border-white/10 px-5 py-2.5 rounded-xl text-xs font-bold text-slate-300 hover:bg-white/10 hover:border-white/20 transition-all shadow-[0_8px_32px_0_rgba(0,0,0,0.36)]">
-                {expiry} <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Top GEX Warning Banner ────────────────────────────────────── */}
-        <div className={`rounded-xl backdrop-blur-md border p-5 flex flex-col md:flex-row items-start md:items-center justify-between shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] transition-all duration-700 relative overflow-hidden group ${
-          config.gexStatus.includes('Positive') 
-            ? 'bg-emerald-500/10 border-emerald-500/30' 
-            : config.gexStatus.includes('Negative')
-            ? 'bg-rose-500/10 border-rose-500/30'
-            : 'bg-slate-800/40 border-slate-700/50'
-        }`}>
-          {/* Animated Background Glow */}
-          <div className={`absolute top-1/2 left-10 w-32 h-32 -translate-y-1/2 rounded-full blur-[40px] opacity-40 transition-colors duration-700 ${
-            config.gexStatus.includes('Positive') ? 'bg-emerald-500' : config.gexStatus.includes('Negative') ? 'bg-rose-500' : 'bg-slate-500'
-          }`}></div>
-
-          <div className="flex items-center gap-4 relative z-10">
-            <div className={`p-3 rounded-full shadow-inner flex items-center justify-center shrink-0 ${
-              config.gexStatus.includes('Positive') ? 'bg-emerald-500/20 text-emerald-400 shadow-emerald-500/20' : 'bg-rose-500/20 text-rose-400 shadow-rose-500/20'
-            }`}>
-              <ShieldAlert className="w-6 h-6 animate-pulse" />
-            </div>
-            <div>
-              <h3 className={`text-base font-black tracking-wide uppercase drop-shadow-md transition-colors ${config.gexStatus.includes('Positive') ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {config.gexStatus} Environment Detected
-              </h3>
-              <p className="text-xs text-slate-300 mt-1 font-medium max-w-2xl leading-relaxed">
-                {config.gexStatus.includes('Positive') 
-                  ? 'Market Makers are buying dips and selling rips. Expect lower volatility, mean-reversion, and theta decay.' 
-                  : 'Market Makers are selling into weakness. Expect high volatility, sudden spikes, and trend continuation.'}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Core KPI Grid ─────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* SPOT CARD */}
-          <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-5 relative overflow-hidden group shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] hover:bg-white/10 transition-all cursor-default">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-sky-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-sky-500/20 transition-all" />
-            <p className="text-slate-400 text-[10px] font-black tracking-widest uppercase mb-1 drop-shadow-sm">{instrument} SPOT</p>
-            <div className="text-3xl font-black text-white tracking-tight drop-shadow-md transition-all duration-300">{Number(config.spot).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
-            <div className="text-[11px] text-sky-400 font-bold mt-2 flex items-center gap-1.5 uppercase tracking-wide bg-sky-500/10 w-fit px-2 py-0.5 rounded border border-sky-500/20">
-              <Activity className="w-3.5 h-3.5" /> Latest Tick
-            </div>
-          </div>
-
-          {/* IV CARD */}
-          <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-5 relative overflow-hidden group shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] hover:bg-white/10 transition-all cursor-default">
-            <div className={`absolute top-0 right-0 w-32 h-32 transition-colors duration-1000 ${isVolExpensive ? 'bg-rose-500/10 group-hover:bg-rose-500/20' : isVolCheap ? 'bg-emerald-500/10 group-hover:bg-emerald-500/20' : 'bg-amber-500/10 group-hover:bg-amber-500/20'} rounded-full blur-3xl -translate-y-1/2 translate-x-1/2`} />
-            <p className="text-slate-400 text-[10px] font-black tracking-widest uppercase mb-1 drop-shadow-sm">ATM Implied Volatility</p>
-            <div className="flex items-end gap-2">
-              <div className={`text-3xl font-black tracking-tight drop-shadow-md transition-all ${isVolExpensive ? 'text-rose-400' : isVolCheap ? 'text-emerald-400' : 'text-amber-400'}`}>{config.ivp}</div>
-            </div>
-            <div className={`text-[11px] font-bold mt-2 flex items-center gap-1.5 transition-colors ${isVolExpensive ? 'text-rose-400 bg-rose-500/10 border border-rose-500/20' : isVolCheap ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20' : 'text-amber-400 bg-amber-500/10 border border-amber-500/20'} w-fit px-2 py-0.5 rounded`}>
-              {isVolExpensive ? 'Premium is Expensive (Favorable for Sellers)' : isVolCheap ? 'Premium is Cheap (Favorable for Buyers)' : 'Premium is Neutral'}
-            </div>
-          </div>
-
-          {/* PCR CARD */}
-          <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-5 relative overflow-hidden group shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] hover:bg-white/10 transition-all cursor-default">
-            <div className={`absolute top-0 right-0 w-32 h-32 transition-colors duration-1000 ${config.pcr > 1.2 ? 'bg-emerald-500/10 group-hover:bg-emerald-500/20' : config.pcr < 0.8 ? 'bg-rose-500/10 group-hover:bg-rose-500/20' : 'bg-slate-500/10 group-hover:bg-slate-500/20'} rounded-full blur-3xl -translate-y-1/2 translate-x-1/2`} />
-            <p className="text-slate-400 text-[10px] font-black tracking-widest uppercase mb-1 drop-shadow-sm">Put-Call Ratio (PCR)</p>
-            <div className="text-3xl font-black text-white tracking-tight drop-shadow-md transition-all">{config.pcr.toFixed(2)}</div>
-            <div className={`text-[11px] font-bold mt-2 transition-colors w-fit px-2 py-0.5 rounded border ${config.pcr > 1.2 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : config.pcr < 0.8 ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : 'text-slate-300 bg-slate-700/30 border-slate-600/50'}`}>
-              {config.pcr > 1.2 ? 'Oversold / Strong Support' : config.pcr < 0.8 ? 'Overbought / Strong Resistance' : 'Neutral Territory'}
-            </div>
-          </div>
-
-          {/* MAX PAIN CARD */}
-          <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-5 relative overflow-hidden group shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] hover:bg-white/10 transition-all cursor-default">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-violet-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-violet-500/20 transition-all" />
-            <p className="text-slate-400 text-[10px] font-black tracking-widest uppercase mb-1 drop-shadow-sm">Max Pain Strike</p>
-            <div className="text-3xl font-black text-violet-400 tracking-tight drop-shadow-[0_0_8px_rgba(139,92,246,0.5)] transition-all">{config.maxPain.toLocaleString('en-IN')}</div>
-            <div className="text-[11px] text-violet-300 font-bold mt-2 bg-violet-500/10 border border-violet-500/20 w-fit px-2 py-0.5 rounded tracking-wide">
-              Estimated by OI Concentration
-            </div>
-          </div>
-        </div>
-
-        {/* ── Main Charts Grid ──────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-          {/* Institutional Footprint (FII/PRO vs Retail) */}
-          <div className="bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 p-5 flex flex-col min-h-[400px] shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] group hover:bg-white/10 transition-all">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-sm font-bold text-white flex items-center gap-2 tracking-wide">
-                  <BarChart2 className="w-4 h-4 text-indigo-400" />
-                  Institutional Net Positioning (EOD)
-                </h2>
-                <p className="text-[10px] text-slate-400 tracking-wider mt-1 uppercase font-bold">FII & PRO vs Retail Clients</p>
-              </div>
-               <div className="text-[10px] font-bold text-slate-300 border border-white/20 bg-white/5 px-2 py-1 rounded shadow-sm">T-1 Report</div>
-            </div>
-
-            <div className="flex-1 w-full relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={fiiData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }} barGap={4} barSize={24}>
-                  <defs>
-                    <linearGradient id="fiiGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#3b82f6" />
-                      <stop offset="100%" stopColor="#1d4ed8" />
-                    </linearGradient>
-                    <linearGradient id="proGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#8b5cf6" />
-                      <stop offset="100%" stopColor="#6d28d9" />
-                    </linearGradient>
-                    <linearGradient id="retailGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#64748b" />
-                      <stop offset="100%" stopColor="#334155" />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff" strokeOpacity={0.05} vertical={false} />
-                  <XAxis dataKey="category" stroke="#94a3b8" fontSize={10} fontWeight="bold" tickLine={false} axisLine={false} />
-                  <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
-                  <Tooltip content={<CustomTooltip />} cursor={{ fill: '#ffffff', opacity: 0.05 }} />
-                  <Bar dataKey="FII" name="Foreign (FII)" fill="url(#fiiGradient)" radius={[4,4,0,0]} isAnimationActive={true} />
-                  <Bar dataKey="PRO" name="Proprietary" fill="url(#proGradient)" radius={[4,4,0,0]} isAnimationActive={true} />
-                  <Bar dataKey="CLIENT" name="Retail Client" fill="url(#retailGradient)" radius={[4,4,0,0]} isAnimationActive={true} />
-                  <ReferenceLine y={0} stroke="#ffffff" strokeOpacity={0.2} strokeWidth={1} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Intraday Theta Decay (Straddle Tracking) */}
-          <div className="bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 p-5 flex flex-col min-h-[400px] shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] group hover:bg-white/10 transition-all">
-             <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-sm font-bold text-white flex items-center gap-2 tracking-wide">
-                  <TrendingUp className="w-4 h-4 text-amber-400" />
-                  ATM Straddle Decay Tracker
-                </h2>
-                <p className="text-[10px] text-slate-400 tracking-wider mt-1 uppercase font-bold">Combined Call + Put Premium intraday drop</p>
-              </div>
-              <div className="bg-amber-500/10 px-3 py-1 rounded-md border border-amber-500/30 text-amber-400 text-[10px] font-black tracking-widest shadow-[0_0_10px_rgba(245,158,11,0.2)]">
-                THETA BLEED
+                <button
+                  type="button"
+                  onClick={() => setViewMode('historical')}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
+                    viewMode === 'historical' ? 'bg-blue-500/16 text-blue-200' : 'text-slate-400'
+                  }`}
+                >
+                  Historical
+                </button>
               </div>
             </div>
 
-            <div className="flex-1 w-full relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={straddleData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorDecay" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.5}/>
-                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff" strokeOpacity={0.05} vertical={false} />
-                  <XAxis dataKey="time" stroke="#94a3b8" fontSize={10} fontWeight="bold" tickLine={false} axisLine={false} />
-                  <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} domain={['dataMin - 10', 'dataMax + 10']} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: 'rgba(15, 21, 32, 0.9)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', boxShadow: '0 8px 32px 0 rgba(0,0,0,0.36)' }}
-                    itemStyle={{ color: '#fcfcfc', fontSize: '13px', fontWeight: 'bold' }}
-                    labelStyle={{ color: '#94a3b8', fontSize: '11px', marginBottom: '6px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}
-                  />
-                  <Area type="step" isAnimationActive={true} dataKey="premium" name="Straddle Price (₹)" stroke="#f59e0b" strokeWidth={3} fillOpacity={1} fill="url(#colorDecay)" style={{ filter: 'drop-shadow(0 0 8px rgba(245,158,11,0.5))' }} />
-                </AreaChart>
-              </ResponsiveContainer>
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              {isLoading && (
+                <div className="rounded-xl border border-blue-500/25 bg-blue-500/10 px-3 py-2 text-xs font-bold text-blue-300">
+                  Refreshing chain...
+                </div>
+              )}
+              {chartLoading && (
+                <div className="rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-3 py-2 text-xs font-bold text-cyan-300">
+                  Refreshing chart...
+                </div>
+              )}
+              {isModeledSession && (
+                <div className="rounded-xl border border-violet-500/25 bg-violet-500/10 px-3 py-2 text-xs font-bold text-violet-300">
+                  Session replay
+                </div>
+              )}
+              {error && (
+                <div className="max-w-[280px] truncate rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-300">
+                  {error}
+                </div>
+              )}
+              <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold text-slate-300">
+                <Clock3 className="h-3.5 w-3.5 text-slate-500" />
+                <span>{clockLabel}</span>
+              </div>
+              <div className="ml-1 flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-bold text-slate-300">
+                <span>{timestampLabel}</span>
+                <span className={`h-2.5 w-2.5 rounded-full ${isLive ? 'bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.8)]' : 'bg-rose-400'}`} />
+              </div>
             </div>
           </div>
 
-          {/* Strike-wise OI Flow Heatmap (Bottom Full Width) */}
-          <div className="col-span-1 lg:col-span-2 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 p-5 flex flex-col min-h-[450px] shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] group hover:bg-white/10 transition-all">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-              <div>
-                <h2 className="text-sm font-bold text-white flex items-center gap-2 tracking-wide">
-                  <Layers className="w-4 h-4 text-emerald-400" />
-                  Intraday Options Flow (Live Additions/Unwinding)
-                </h2>
-                <p className="text-[10px] text-slate-400 tracking-wider mt-1 uppercase font-bold">Changes in Open Interest at near-ATM strikes (in Thousands)</p>
-              </div>
-              <div className="flex flex-wrap items-center justify-end gap-3 text-[10px] sm:text-[11px] font-bold tracking-wide">
-                <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2 py-1 rounded-full shadow-sm"><div className="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]"/> Call Writing</div>
-                <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2 py-1 rounded-full shadow-sm"><div className="w-2 h-2 rounded-full bg-rose-300"/> Call Unwind</div>
-                <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2 py-1 rounded-full shadow-sm"><div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"/> Put Writing</div>
-                <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2 py-1 rounded-full shadow-sm"><div className="w-2 h-2 rounded-full bg-emerald-300"/> Put Unwind</div>
+          <div className="grid gap-4 p-4 xl:grid-cols-[1.38fr_0.92fr]">
+            <div className="overflow-hidden rounded-[22px] border border-white/6 bg-[#0b0d10] shadow-[0_18px_50px_rgba(0,0,0,0.34)]">
+              <div className="relative h-[640px] bg-[#0b0d10]">
+                <div className="pointer-events-none absolute left-3 top-2 z-10 flex items-center gap-2 text-[11px] font-black">
+                  <span className="text-slate-300">{instrument}</span>
+                  <span className="h-1 w-1 rounded-full bg-slate-500" />
+                  <span className="rounded border border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-sky-300">Smart OI</span>
+                </div>
+                {chartInfo && (
+                  <div className="pointer-events-none absolute right-3 top-8 z-10 w-[170px] rounded-md border border-slate-700/80 bg-[#0d1219]/96 px-3 py-2 text-[11px] shadow-[0_12px_26px_rgba(0,0,0,0.45)]">
+                    <div className="font-bold text-slate-200">{chartInfo.label}</div>
+                    <div className="mt-1 space-y-0.5 text-slate-300">
+                      <div>open: {chartInfo.open.toFixed(1)}</div>
+                      <div>high: {chartInfo.high.toFixed(1)}</div>
+                      <div>low: {chartInfo.low.toFixed(1)}</div>
+                      <div>close: {chartInfo.close.toFixed(1)}</div>
+                    </div>
+                    <div className="mt-2 flex items-center gap-1.5 text-sky-300">
+                      <span className="h-2 w-2 rounded-full bg-sky-400" />
+                      <span>Smart OI:</span>
+                      <span className="font-black">{formatFlowValueSigned(chartInfo.smartOi)}</span>
+                    </div>
+                  </div>
+                )}
+
+                {chartError ? (
+                  <div className="flex h-full items-center justify-center text-sm text-slate-500">
+                    {chartError}
+                  </div>
+                ) : (
+                  <div ref={chartHostRef} className="h-full w-full" />
+                )}
               </div>
             </div>
 
-            <div className="flex-1 w-full relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={strikeData} layout="vertical" margin={{ top: 10, right: 30, left: 30, bottom: 5 }} barSize={20}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#ffffff" strokeOpacity={0.05} horizontal={false} />
-                  <XAxis 
-                    type="number" 
-                    stroke="#64748b" 
-                    fontSize={10} 
-                    tickLine={false} 
-                    axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} 
-                    tickFormatter={(val) => `${Math.abs(val).toFixed(0)}k`}
-                    domain={([dataMin, dataMax]) => {
-                      const maxAbs = Math.max(Math.abs(dataMin), Math.abs(dataMax));
-                      // Add 10% padding to the max value for better visuals
-                      const paddedMax = Math.ceil(maxAbs * 1.1);
-                      return [-paddedMax, paddedMax];
-                    }}
-                  />
-                  <YAxis dataKey="strike" type="category" stroke="#f8fafc" fontSize={12} fontWeight="900" tickLine={false} axisLine={false} />
-                  <Tooltip 
-                    cursor={{ fill: '#ffffff', opacity: 0.05 }}
-                    contentStyle={{ backgroundColor: 'rgba(15, 21, 32, 0.9)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', boxShadow: '0 8px 32px 0 rgba(0,0,0,0.36)' }}
-                    itemStyle={{ color: '#fcfcfc', fontSize: '13px', fontWeight: 'bold' }}
-                    formatter={(value: number, name: string, props: any) => {
-                      const isCall = name.includes('Call');
-                      const actualValue = isCall ? props.payload.callChg : props.payload.putChg;
-                      const label = isCall 
-                        ? (actualValue > 0 ? 'Call Writing' : 'Call Unwinding') 
-                        : (actualValue > 0 ? 'Put Writing' : 'Put Unwinding');
-                      return [`${Math.abs(actualValue).toFixed(1)}k`, label];
-                    }}
-                  />
-                  <ReferenceLine x={0} stroke="#ffffff" strokeOpacity={0.2} strokeWidth={2} />
-                  
-                  {/* Call Bar */}
-                  <Bar dataKey="callChgVis" name="Call Writing (Bearish)" radius={[4,0,0,4]} isAnimationActive={true}>
-                    {strikeData.map((entry, index) => (
-                      <Cell key={`call-${index}`} fill={entry.callChg > 0 ? '#f43f5e' : '#fda4af'} style={{ filter: entry.callChg > 0 ? 'drop-shadow(0 0 4px rgba(244,63,94,0.4))' : 'none' }} />
-                    ))}
-                  </Bar>
-                  
-                  <Bar dataKey="putChgVis" name="Put Writing (Bullish)" radius={[0,4,4,0]} isAnimationActive={true}>
-                    {strikeData.map((entry, index) => (
-                      <Cell key={`put-${index}`} fill={entry.putChg > 0 ? '#10b981' : '#6ee7b7'} style={{ filter: entry.putChg > 0 ? 'drop-shadow(0 0 4px rgba(16,185,129,0.4))' : 'none' }} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            
-            <div className="mt-4 p-4 rounded-xl bg-white/5 border border-white/10 flex items-start gap-3 shadow-inner">
-              <div className="bg-emerald-500/20 p-1 rounded-full shrink-0">
-                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+            <div className="space-y-4">
+              <div className="rounded-[22px] border border-white/8 bg-[#050a14] p-3">
+                <div className="flex items-center justify-between gap-2 border-b border-white/8 px-2 pb-3">
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] font-black">
+                    <span className="rounded-full border border-rose-500/25 bg-rose-500/10 px-2 py-1 text-rose-300">Put</span>
+                    <span className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-emerald-300">Call</span>
+                    <span className="rounded-full border border-violet-500/25 bg-violet-500/10 px-2 py-1 text-violet-300">PE-CE</span>
+                    {isModeledSession && <span className="rounded-full border border-violet-500/20 bg-violet-500/[0.06] px-2 py-1 text-violet-200">Modeled</span>}
+                  </div>
+                  {latestFlow && (
+                    <div className="flex gap-2 text-[11px] font-black">
+                      <span className="rounded bg-rose-500/12 px-2 py-1 text-rose-300">{formatFlowValueSigned(latestFlow.Put)}</span>
+                      <span className="rounded bg-emerald-500/12 px-2 py-1 text-emerald-300">{formatFlowValueSigned(latestFlow.Call)}</span>
+                      <span className="rounded bg-violet-500/12 px-2 py-1 text-violet-300">{formatFlowValueSigned(latestFlow['PE-CE'])}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-3 h-[280px]">
+                  {flowChartData.length > 1 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={flowChartData} margin={{ top: 8, right: 10, left: -8, bottom: 0 }}>
+                        <CartesianGrid stroke="rgba(255,255,255,0.06)" />
+                        <XAxis dataKey="time" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={32} />
+                        <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} axisLine={false} width={56} tickFormatter={(value) => formatFlowValue(value)} />
+                        <Tooltip content={<FlowTooltip />} />
+                        <ReferenceLine y={0} stroke="rgba(255,255,255,0.14)" />
+                        {flowReferencePoint && <ReferenceLine x={flowReferencePoint.time} stroke="rgba(255,255,255,0.18)" strokeDasharray="3 4" />}
+                        <Line type="monotone" dataKey="Put" stroke="#fb7185" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#0b0d10', stroke: '#fb7185', strokeWidth: 2 }} />
+                        <Line type="monotone" dataKey="Call" stroke="#4ade80" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#0b0d10', stroke: '#4ade80', strokeWidth: 2 }} />
+                        <Line type="monotone" dataKey="PE-CE" stroke="#8b5cf6" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#0b0d10', stroke: '#8b5cf6', strokeWidth: 2 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-white/10 text-sm text-slate-500">
+                      Session flow starts building after a few live refresh cycles.
+                    </div>
+                  )}
+                </div>
               </div>
-              <p className="text-sm text-slate-300 leading-relaxed font-medium">
-                <strong className="text-white tracking-wide uppercase mr-2">Pro Tip:</strong> When significant <span className="text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">Put Writing</span> coincides with <span className="text-rose-400 font-bold bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">Call Unwinding</span> at a strike, it transforms into extremely robust support for the intraday session.
-              </p>
+
+              <div className="rounded-[22px] border border-white/8 bg-[#050a14] p-3">
+                <div className="flex items-center justify-between gap-2 border-b border-white/8 px-2 pb-3">
+                  <div className="flex items-center gap-2 text-[11px] font-black text-sky-300">
+                    <span className="rounded-full border border-sky-500/25 bg-sky-500/10 px-2 py-1">PCR</span>
+                  </div>
+                  <div className="text-sm font-black text-sky-300">{latestFlow ? latestFlow.PCR.toFixed(2) : '--'}</div>
+                </div>
+
+                <div className="mt-3 h-[240px]">
+                  {flowChartData.length > 1 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={flowChartData} margin={{ top: 8, right: 10, left: -8, bottom: 0 }}>
+                        <CartesianGrid stroke="rgba(255,255,255,0.06)" />
+                        <XAxis dataKey="time" tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} axisLine={false} minTickGap={32} />
+                        <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickLine={false} axisLine={false} width={42} domain={['dataMin - 0.05', 'dataMax + 0.05']} />
+                        <Tooltip content={<FlowTooltip />} />
+                        <ReferenceLine y={1} stroke="rgba(255,255,255,0.14)" />
+                        {flowReferencePoint && <ReferenceLine x={flowReferencePoint.time} stroke="rgba(255,255,255,0.18)" strokeDasharray="3 4" />}
+                        <Line type="monotone" dataKey="PCR" stroke="#38bdf8" strokeWidth={2.4} dot={false} activeDot={{ r: 4, fill: '#0b0d10', stroke: '#38bdf8', strokeWidth: 2 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-white/10 text-sm text-slate-500">
+                      PCR trend appears once session history is available.
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
+          <div className="grid gap-3 border-t border-white/8 px-4 py-4 md:grid-cols-2 xl:grid-cols-4">
+            {keyLevels.map((item) => (
+              <MetricTile
+                key={item.label}
+                label={item.label}
+                value={item.value}
+                subtext={item.subtext}
+                tone={item.tone}
+                icon={item.icon}
+              />
+            ))}
+          </div>
+
+          <div className="grid gap-3 border-t border-white/8 px-4 py-4 lg:grid-cols-[1.2fr_0.9fr]">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-sm font-black text-white">
+                  <Activity className="h-4 w-4 text-blue-300" />
+                  <span>Trader View</span>
+                </div>
+                <div
+                  className={`rounded-full border px-3 py-1 text-[11px] font-black ${
+                    traderView.tone === 'bullish'
+                      ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300'
+                      : traderView.tone === 'bearish'
+                        ? 'border-rose-500/25 bg-rose-500/10 text-rose-300'
+                        : 'border-slate-500/25 bg-slate-500/10 text-slate-300'
+                  }`}
+                >
+                  {traderView.label}
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <div className="text-2xl font-black text-white">{traderView.label}</div>
+                  <div className="mt-1 text-sm text-slate-400">Since {traderView.since}</div>
+                </div>
+                <div className="rounded-xl border border-white/8 bg-slate-950/45 px-3 py-2 text-right">
+                  <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Confidence</div>
+                  <div className="mt-1 text-xl font-black text-white">{traderView.confidence}%</div>
+                </div>
+              </div>
+              <div className="mt-3 text-sm leading-6 text-slate-300">{traderView.summary}</div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {traderView.stats.map((item) => (
+                  <div key={item.label} className="rounded-xl border border-white/8 bg-slate-950/45 px-3 py-3">
+                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">{item.label}</div>
+                    <div className="mt-2 text-lg font-black text-white">{item.value}</div>
+                    <div className="mt-1 text-xs text-slate-500">{item.subtext}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 rounded-xl border border-white/8 bg-slate-950/45">
+                <div className="border-b border-white/8 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                  Time Wise View
+                </div>
+                <div className="divide-y divide-white/6">
+                  {traderView.checkpoints.length ? (
+                    traderView.checkpoints.map((item) => (
+                      <div key={`${item.time}-${item.state}`} className="flex items-center justify-between gap-3 px-3 py-3">
+                        <div>
+                          <div className="text-sm font-black text-white">{item.time}</div>
+                          <div className="text-xs text-slate-500">{item.note}</div>
+                        </div>
+                        <div
+                          className={`rounded-full border px-3 py-1 text-[11px] font-black ${
+                            item.tone === 'bullish'
+                              ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300'
+                              : item.tone === 'bearish'
+                                ? 'border-rose-500/25 bg-rose-500/10 text-rose-300'
+                                : 'border-slate-500/25 bg-slate-500/10 text-slate-300'
+                          }`}
+                        >
+                          {getTraderLabel(item.state)}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="px-3 py-4 text-sm text-slate-500">Enough live samples aane par time-wise view fill hoga.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <div className="flex items-center gap-2 text-sm font-black text-white">
+                <Zap className="h-4 w-4 text-amber-300" />
+                <span>Active Walls</span>
+              </div>
+              <div className="mt-3 space-y-2">
+                {sortedByOi.slice(0, 5).map((row) => (
+                  <div key={row.strike} className="rounded-xl border border-white/8 bg-slate-950/45 px-3 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2 text-sm font-black text-white">
+                          <span>{formatPrice(row.strike, 0)}</span>
+                          {row.isATM && (
+                            <span className="rounded-full border border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-sky-300">
+                              ATM
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-1 text-[11px] font-semibold text-slate-500">
+                          {row.dominantSide === 'put' ? 'Put wall active' : 'Call wall active'}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className={`text-sm font-black ${row.dominantSide === 'put' ? 'text-emerald-300' : 'text-rose-300'}`}>
+                          {row.dominantSide === 'put' ? formatCompact(row.peOi) : formatCompact(row.ceOi)}
+                        </div>
+                        <div className="text-[11px] text-slate-500">
+                          Chg {row.dominantSide === 'put' ? formatSignedCompact(row.peChg) : formatSignedCompact(row.ceChg)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-3 border-t border-white/8 px-4 py-4 lg:grid-cols-[1.2fr_0.8fr]">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sm font-black text-white">
+                  <BarChart3 className="h-4 w-4 text-sky-300" />
+                  <span>Strike Ladder</span>
+                </div>
+                <div className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[11px] font-bold text-slate-400">
+                  Focus around ATM
+                </div>
+              </div>
+              <div className="mt-4 overflow-hidden rounded-2xl border border-white/8">
+                <div className="grid grid-cols-[1fr_0.8fr_0.95fr_0.8fr_1fr] bg-slate-950/75 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                  <span>Call OI</span>
+                  <span>Call Chg</span>
+                  <span className="text-center">Strike</span>
+                  <span className="text-right">Put Chg</span>
+                  <span className="text-right">Put OI</span>
+                </div>
+                <div className="divide-y divide-white/6">
+                  {strikeFocusRows.map((row) => (
+                    <div
+                      key={row.strike}
+                      className={`grid grid-cols-[1fr_0.8fr_0.95fr_0.8fr_1fr] items-center px-3 py-3 text-sm ${
+                        row.isATM ? 'bg-sky-500/[0.07]' : 'bg-transparent'
+                      }`}
+                    >
+                      <div className="font-black text-rose-300">{formatCompact(row.ceOi)}</div>
+                      <div className={`text-xs font-bold ${row.ceChg >= 0 ? 'text-rose-300' : 'text-emerald-300'}`}>
+                        {formatSignedCompact(row.ceChg)}
+                      </div>
+                      <div className="text-center">
+                        <div className={`font-black ${row.isATM ? 'text-sky-300' : 'text-white'}`}>
+                          {formatPrice(row.strike, 0)}
+                        </div>
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                          {row.isATM ? 'ATM' : row.dominantSide === 'put' ? 'Put heavy' : 'Call heavy'}
+                        </div>
+                      </div>
+                      <div className={`text-right text-xs font-bold ${row.peChg >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                        {formatSignedCompact(row.peChg)}
+                      </div>
+                      <div className="text-right font-black text-emerald-300">{formatCompact(row.peOi)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="flex items-center gap-2 text-sm font-black text-white">
+                  <Target className="h-4 w-4 text-violet-300" />
+                  <span>Trade Map</span>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  {playbookItems.map((item) => (
+                    <div key={item.label} className="rounded-xl border border-white/8 bg-slate-950/45 px-3 py-3">
+                      <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">{item.label}</div>
+                      <div className="mt-1 text-lg font-black text-white">{item.value}</div>
+                      <div className="mt-1 text-xs text-slate-500">{item.note}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="flex items-center gap-2 text-sm font-black text-white">
+                  <Activity className="h-4 w-4 text-blue-300" />
+                  <span>Flow Readings</span>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-white/8 bg-slate-950/45 px-3 py-3">
+                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Call OI</div>
+                    <div className="mt-1 text-lg font-black text-rose-300">{formatCompact(snapshot.totalCeOi)}</div>
+                  </div>
+                  <div className="rounded-xl border border-white/8 bg-slate-950/45 px-3 py-3">
+                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Put OI</div>
+                    <div className="mt-1 text-lg font-black text-emerald-300">{formatCompact(snapshot.totalPeOi)}</div>
+                  </div>
+                  <div className="rounded-xl border border-white/8 bg-slate-950/45 px-3 py-3">
+                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">ATM Call LTP</div>
+                    <div className="mt-1 text-lg font-black text-white">{atmRow ? `Rs ${formatPrice(atmRow.ceLtp)}` : '--'}</div>
+                  </div>
+                  <div className="rounded-xl border border-white/8 bg-slate-950/45 px-3 py-3">
+                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">ATM Put LTP</div>
+                    <div className="mt-1 text-lg font-black text-white">{atmRow ? `Rs ${formatPrice(atmRow.peLtp)}` : '--'}</div>
+                  </div>
+                </div>
+                <div className="mt-3 rounded-xl border border-white/8 bg-slate-950/45 px-3 py-3 text-xs leading-6 text-slate-400">
+                  {isModeledSession
+                    ? 'Session curves are being reconstructed from candles until enough live option-chain samples build.'
+                    : 'Session curves are based on accumulated option-chain snapshots from the live session.'}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
