@@ -674,6 +674,42 @@ app.get('/api/yahoo-quotes', async (req, res) => {
   }
 });
 
+app.get('/api/yahoo/spark', async (req, res) => {
+  const symbols = (req.query?.symbols || '').toString();
+  const range = (req.query?.range || '1mo').toString();
+  const interval = (req.query?.interval || '1d').toString();
+
+  if (!symbols) {
+    return res.status(400).json({ error: 'Missing symbols parameter' });
+  }
+
+  try {
+    const url = `https://query1.finance.yahoo.com/v7/finance/spark?symbols=${encodeURIComponent(symbols)}&range=${encodeURIComponent(range)}&interval=${encodeURIComponent(interval)}`;
+    const fetchResponse = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        'Accept': 'application/json'
+      }
+    });
+
+    const text = await fetchResponse.text();
+    if (!fetchResponse.ok) {
+      return res.status(fetchResponse.status).json({
+        error: 'Yahoo spark failed',
+        status: fetchResponse.status,
+        body: text.slice(0, 500)
+      });
+    }
+
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Content-Type', 'application/json');
+    return res.status(200).send(text);
+  } catch (error) {
+    console.error('Yahoo Spark API Error:', error.message);
+    return res.status(500).json({ error: 'Failed to fetch spark data' });
+  }
+});
+
 // Search endpoint using Yahoo Finance
 app.get('/api/search', async (req, res) => {
   const q = req.query.q;

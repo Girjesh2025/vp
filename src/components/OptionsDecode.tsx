@@ -174,6 +174,18 @@ const formatFlowValueSigned = (value: number | null | undefined) => {
   return `${value >= 0 ? '+' : ''}${formatCompact(value * 1e7)}`;
 };
 
+const formatSmartOiDisplayValue = (value: number | null | undefined, isModeled: boolean) => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '--';
+  if (isModeled) return `${value >= 0 ? '+' : ''}${value.toFixed(3)}x`;
+  return formatFlowValueSigned(value);
+};
+
+const formatSmartOiAxisValue = (value: number, isModeled: boolean) => {
+  if (!Number.isFinite(value)) return '--';
+  if (isModeled) return `${value.toFixed(2)}x`;
+  return formatFlowValue(value);
+};
+
 const formatChartTimeLabel = (timestampSeconds: number) =>
   new Intl.DateTimeFormat('en-IN', {
     timeZone: 'Asia/Kolkata',
@@ -198,6 +210,27 @@ const formatSignedPrice = (value: number | null | undefined, digits: number = 2)
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+// #region debug-point A:smart-oi-report
+const SMART_OI_DEBUG_RUN_ID = 'post-fix-4';
+
+const reportSmartOiDebug = (hypothesisId: string, msg: string, data: Record<string, unknown>) => {
+  if (typeof window === 'undefined') return;
+  fetch('http://127.0.0.1:7777/event', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId: 'smart-oi-histogram',
+      runId: SMART_OI_DEBUG_RUN_ID,
+      hypothesisId,
+      location: 'src/components/OptionsDecode.tsx',
+      msg: `[DEBUG] ${msg}`,
+      data,
+      ts: Date.now(),
+    }),
+  }).catch(() => {});
+};
+// #endregion
 
 const getIstDateKey = () => {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -490,13 +523,15 @@ const buildDerivedSessionHistory = (
     };
   });
 
-  const endCall = replay[replay.length - 1]?.callAcc || 1;
-  const endPut = replay[replay.length - 1]?.putAcc || 1;
-  const callScale = Math.abs(snapshot.totalCeChg) > 0 ? snapshot.totalCeChg / endCall : 0;
-  const putScale = Math.abs(snapshot.totalPeChg) > 0 ? snapshot.totalPeChg / endPut : 0;
+  const endCallMagnitude = Math.max(Math.abs(replay[replay.length - 1]?.callAcc || 0), 1);
+  const endPutMagnitude = Math.max(Math.abs(replay[replay.length - 1]?.putAcc || 0), 1);
+  const callScale = Math.abs(snapshot.totalCeChg) > 0 ? Math.abs(snapshot.totalCeChg) / endCallMagnitude : 0;
+  const putScale = Math.abs(snapshot.totalPeChg) > 0 ? Math.abs(snapshot.totalPeChg) / endPutMagnitude : 0;
+  const callSign = snapshot.totalCeChg === 0 ? 0 : Math.sign(snapshot.totalCeChg);
+  const putSign = snapshot.totalPeChg === 0 ? 0 : Math.sign(snapshot.totalPeChg);
   const scaledReplay = replay.map((point, index) => {
-    const callBuild = point.callAcc * callScale;
-    const putBuild = point.putAcc * putScale;
+    const callBuild = Math.abs(point.callAcc) * callScale * callSign;
+    const putBuild = Math.abs(point.putAcc) * putScale * putSign;
 
     return {
       ts: point.ts,
@@ -570,7 +605,8 @@ const buildSmartOiHistogram = (
   });
 
   return candles.map((candle, index) => {
-    const value = Number(interpolatedDiffCr[index].toFixed(3));
+    const previousValue = index > 0 ? interpolatedDiffCr[index - 1] : interpolatedDiffCr[index];
+    const value = Number((interpolatedDiffCr[index] - previousValue).toFixed(3));
 
     return {
       time: candle.time,
@@ -647,6 +683,10 @@ const OptionsDecode = () => {
   const [chartError, setChartError] = useState<string | null>(null);
   const [chartHover, setChartHover] = useState<ChartHoverState | null>(null);
   const chartHostRef = useRef<HTMLDivElement | null>(null);
+  const chartApiRef = useRef<any>(null);
+  const candleSeriesRef = useRef<any>(null);
+  const histogramSeriesRef = useRef<any>(null);
+  const defaultChartHoverRef = useRef<ChartHoverState | null>(null);
 
   useEffect(() => {
     setSessionHistory(
@@ -948,6 +988,106 @@ const OptionsDecode = () => {
     [candles, effectiveSessionHistory]
   );
 
+  // #region debug-point B:session-source
+  useEffect(() => {
+    if (candles.length === 0 || effectiveSessionHistory.length === 0) return;
+
+    const firstSessionPoint = effectiveSessionHistory[0];
+    const lastSessionPoint = effectiveSessionHistory[effectiveSessionHistory.length - 1];
+
+    reportSmartOiDebug('B', 'session source and diff summary', {
+      instrument,
+      interval,
+      viewMode,
+      isModeledSession,
+      candleCount: candles.length,
+      sessionPointCount: effectiveSessionHistory.length,
+      rawSessionPointCount: sessionHistory.length,
+      spotPrice,
+      snapshotCeChg: snapshot.totalCeChg,
+      snapshotPeChg: snapshot.totalPeChg,
+      firstDiffCr: Number((firstSessionPoint.diff / 1e7).toFixed(3)),
+      lastDiffCr: Number((lastSessionPoint.diff / 1e7).toFixed(3)),
+      firstPcr: Number(firstSessionPoint.pcr.toFixed(3)),
+      lastPcr: Number(lastSessionPoint.pcr.toFixed(3)),
+    });
+  }, [candles.length, effectiveSessionHistory, instrument, interval, isModeledSession, sessionHistory.length, snapshot.totalCeChg, snapshot.totalPeChg, spotPrice, viewMode]);
+  // #endregion
+
+  // #region debug-point C:histogram-direction
+  useEffect(() => {
+    if (candles.length === 0 || smartOiHistogramSeries.length === 0) return;
+
+    const sample = candles.slice(-12).map((candle) => {
+      const histogramPoint = smartOiHistogramSeries.find((item) => Number(item.time) === Number(candle.time));
+      const candleMove = candle.close - candle.open;
+      const histogramValue = typeof histogramPoint?.value === 'number' ? histogramPoint.value : 0;
+
+      return {
+        label: getSessionLabel(Number(candle.time) * 1000),
+        candleMove: Number(candleMove.toFixed(1)),
+        candleDir: candleMove > 0 ? 'up' : candleMove < 0 ? 'down' : 'flat',
+        histogramCr: Number(histogramValue.toFixed(3)),
+        histogramDir: histogramValue > 0 ? 'positive' : histogramValue < 0 ? 'negative' : 'flat',
+      };
+    });
+
+    const directionalPairs = sample.filter((item) => item.candleDir !== 'flat' && item.histogramDir !== 'flat');
+    const mismatchCount = directionalPairs.filter(
+      (item) =>
+        (item.candleDir === 'up' && item.histogramDir === 'negative') ||
+        (item.candleDir === 'down' && item.histogramDir === 'positive')
+    ).length;
+
+    reportSmartOiDebug('C', 'candle vs histogram direction sample', {
+      instrument,
+      interval,
+      viewMode,
+      mismatchCount,
+      comparableBars: directionalPairs.length,
+      sample,
+    });
+  }, [candles, instrument, interval, smartOiHistogramSeries, viewMode]);
+  // #endregion
+
+  // #region debug-point D:histogram-components
+  useEffect(() => {
+    if (candles.length === 0 || effectiveSessionHistory.length < 2 || smartOiHistogramSeries.length === 0) return;
+
+    const sortedSessionPoints = [...effectiveSessionHistory].sort((a, b) => a.ts - b.ts);
+    const sample = candles.slice(-12).map((candle) => {
+      const candleTs = Number(candle.time) * 1000;
+      let pointIndex = 0;
+      while (pointIndex < sortedSessionPoints.length - 1 && sortedSessionPoints[pointIndex + 1].ts <= candleTs) {
+        pointIndex += 1;
+      }
+
+      const point = sortedSessionPoints[pointIndex];
+      const previousPoint = sortedSessionPoints[Math.max(0, pointIndex - 1)];
+      const histogramPoint = smartOiHistogramSeries.find((item) => Number(item.time) === Number(candle.time));
+
+      return {
+        label: getSessionLabel(candleTs),
+        candleMove: Number((candle.close - candle.open).toFixed(1)),
+        histogramCr: Number((histogramPoint?.value ?? 0).toFixed(3)),
+        pointDiffCr: Number((point.diff / 1e7).toFixed(3)),
+        deltaDiffCr: Number((((point.diff - previousPoint.diff) || 0) / 1e7).toFixed(3)),
+        deltaPutCr: Number((((point.putBuild - previousPoint.putBuild) || 0) / 1e7).toFixed(3)),
+        deltaCallCr: Number((((point.callBuild - previousPoint.callBuild) || 0) / 1e7).toFixed(3)),
+      };
+    });
+
+    reportSmartOiDebug('D', 'histogram source components sample', {
+      instrument,
+      interval,
+      viewMode,
+      rawSessionPointCount: sessionHistory.length,
+      isModeledSession,
+      sample,
+    });
+  }, [candles, effectiveSessionHistory, instrument, interval, isModeledSession, sessionHistory.length, smartOiHistogramSeries, viewMode]);
+  // #endregion
+
   const latestFlow = flowChartData[flowChartData.length - 1];
   const timestampLabel = chainTimestamp ?? (lastUpdatedAt ? getSessionLabel(lastUpdatedAt) : '--');
   const sessionSummary = useMemo(() => {
@@ -1133,15 +1273,12 @@ const OptionsDecode = () => {
   }, [candles, smartOiHistogramSeries]);
 
   useEffect(() => {
-    const host = chartHostRef.current;
-    if (!host || candles.length === 0) return;
-    const latestCandle = candles[candles.length - 1];
-    const currentPriceLineColor =
-      latestCandle && latestCandle.close >= latestCandle.open ? 'rgba(34, 197, 94, 0.92)' : 'rgba(239, 68, 68, 0.92)';
+    defaultChartHoverRef.current = defaultChartHover;
+  }, [defaultChartHover]);
 
-    if (defaultChartHover) {
-      setChartHover(defaultChartHover);
-    }
+  useEffect(() => {
+    const host = chartHostRef.current;
+    if (!host || candles.length === 0 || chartApiRef.current) return;
 
     const chart = createChart(host, {
       autoSize: true,
@@ -1212,6 +1349,7 @@ const OptionsDecode = () => {
         axisDoubleClickReset: true,
       },
     });
+    chartApiRef.current = chart;
 
     const candleSeries = chart.addSeries(CandlestickSeries, {
       priceScaleId: 'left',
@@ -1224,10 +1362,9 @@ const OptionsDecode = () => {
       lastValueVisible: true,
       priceLineWidth: 1,
       priceLineStyle: LineStyle.Solid,
-      priceLineColor: currentPriceLineColor,
+      priceLineColor: 'rgba(34, 197, 94, 0.92)',
     });
-
-    candleSeries.setData(candles);
+    candleSeriesRef.current = candleSeries;
 
     const histogramSeries = chart.addSeries(HistogramSeries, {
       priceScaleId: 'right',
@@ -1238,26 +1375,14 @@ const OptionsDecode = () => {
       priceFormat: {
         type: 'custom',
         minMove: 0.01,
-        formatter: (price: number) => formatFlowValue(price),
+        formatter: (price: number) => formatSmartOiAxisValue(price, false),
       },
     });
-
-    if (smartOiHistogramSeries.length > 0) {
-      histogramSeries.setData(smartOiHistogramSeries);
-      chart.priceScale('right').applyOptions({
-        autoScale: true,
-        scaleMargins: {
-          top: 0.78,
-          bottom: 0.06,
-        },
-        borderVisible: true,
-        borderColor: 'rgba(120,138,165,0.18)',
-      });
-    }
+    histogramSeriesRef.current = histogramSeries;
 
     const handleCrosshairMove = (param: any) => {
       if (!param?.time || !param?.seriesData) {
-        setChartHover(defaultChartHover);
+        setChartHover(defaultChartHoverRef.current);
         return;
       }
 
@@ -1276,9 +1401,6 @@ const OptionsDecode = () => {
     };
 
     chart.subscribeCrosshairMove(handleCrosshairMove);
-
-    chart.timeScale().fitContent();
-
     const resizeObserver = new ResizeObserver(() => {
       chart.timeScale().fitContent();
     });
@@ -1287,9 +1409,51 @@ const OptionsDecode = () => {
     return () => {
       chart.unsubscribeCrosshairMove(handleCrosshairMove);
       resizeObserver.disconnect();
+      chartApiRef.current = null;
+      candleSeriesRef.current = null;
+      histogramSeriesRef.current = null;
       chart.remove();
     };
-  }, [candles, defaultChartHover, smartOiHistogramSeries]);
+  }, [candles.length]);
+
+  useEffect(() => {
+    const chart = chartApiRef.current;
+    const candleSeries = candleSeriesRef.current;
+    const histogramSeries = histogramSeriesRef.current;
+    if (!chart || !candleSeries || !histogramSeries || candles.length === 0) return;
+
+    const latestCandle = candles[candles.length - 1];
+    const currentPriceLineColor =
+      latestCandle && latestCandle.close >= latestCandle.open ? 'rgba(34, 197, 94, 0.92)' : 'rgba(239, 68, 68, 0.92)';
+
+    candleSeries.applyOptions({
+      priceLineColor: currentPriceLineColor,
+    });
+    candleSeries.setData(candles);
+    histogramSeries.setData(smartOiHistogramSeries);
+    histogramSeries.applyOptions({
+      lastValueVisible: !isModeledSession,
+      priceLineVisible: !isModeledSession,
+      priceFormat: {
+        type: 'custom',
+        minMove: 0.01,
+        formatter: (price: number) => formatSmartOiAxisValue(price, isModeledSession),
+      },
+    });
+    chart.priceScale('right').applyOptions({
+      autoScale: true,
+      scaleMargins: {
+        top: 0.78,
+        bottom: 0.06,
+      },
+      borderVisible: true,
+      borderColor: 'rgba(120,138,165,0.18)',
+    });
+
+    if (defaultChartHover) {
+      setChartHover(defaultChartHover);
+    }
+  }, [candles, defaultChartHover, isModeledSession, smartOiHistogramSeries]);
 
   const marketBias = useMemo(() => {
     if (snapshot.pcr >= 1.15 && snapshot.totalPeChg >= snapshot.totalCeChg) {
@@ -1516,8 +1680,8 @@ const OptionsDecode = () => {
                     </div>
                     <div className="mt-2 flex items-center gap-1.5 text-sky-300">
                       <span className="h-2 w-2 rounded-full bg-sky-400" />
-                      <span>Smart OI:</span>
-                      <span className="font-black">{formatFlowValueSigned(chartInfo.smartOi)}</span>
+                      <span>{isModeledSession ? 'Smart OI Proxy:' : 'Smart OI:'}</span>
+                      <span className="font-black">{formatSmartOiDisplayValue(chartInfo.smartOi, isModeledSession)}</span>
                     </div>
                   </div>
                 )}

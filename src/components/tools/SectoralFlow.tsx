@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import ProfessionalHeader from '../ProfessionalHeader';
 import ProfessionalSidebar from '../ProfessionalSidebar';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, BarChart3, LayoutGrid, TrendingUp, TrendingDown, Activity, ExternalLink } from 'lucide-react';
-import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from 'recharts';
+import { ArrowLeft, Loader2, BarChart3, LayoutGrid, TrendingUp, TrendingDown, Activity, ExternalLink, RefreshCw } from 'lucide-react';
+import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
 import { fetchStockPrice } from '../../utils/priceApi';
 import StockLogo from '../StockLogo';
 
@@ -49,20 +49,78 @@ const fetchRealSparkData = async (symbols: string[]): Promise<Record<string, num
   return results;
 };
 
+const fetchSectorIndexData = async (
+  symbols: string[]
+): Promise<Record<string, { price: number; change: number; previousClose: number }>> => {
+  if (symbols.length === 0) return {};
+
+  try {
+    const response = await fetch(
+      `/api/yahoo/spark?symbols=${encodeURIComponent(symbols.join(','))}&range=1d&interval=1d`
+    );
+    if (!response.ok) return {};
+
+    const parsed = await response.json();
+    const results: Record<string, { price: number; change: number; previousClose: number }> = {};
+
+    const items = parsed?.spark?.result;
+    if (!Array.isArray(items)) return {};
+
+    items.forEach((item: any) => {
+      const symbol = item?.symbol;
+      const responseNode = item?.response?.[0];
+      const closes = responseNode?.indicators?.quote?.[0]?.close;
+      const validCloses = Array.isArray(closes)
+        ? closes.filter((value: unknown) => typeof value === 'number' && Number.isFinite(value))
+        : [];
+
+      const price =
+        typeof validCloses[validCloses.length - 1] === 'number'
+          ? validCloses[validCloses.length - 1]
+          : responseNode?.meta?.regularMarketPrice;
+      const previousClose =
+        responseNode?.meta?.chartPreviousClose ??
+        responseNode?.meta?.previousClose ??
+        item?.previousClose ??
+        price;
+
+      if (
+        typeof symbol === 'string' &&
+        typeof price === 'number' &&
+        Number.isFinite(price) &&
+        typeof previousClose === 'number' &&
+        Number.isFinite(previousClose) &&
+        previousClose > 0
+      ) {
+        const change = ((price - previousClose) / previousClose) * 100;
+        results[symbol] = {
+          price: Number(price.toFixed(2)),
+          change: Number(change.toFixed(2)),
+          previousClose: Number(previousClose.toFixed(2)),
+        };
+      }
+    });
+
+    return results;
+  } catch {
+    return {};
+  }
+};
+
 // Define the core constituents we want to track for our sectoral flow proxy
 const SECTOR_DEFINITIONS = [
-  { title: 'DEFENCE', ext: 'NIFTY IND DEFENCE', stocks: ['HAL', 'BEL', 'MAZAGON', 'BDL', 'ASTRAMICRO', 'PARAS', 'MTARTECH', 'DATAPATTNS', 'BEML', 'GRSE', 'MIDHANI', 'SOLARIND', 'BHEL', 'APOLLOMICRO', 'ZENITHEXPO'] },
-  { title: 'PSU BANK', ext: 'NIFTY PSU BANK', stocks: ['SBIN', 'PNB', 'BANKINDIA', 'CANBK', 'UNIONBANK', 'INDIANB', 'BANKBARODA', 'MAHABANK', 'PSB', 'CENTRALBK', 'IOB', 'UCOBANK'] },
-  { title: 'MEDIA', ext: 'NIFTY MEDIA', stocks: ['ZEEL', 'NETWORK18', 'PVRINOX', 'NDTV', 'SUNTV', 'TV18BRDCST', 'DISHTV', 'HATHWAY', 'NAVKARCORP', 'DBCORP'] },
-  { title: 'BANK', ext: 'NIFTY BANK', stocks: ['HDFCBANK', 'ICICIBANK', 'SBIN', 'AXISBANK', 'KOTAKBANK', 'INDUSINDBK', 'PNB', 'AUBANK', 'BANKBARODA', 'FEDERALBNK', 'IDFCFIRSTB', 'BANDHANBNK'] },
-  { title: 'REALTY', ext: 'NIFTY REALTY', stocks: ['DLF', 'GODREJPROP', 'OBEROIRLTY', 'PRESTIGE', 'LODHA', 'BRIGADE', 'SOBHA', 'MAHLIFE', 'PHOENIXLTD'] },
-  { title: 'METAL', ext: 'NIFTY METAL', stocks: ['TATASTEEL', 'HINDALCO', 'JSWSTEEL', 'COALINDIA', 'VEDL', 'SAIL', 'NMDC', 'JINDALSTEL', 'NATIONALUM', 'HINDZINC', 'APLALAPOLLO', 'WELCORP', 'RATNAMANI'] },
-  { title: 'IT', ext: 'NIFTY IT', stocks: ['TCS', 'INFY', 'HCLTECH', 'WIPRO', 'TECHM', 'LTIM', 'PERSISTENT', 'OFSS', 'COFORGE', 'MPHASIS'] },
-  { title: 'AUTO', ext: 'NIFTY AUTO', stocks: ['TATAMOTORS', 'M&M', 'MARUTI', 'BAJAJ-AUTO', 'EICHERMOT', 'HEROMOTOCO', 'TVSMOTOR', 'BOSCHLTD', 'ASHOKLEY', 'MRF', 'TIINDIA', 'MOTHERSON', 'SONACOMS', 'BALKRISIND', 'BHARATFORG'] },
-  { title: 'PHARMA', ext: 'NIFTY PHARMA', stocks: ['SUNPHARMA', 'CIPLA', 'DRREDDY', 'DIVISLAB', 'LUPIN', 'AUROPHARMA', 'APOLLOHOSP', 'TORNTPHARM', 'ZYDUSLIFE', 'MANKIND', 'BIOCON', 'SYNGENE', 'ABBOTINDIA', 'IPCALAB', 'GLENMARK', 'AJANTPHARM', 'LAURUSLABS', 'NATCOPHARM', 'GRANULES', 'JBCHEPHARM'] },
-  { title: 'FMCG', ext: 'NIFTY FMCG', stocks: ['ITC', 'HINDUNILVR', 'NESTLEIND', 'BRITANNIA', 'DABUR', 'GODREJCP', 'TATACONSUM', 'MARICO', 'VBL', 'COLPAL', 'UBL', 'PGHH', 'RADICO', 'EMAMILTD', 'BALRAMCHIN'] },
-  { title: 'ENERGY', ext: 'NIFTY ENERGY', stocks: ['RELIANCE', 'ONGC', 'NTPC', 'POWERGRID', 'BPCL', 'COALINDIA', 'TATAPOWER', 'IOC', 'HPCL', 'ADANIGREEN'] },
-  { title: 'INFRA', ext: 'NIFTY INFRA', stocks: ['LT', 'ADANIPORTS', 'ULTRACEMCO', 'GRASIM', 'AMBUJACEM', 'SHREECEM', 'BHARTIARTL', 'ACC', 'LODHA', 'PVRINOX', 'NTPC', 'POWERGRID', 'ONGC', 'IOC'] },
+  { title: 'DEFENCE', ext: 'NIFTY IND DEFENCE', symbol: '', stocks: ['HAL', 'BEL', 'MAZAGON', 'BDL', 'ASTRAMICRO', 'PARAS', 'MTARTECH', 'DATAPATTNS', 'BEML', 'GRSE', 'MIDHANI', 'SOLARIND', 'BHEL', 'APOLLOMICRO', 'ZENITHEXPO'] },
+  { title: 'PSU BANK', ext: 'NIFTY PSU BANK', symbol: '^CNXPSUBANK', stocks: ['SBIN', 'PNB', 'BANKINDIA', 'CANBK', 'UNIONBANK', 'INDIANB', 'BANKBARODA', 'MAHABANK', 'PSB', 'CENTRALBK', 'IOB', 'UCOBANK'] },
+  { title: 'MEDIA', ext: 'NIFTY MEDIA', symbol: '^CNXMEDIA', stocks: ['ZEEL', 'NETWORK18', 'PVRINOX', 'NDTV', 'SUNTV', 'TV18BRDCST', 'DISHTV', 'HATHWAY', 'NAVKARCORP', 'DBCORP'] },
+  { title: 'BANK', ext: 'NIFTY BANK', symbol: '^NSEBANK', stocks: ['HDFCBANK', 'ICICIBANK', 'SBIN', 'AXISBANK', 'KOTAKBANK', 'INDUSINDBK', 'PNB', 'AUBANK', 'BANKBARODA', 'FEDERALBNK', 'IDFCFIRSTB', 'BANDHANBNK'] },
+  { title: 'REALTY', ext: 'NIFTY REALTY', symbol: '^CNXREALTY', stocks: ['DLF', 'GODREJPROP', 'OBEROIRLTY', 'PRESTIGE', 'LODHA', 'BRIGADE', 'SOBHA', 'MAHLIFE', 'PHOENIXLTD'] },
+  { title: 'METAL', ext: 'NIFTY METAL', symbol: '^CNXMETAL', stocks: ['TATASTEEL', 'HINDALCO', 'JSWSTEEL', 'COALINDIA', 'VEDL', 'SAIL', 'NMDC', 'JINDALSTEL', 'NATIONALUM', 'HINDZINC', 'APLALAPOLLO', 'WELCORP', 'RATNAMANI'] },
+  { title: 'IT', ext: 'NIFTY IT', symbol: '^CNXIT', stocks: ['TCS', 'INFY', 'HCLTECH', 'WIPRO', 'TECHM', 'LTIM', 'PERSISTENT', 'OFSS', 'COFORGE', 'MPHASIS'] },
+  { title: 'AUTO', ext: 'NIFTY AUTO', symbol: '^CNXAUTO', stocks: ['TATAMOTORS', 'M&M', 'MARUTI', 'BAJAJ-AUTO', 'EICHERMOT', 'HEROMOTOCO', 'TVSMOTOR', 'BOSCHLTD', 'ASHOKLEY', 'MRF', 'TIINDIA', 'MOTHERSON', 'SONACOMS', 'BALKRISIND', 'BHARATFORG'] },
+  { title: 'PHARMA', ext: 'NIFTY PHARMA', symbol: '^CNXPHARMA', stocks: ['SUNPHARMA', 'CIPLA', 'DRREDDY', 'DIVISLAB', 'LUPIN', 'AUROPHARMA', 'APOLLOHOSP', 'TORNTPHARM', 'ZYDUSLIFE', 'MANKIND', 'BIOCON', 'SYNGENE', 'ABBOTINDIA', 'IPCALAB', 'GLENMARK', 'AJANTPHARM', 'LAURUSLABS', 'NATCOPHARM', 'GRANULES', 'JBCHEPHARM'] },
+  { title: 'FMCG', ext: 'NIFTY FMCG', symbol: '^CNXFMCG', stocks: ['ITC', 'HINDUNILVR', 'NESTLEIND', 'BRITANNIA', 'DABUR', 'GODREJCP', 'TATACONSUM', 'MARICO', 'VBL', 'COLPAL', 'UBL', 'PGHH', 'RADICO', 'EMAMILTD', 'BALRAMCHIN'] },
+  { title: 'ENERGY', ext: 'NIFTY ENERGY', symbol: '^CNXENERGY', stocks: ['RELIANCE', 'ONGC', 'NTPC', 'POWERGRID', 'BPCL', 'COALINDIA', 'TATAPOWER', 'IOC', 'HPCL', 'ADANIGREEN'] },
+  { title: 'INFRA', ext: 'NIFTY INFRA', symbol: '^CNXINFRA', stocks: ['LT', 'ADANIPORTS', 'ULTRACEMCO', 'GRASIM', 'AMBUJACEM', 'SHREECEM', 'BHARTIARTL', 'ACC', 'LODHA', 'PVRINOX', 'NTPC', 'POWERGRID', 'ONGC', 'IOC'] },
 ];
 
 /** 
@@ -86,6 +144,10 @@ const getHeatmapGlow = (val: number): string => {
   return 'rgba(100,116,139,0.08)';
 };
 
+const clamp = (value: number, min: number, max: number): number => {
+  return Math.min(Math.max(value, min), max);
+};
+
 /** Deterministic mock Average % Change (last 20 days) for R.Fac calculation */
 const getMockAvgPercentChange20D = (symbol: string): number => {
   let hash = 0;
@@ -96,15 +158,53 @@ const getMockAvgPercentChange20D = (symbol: string): number => {
   return 0.8 + (Math.abs(hash) % 100) / 60; 
 };
 
+type SectorMover = {
+  symbol: string;
+  change: number;
+};
+
+type SectorSnapshot = {
+  name: string;
+  value: number;
+  displayChange: number;
+  indexPrice: number | null;
+  equalWeightValue: number;
+  breadth: number;
+  advanceCount: number;
+  declineCount: number;
+  avgRfac: number;
+  stockCount: number;
+  loadedCount: number;
+  coveragePct: number;
+  momentumLift: number;
+  convictionScore: number;
+  participationScore: number;
+  dominanceScore: number;
+  consistencyScore: number;
+  tradeSetup: 'Long Continuation' | 'Short Pressure' | 'Long Watch' | 'Short Watch' | 'Mixed';
+  leader: SectorMover | null;
+  laggard: SectorMover | null;
+};
+
+const formatSignedPct = (value?: number | null, digits = 2): string => {
+  if (typeof value !== 'number' || Number.isNaN(value)) return '--';
+  return `${value >= 0 ? '+' : ''}${value.toFixed(digits)}%`;
+};
+
 const SectoralFlow: React.FC = () => {
   const navigate = useNavigate();
   
   const [liveData, setLiveData] = useState<Record<string, { price: number; change: number; avgChange20D: number }>>({});
+  const [sectorIndexData, setSectorIndexData] = useState<Record<string, { price: number; change: number; previousClose: number }>>({});
   const [loading, setLoading] = useState(true);
   const [activeView, setActiveView] = useState<'chart' | 'heatmap'>('chart');
   const [highlightedSector, setHighlightedSector] = useState<string | null>(null);
   const [hoveredHeatmapTile, setHoveredHeatmapTile] = useState<string | null>(null);
   const [loadProgress, setLoadProgress] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const sectorRefs = React.useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   const scrollToSector = (sectorTitle: string) => {
@@ -120,14 +220,25 @@ const SectoralFlow: React.FC = () => {
     let isMounted = true;
 
     const loadLiveMarketData = async () => {
+      const isInitialLoad = refreshKey === 0;
       const allSymbols = new Set<string>();
       SECTOR_DEFINITIONS.forEach(sec => sec.stocks.forEach(s => allSymbols.add(s)));
       const symbolArray = Array.from(allSymbols);
-      
-      setLoading(false);
+      if (isMounted) {
+        setError(null);
+        setLoadProgress(0);
+        if (isInitialLoad) {
+          setLoading(true);
+        } else {
+          setRefreshing(true);
+        }
+      }
 
       // Start fetching the 20-day average percentage change in the background
       const sparkDataPromise = fetchRealSparkData(symbolArray);
+      const sectorSymbols = SECTOR_DEFINITIONS.map((sector) => sector.symbol).filter(Boolean);
+      const sectorIndexPromise = fetchSectorIndexData(sectorSymbols);
+      const nextLiveData: Record<string, { price: number; change: number; avgChange20D: number }> = {};
 
       const chunkSize = 12;
       let loaded = 0;
@@ -156,6 +267,7 @@ const SectoralFlow: React.FC = () => {
         if (isMounted) {
           setLoadProgress(Math.round((loaded / symbolArray.length) * 100));
           if (Object.keys(chunkResults).length > 0) {
+            Object.assign(nextLiveData, chunkResults);
             setLiveData(prev => ({ ...prev, ...chunkResults }));
           }
         }
@@ -177,40 +289,182 @@ const SectoralFlow: React.FC = () => {
         } catch (err) {
           console.warn("Failed to load real spark averages", err);
         }
+
+        let sectorIndices: Record<string, { price: number; change: number; previousClose: number }> = {};
+        try {
+          sectorIndices = await sectorIndexPromise;
+          if (Object.keys(sectorIndices).length > 0) {
+            setSectorIndexData(sectorIndices);
+          }
+        } catch (err) {
+          console.warn('Failed to load official sector indices', err);
+        }
+
+        if (Object.keys(nextLiveData).length === 0 && Object.keys(sectorIndices).length === 0) {
+          setError('Live sector data is currently unavailable. Please refresh and try again.');
+        } else {
+          setLastUpdatedAt(Date.now());
+        }
+
+        setLoadProgress(100);
+        setLoading(false);
+        setRefreshing(false);
       }
     };
 
     loadLiveMarketData();
     return () => { isMounted = false; };
+  }, [refreshKey]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setRefreshKey((prev) => prev + 1);
+    }, 120000);
+
+    return () => window.clearInterval(intervalId);
   }, []);
 
   // Compute aggregated sector performance
-  const sectoralFlowData = useMemo(() => {
+  const sectoralFlowData = useMemo<SectorSnapshot[]>(() => {
     return SECTOR_DEFINITIONS.map(sector => {
       let totalChg = 0;
       let count = 0;
-      sector.stocks.forEach(sym => {
-        if (liveData[sym]) {
-          totalChg += liveData[sym].change;
+      let advances = 0;
+      let declines = 0;
+      let rfacSum = 0;
+      let absChangeSum = 0;
+      const stockChanges: number[] = [];
+      let topStock: SectorMover | null = null;
+      let laggardStock: SectorMover | null = null;
+
+      sector.stocks.forEach((sym) => {
+        if (liveData[sym] && liveData[sym].price > 0) {
+          const stock = liveData[sym];
+          totalChg += stock.change;
+          absChangeSum += Math.abs(stock.change);
+          stockChanges.push(stock.change);
           count++;
+          if (stock.change >= 0) advances++;
+          else declines++;
+
+          const avgChange20D = stock.avgChange20D || getMockAvgPercentChange20D(sym);
+          rfacSum += Math.abs(stock.change) / Math.max(avgChange20D, 0.1);
+
+          if (!topStock || stock.change > topStock.change) {
+            topStock = { symbol: sym, change: stock.change };
+          }
+          if (!laggardStock || stock.change < laggardStock.change) {
+            laggardStock = { symbol: sym, change: stock.change };
+          }
         }
       });
+
       const avgChange = count > 0 ? totalChg / count : 0;
+      const officialIndex = sector.symbol ? sectorIndexData[sector.symbol] : undefined;
+      const displayChange = officialIndex?.change ?? avgChange;
+      const breadth = count > 0 ? ((advances - declines) / count) * 100 : 0;
+      const avgRfac = count > 0 ? rfacSum / count : 0;
+      const coverageRatio = sector.stocks.length > 0 ? count / sector.stocks.length : 0;
+      const avgAbsChange = count > 0 ? absChangeSum / count : 0;
+      const variance =
+        count > 0 ? stockChanges.reduce((sum, change) => sum + Math.pow(change - avgChange, 2), 0) / count : 0;
+      const stdDev = Math.sqrt(variance);
+      const directionalBias = avgChange !== 0 ? Math.sign(avgChange) : Math.sign(breadth || 0);
+      const alignedCount = directionalBias >= 0 ? advances : declines;
+      const participationRatio = count > 0 ? alignedCount / count : 0;
+      const participationScore = clamp((participationRatio - 0.5) / 0.5, 0, 1);
+      const consistencyScore = clamp(1 - stdDev / Math.max(avgAbsChange, 0.3), 0, 1);
+      const impulseScore = clamp((avgRfac - 1) / 1.7, 0, 1);
+      const strengthScore = clamp(Math.abs(displayChange) / 2.4, 0, 1);
+      const topStockChange = (topStock as SectorMover | null)?.change ?? 0;
+      const leaderDominance = absChangeSum > 0 ? Math.abs(topStockChange) / absChangeSum : 0;
+      const dominancePenalty = clamp((leaderDominance - 0.34) / 0.36, 0, 1);
+      const convictionScore = clamp(
+        strengthScore * 0.28 +
+          participationScore * 0.28 +
+          consistencyScore * 0.18 +
+          impulseScore * 0.16 +
+          coverageRatio * 0.1 -
+          dominancePenalty * 0.14,
+        0,
+        1
+      );
+      const breadthAdjustment = (breadth / 100) * Math.max(Math.abs(avgChange), 0.32) * 0.8;
+      const impulseAdjustment = directionalBias * impulseScore * 0.42;
+      const convictionAdjustment = directionalBias * convictionScore * Math.max(Math.abs(displayChange) * 0.42, 0.22);
+      const consistencyAdjustment = directionalBias * consistencyScore * 0.18;
+      const dominanceAdjustment = directionalBias * dominancePenalty * -0.16;
+      const coverageAdjustment = (coverageRatio - 1) * 0.18;
+      const momentumScore =
+        displayChange +
+        breadthAdjustment +
+        impulseAdjustment +
+        convictionAdjustment +
+        consistencyAdjustment +
+        dominanceAdjustment +
+        coverageAdjustment;
+      const momentumLift = momentumScore - displayChange;
+      const tradeSetup: SectorSnapshot['tradeSetup'] =
+        convictionScore >= 0.7 && directionalBias > 0 && breadth >= 18
+          ? 'Long Continuation'
+          : convictionScore >= 0.7 && directionalBias < 0 && breadth <= -18
+            ? 'Short Pressure'
+            : convictionScore >= 0.5 && directionalBias > 0 && breadth >= 5
+              ? 'Long Watch'
+              : convictionScore >= 0.5 && directionalBias < 0 && breadth <= -5
+                ? 'Short Watch'
+                : 'Mixed';
+
       return { 
         name: sector.title, 
-        value: Number(avgChange.toFixed(2)), 
+        value: Number(momentumScore.toFixed(2)),
+        displayChange: Number(displayChange.toFixed(2)),
+        indexPrice: officialIndex?.price ?? null,
+        equalWeightValue: Number(avgChange.toFixed(2)),
+        breadth: Number(breadth.toFixed(1)),
+        advanceCount: advances,
+        declineCount: declines,
+        avgRfac: Number(avgRfac.toFixed(2)),
         stockCount: sector.stocks.length,
-        loadedCount: count
+        loadedCount: count,
+        coveragePct: sector.stocks.length > 0 ? Math.round((count / sector.stocks.length) * 100) : 0,
+        momentumLift: Number(momentumLift.toFixed(2)),
+        convictionScore: Number((convictionScore * 100).toFixed(0)),
+        participationScore: Number((participationScore * 100).toFixed(0)),
+        dominanceScore: Number((leaderDominance * 100).toFixed(0)),
+        consistencyScore: Number((consistencyScore * 100).toFixed(0)),
+        tradeSetup,
+        leader: topStock,
+        laggard: laggardStock,
       };
-    }).sort((a, b) => a.value - b.value);
-  }, [liveData]);
+    }).sort((a, b) => a.displayChange - b.displayChange);
+  }, [liveData, sectorIndexData]);
 
   // Summary stats
-  const gainingSectors = sectoralFlowData.filter(s => s.value > 0).length;
-  const losingSectors = sectoralFlowData.filter(s => s.value < 0).length;
+  const gainingSectors = sectoralFlowData.filter(s => s.displayChange > 0).length;
+  const losingSectors = sectoralFlowData.filter(s => s.displayChange < 0).length;
   const topSector = sectoralFlowData[sectoralFlowData.length - 1];
   const bottomSector = sectoralFlowData[0];
-
+  const positiveBreadthSectors = sectoralFlowData.filter((s) => s.breadth > 0).length;
+  const totalTrackedSymbols = useMemo(() => new Set(SECTOR_DEFINITIONS.flatMap((sector) => sector.stocks)).size, []);
+  const loadedSymbols = Object.keys(liveData).length;
+  const coveragePct = totalTrackedSymbols > 0 ? Math.round((loadedSymbols / totalTrackedSymbols) * 100) : 0;
+  const bestTradeSetup = useMemo(() => {
+    return [...sectoralFlowData].sort(
+      (a, b) => b.convictionScore * Math.abs(b.value) - a.convictionScore * Math.abs(a.value)
+    )[0];
+  }, [sectoralFlowData]);
+  const sectorMomentumLeaders = useMemo(() => {
+    return [...sectoralFlowData].sort((a, b) => b.value - a.value);
+  }, [sectoralFlowData]);
+  const chartDomain = useMemo(() => {
+    const values = sectorMomentumLeaders.map((item) => item.value);
+    const maxValue = Math.max(...values, 0.8);
+    const minValue = Math.min(...values, 0);
+    const upperPad = Math.max(0.45, Number((maxValue * 0.16).toFixed(2)));
+    const lowerPad = Math.max(0.28, Number((Math.abs(minValue) * 0.45).toFixed(2)));
+    return [Number((minValue - lowerPad).toFixed(2)), Number((maxValue + upperPad).toFixed(2))];
+  }, [sectorMomentumLeaders]);
   const handleTabChange = (tabId: string) => {
     navigate('/app', { state: { activeTab: tabId } });
   };
@@ -219,30 +473,42 @@ const SectoralFlow: React.FC = () => {
   const CustomTooltip = ({ active, payload }: any) => {
     if (!active || !payload?.length) return null;
     const data = payload[0].payload;
-    const isPositive = data.value >= 0;
+    const isPositive = data.displayChange >= 0;
     return (
       <div style={{
-        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-        border: `1px solid ${isPositive ? '#22c55e40' : '#ef444440'}`,
-        borderRadius: '12px',
-        padding: '14px 18px',
-        boxShadow: `0 8px 32px ${isPositive ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)'}`,
-        minWidth: '160px'
+        background: 'linear-gradient(135deg, rgba(10,15,24,0.98) 0%, rgba(19,27,38,0.98) 100%)',
+        border: `1px solid ${isPositive ? 'rgba(52, 211, 153, 0.28)' : 'rgba(248, 113, 113, 0.28)'}`,
+        borderRadius: '10px',
+        padding: '10px 12px',
+        boxShadow: `0 10px 28px ${isPositive ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)'}`,
+        minWidth: '132px',
+        backdropFilter: 'blur(10px)'
       }}>
-        <div style={{ color: '#94a3b8', fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', marginBottom: '8px', textTransform: 'uppercase' as const }}>
+        <div style={{ color: '#94a3b8', fontSize: '9px', fontWeight: 700, letterSpacing: '0.12em', marginBottom: '5px', textTransform: 'uppercase' as const }}>
           NIFTY {data.name}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
           <span style={{ 
             color: isPositive ? '#4ade80' : '#f87171', 
-            fontSize: '20px', 
+            fontSize: '18px', 
             fontWeight: 900 
           }}>
-            {isPositive ? '+' : ''}{data.value}%
+            {isPositive ? '+' : ''}{data.displayChange}%
+          </span>
+          <span style={{ color: '#64748b', fontSize: '9px', fontWeight: 700 }}>
+            {data.indexPrice ? `${data.indexPrice}` : `${data.loadedCount}/${data.stockCount}`}
           </span>
         </div>
-        <div style={{ color: '#475569', fontSize: '10px', marginTop: '6px' }}>
-          {data.loadedCount}/{data.stockCount} stocks loaded
+        <div style={{ color: '#64748b', fontSize: '9px', marginTop: '5px', lineHeight: 1.4 }}>
+          Momentum {data.value >= 0 ? '+' : ''}{data.value}% | Breadth {data.breadth >= 0 ? '+' : ''}{data.breadth}%
+        </div>
+        <div style={{ display: 'flex', gap: '5px', marginTop: '7px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '9px', color: '#dbeafe', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.16)', padding: '2px 6px', borderRadius: '999px' }}>
+            Conv {data.convictionScore}%
+          </span>
+          <span style={{ fontSize: '9px', color: isPositive ? '#bbf7d0' : '#fecaca', background: isPositive ? 'rgba(34,197,94,0.10)' : 'rgba(239,68,68,0.10)', border: `1px solid ${isPositive ? 'rgba(34,197,94,0.16)' : 'rgba(239,68,68,0.16)'}`, padding: '2px 6px', borderRadius: '999px' }}>
+            {data.tradeSetup}
+          </span>
         </div>
       </div>
     );
@@ -279,7 +545,7 @@ const SectoralFlow: React.FC = () => {
                         <Activity className="w-5 h-5 text-white" />
                       </div>
                       <div>
-                        <h2 className="text-2xl font-bold tracking-tight text-white">Sectorial Flow</h2>
+                        <h2 className="text-2xl font-bold tracking-tight text-white">Sectoral Flow</h2>
                         <p className="text-[10px] text-emerald-500 tracking-widest uppercase flex items-center gap-2">
                           <span className="relative flex h-2 w-2">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -290,12 +556,37 @@ const SectoralFlow: React.FC = () => {
                             <span className="text-slate-500 ml-2">({loadProgress}% loaded)</span>
                           )}
                         </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                          <span className="rounded-full border border-slate-700/60 bg-[#0f1520] px-2.5 py-1">
+                            Coverage {loadedSymbols}/{totalTrackedSymbols}
+                          </span>
+                          <span className="rounded-full border border-slate-700/60 bg-[#0f1520] px-2.5 py-1">
+                            Last update {lastUpdatedAt ? new Date(lastUpdatedAt).toLocaleTimeString() : '--'}
+                          </span>
+                          <span className="rounded-full border border-indigo-500/20 bg-indigo-500/10 px-2.5 py-1 text-indigo-200">
+                            Composite momentum ranking
+                          </span>
+                          {error && (
+                            <span className="rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-red-300">
+                              {error}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
 
                   {/* CHART / HEATMAP Toggle */}
-                  <div className="flex bg-[#131b26] rounded-xl p-1 border border-slate-700/40 shadow-inner">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setRefreshKey((prev) => prev + 1)}
+                      disabled={refreshing}
+                      className="flex items-center gap-2 rounded-xl border border-slate-700/40 bg-[#131b26] px-4 py-2 text-xs font-bold text-slate-200 transition hover:border-slate-500/60 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+                      REFRESH
+                    </button>
+                    <div className="flex bg-[#131b26] rounded-xl p-1 border border-slate-700/40 shadow-inner">
                     <button 
                       onClick={() => setActiveView('chart')}
                       className={`flex items-center gap-2 px-5 py-2 text-xs font-bold rounded-lg transition-all duration-300 ${
@@ -318,11 +609,12 @@ const SectoralFlow: React.FC = () => {
                       <LayoutGrid className="w-3.5 h-3.5" />
                       HEATMAP
                     </button>
+                    </div>
                   </div>
                 </div>
 
                 {/* ─── Summary KPI Cards ─── */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
                   <div className="bg-[#131b26] rounded-xl p-4 border border-slate-800 relative overflow-hidden">
                     <div className="absolute -top-4 -right-4 w-20 h-20 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Gaining</p>
@@ -340,7 +632,7 @@ const SectoralFlow: React.FC = () => {
                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Top Sector</p>
                     <p className="text-lg font-black text-white">{topSector?.name || '-'}</p>
                     <p className="text-[10px] text-emerald-400 font-bold mt-1">
-                      {topSector ? `+${topSector.value.toFixed(2)}%` : '-'}
+                      {topSector ? formatSignedPct(topSector.displayChange) : '-'}
                     </p>
                   </div>
                   <div className="bg-[#131b26] rounded-xl p-4 border border-slate-800 relative overflow-hidden">
@@ -348,10 +640,36 @@ const SectoralFlow: React.FC = () => {
                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Bottom Sector</p>
                     <p className="text-lg font-black text-white">{bottomSector?.name || '-'}</p>
                     <p className="text-[10px] text-red-400 font-bold mt-1">
-                      {bottomSector ? `${bottomSector.value.toFixed(2)}%` : '-'}
+                      {bottomSector ? formatSignedPct(bottomSector.displayChange) : '-'}
                     </p>
                   </div>
+                  <div className="bg-[#131b26] rounded-xl p-4 border border-slate-800 relative overflow-hidden">
+                    <div className="absolute -top-4 -right-4 w-20 h-20 bg-sky-500/10 rounded-full blur-2xl pointer-events-none" />
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Coverage</p>
+                    <p className="text-2xl font-black text-sky-300">{coveragePct}%</p>
+                    <p className="text-[10px] text-slate-600 mt-1">{loadedSymbols} symbols loaded</p>
+                  </div>
+                  <div className="bg-[#131b26] rounded-xl p-4 border border-slate-800 relative overflow-hidden">
+                    <div className="absolute -top-4 -right-4 w-20 h-20 bg-violet-500/10 rounded-full blur-2xl pointer-events-none" />
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Positive Breadth</p>
+                    <p className="text-2xl font-black text-violet-300">{positiveBreadthSectors}</p>
+                    <p className="text-[10px] text-slate-600 mt-1">sectors with more advancers</p>
+                  </div>
+                  <div className="bg-[#131b26] rounded-xl p-4 border border-slate-800 relative overflow-hidden">
+                    <div className="absolute -top-4 -right-4 w-20 h-20 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Best Setup</p>
+                    <p className="text-lg font-black text-amber-300 truncate">{bestTradeSetup?.name || '-'}</p>
+                    <p className="text-[10px] text-slate-600 mt-1">{bestTradeSetup?.tradeSetup || '-'}</p>
+                  </div>
                 </div>
+
+                {loadedSymbols > 0 && coveragePct < 100 && (
+                  <div className="overflow-x-auto rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                    <p className="whitespace-nowrap">
+                      Sector flow is currently computed using partial live data. Loaded coverage is {loadedSymbols}/{totalTrackedSymbols}, so rankings may still shift.
+                    </p>
+                  </div>
+                )}
 
                 {/* ─── Main View: CHART or HEATMAP ─── */}
                 {activeView === 'chart' ? (
@@ -362,48 +680,57 @@ const SectoralFlow: React.FC = () => {
                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                         <h3 className="text-xs font-black text-slate-300 uppercase tracking-[0.15em]">Sector Momentum</h3>
                       </div>
-                      <span className="text-[10px] text-slate-500 font-medium uppercase tracking-widest">Avg % change of constituents</span>
+                      <span className="text-[10px] text-slate-500 font-medium uppercase tracking-widest">Conviction-adjusted score using move, breadth, impulse and participation</span>
                     </div>
-                    <div className="p-6 h-[480px]">
+                    <div className="p-5 h-[500px]">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={sectoralFlowData} margin={{ top: 20, right: 20, left: -20, bottom: 60 }}>
+                        <BarChart data={sectorMomentumLeaders} margin={{ top: 18, right: 12, left: -18, bottom: 34 }} barCategoryGap="24%">
                           <defs>
                             <linearGradient id="greenBar" x1="0" y1="1" x2="0" y2="0">
-                              <stop offset="0%" stopColor="#059669" stopOpacity={0.9} />
-                              <stop offset="100%" stopColor="#34d399" stopOpacity={1} />
+                              <stop offset="0%" stopColor="#064e3b" stopOpacity={0.98} />
+                              <stop offset="65%" stopColor="#2bbd8a" stopOpacity={0.98} />
+                              <stop offset="100%" stopColor="#6ee7b7" stopOpacity={1} />
                             </linearGradient>
                             <linearGradient id="redBar" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="#dc2626" stopOpacity={0.9} />
-                              <stop offset="100%" stopColor="#f87171" stopOpacity={1} />
+                              <stop offset="0%" stopColor="#7f1d1d" stopOpacity={0.98} />
+                              <stop offset="65%" stopColor="#ef4444" stopOpacity={0.98} />
+                              <stop offset="100%" stopColor="#fca5a5" stopOpacity={1} />
                             </linearGradient>
                           </defs>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b50" />
-                          <XAxis 
-                            dataKey="name" 
-                            type="category" 
-                            axisLine={false} 
-                            tickLine={false} 
-                            tick={{ fill: '#cbd5e1', fontSize: 10, fontWeight: 700 }} 
-                            angle={-45}
+                          <CartesianGrid strokeDasharray="2 4" vertical={false} stroke="#1e293b40" />
+                          <ReferenceLine y={0} stroke="#1f3348" strokeOpacity={0.9} />
+                          <XAxis
+                            dataKey="name"
+                            type="category"
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: '#d6e0f0', fontSize: 10, fontWeight: 800 }}
+                            angle={-38}
                             textAnchor="end"
-                            height={60}
+                            tickMargin={4}
+                            height={40}
                           />
-                          <YAxis 
-                            type="number" 
-                            axisLine={{ stroke: '#1e293b' }} 
-                            tickLine={false} 
-                            tick={{ fill: '#475569', fontSize: 10, fontWeight: 500 }} 
-                            domain={['dataMin - 0.5', 'dataMax + 0.5']}
+                          <YAxis
+                            type="number"
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: '#64748b', fontSize: 10, fontWeight: 600 }}
+                            domain={chartDomain}
                             tickFormatter={(v: number) => `${v > 0 ? '+' : ''}${v.toFixed(1)}%`}
                           />
-                          <Tooltip content={<CustomTooltip />} cursor={{ fill: '#1e293b', opacity: 0.3 }} />
-                          <Bar dataKey="value" radius={[4, 4, 4, 4]} barSize={32}>
-                            {sectoralFlowData.map((entry, index) => (
-                              <Cell 
-                                key={`cell-${index}`} 
+                          <Tooltip content={<CustomTooltip />} cursor={{ fill: '#172030', opacity: 0.18 }} />
+                          <Bar dataKey="value" radius={[10, 10, 3, 3]} barSize={32} minPointSize={5}>
+                            {sectorMomentumLeaders.map((entry, index) => (
+                              <Cell
+                                key={`cell-${index}`}
                                 fill={entry.value >= 0 ? 'url(#greenBar)' : 'url(#redBar)'}
                                 onClick={() => scrollToSector(entry.name)}
-                                style={{ cursor: 'pointer', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))' }}
+                                style={{
+                                  cursor: 'pointer',
+                                  filter: entry.value >= 0
+                                    ? 'drop-shadow(0 8px 14px rgba(16,185,129,0.18))'
+                                    : 'drop-shadow(0 8px 14px rgba(239,68,68,0.16))'
+                                }}
                               />
                             ))}
                           </Bar>
@@ -444,15 +771,18 @@ const SectoralFlow: React.FC = () => {
                               hoveredHeatmapTile === s.name ? 'ring-2 ring-white/50 z-10 scale-[1.02] shadow-2xl' : 'hover:ring-1 hover:ring-white/20'
                             }`}
                             style={{ 
-                              background: `linear-gradient(135deg, ${s.loadedCount > 0 ? getHeatmapColor(s.value) : '#334155'}dd, ${s.loadedCount > 0 ? getHeatmapColor(s.value) : '#334155'}99)`,
-                              boxShadow: hoveredHeatmapTile === s.name ? `0 0 30px ${getHeatmapGlow(s.value)}` : 'none'
+                              background: `linear-gradient(135deg, ${s.loadedCount > 0 ? getHeatmapColor(s.displayChange) : '#334155'}dd, ${s.loadedCount > 0 ? getHeatmapColor(s.displayChange) : '#334155'}99)`,
+                              boxShadow: hoveredHeatmapTile === s.name ? `0 0 30px ${getHeatmapGlow(s.displayChange)}` : 'none'
                             }}
                           >
                             <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors" />
                             <span className="relative text-white font-black text-xl tracking-wider drop-shadow-md z-10">{s.name}</span>
                             <div className="relative mt-2 flex items-center gap-1 z-10">
                               <span className="text-white/90 text-sm font-bold bg-black/20 px-2 py-0.5 rounded-md backdrop-blur-sm">
-                                {s.loadedCount > 0 ? `${s.value >= 0 ? '+' : ''}${s.value.toFixed(2)}%` : '--'}
+                                {s.loadedCount > 0 ? formatSignedPct(s.displayChange) : '--'}
+                              </span>
+                              <span className="relative z-10 mt-1 text-[10px] text-white/70">
+                                Br {s.breadth >= 0 ? '+' : ''}{s.breadth.toFixed(0)}%
                               </span>
                             </div>
                           </button>
@@ -471,14 +801,17 @@ const SectoralFlow: React.FC = () => {
                               hoveredHeatmapTile === s.name ? 'ring-2 ring-white/50 z-10 scale-105 shadow-xl' : 'hover:ring-1 hover:ring-white/20'
                             }`}
                             style={{ 
-                              background: `linear-gradient(135deg, ${s.loadedCount > 0 ? getHeatmapColor(s.value) : '#334155'}dd, ${s.loadedCount > 0 ? getHeatmapColor(s.value) : '#334155'}99)`,
-                              boxShadow: hoveredHeatmapTile === s.name ? `0 0 20px ${getHeatmapGlow(s.value)}` : 'none'
+                              background: `linear-gradient(135deg, ${s.loadedCount > 0 ? getHeatmapColor(s.displayChange) : '#334155'}dd, ${s.loadedCount > 0 ? getHeatmapColor(s.displayChange) : '#334155'}99)`,
+                              boxShadow: hoveredHeatmapTile === s.name ? `0 0 20px ${getHeatmapGlow(s.displayChange)}` : 'none'
                             }}
                           >
                             <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors" />
                             <span className="relative text-white/90 font-bold text-xs tracking-wider drop-shadow-md z-10">{s.name}</span>
                             <span className="relative mt-1 text-white/80 text-[10px] font-bold bg-black/20 px-1.5 py-0.5 rounded backdrop-blur-sm z-10">
-                              {s.loadedCount > 0 ? `${s.value >= 0 ? '+' : ''}${s.value.toFixed(2)}%` : '--'}
+                              {s.loadedCount > 0 ? formatSignedPct(s.displayChange) : '--'}
+                            </span>
+                            <span className="relative z-10 mt-1 text-white/70 text-[9px]">
+                              Br {s.breadth >= 0 ? '+' : ''}{s.breadth.toFixed(0)}%
                             </span>
                           </button>
                         ))}
@@ -502,7 +835,8 @@ const SectoralFlow: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
                     {SECTOR_DEFINITIONS.map((sector) => {
                       const sectorData = sectoralFlowData.find(s => s.name === sector.title);
-                      const sectorChange = sectorData?.value ?? 0;
+                      const sectorChange = sectorData?.displayChange ?? 0;
+                      const equalWeightChange = sectorData?.equalWeightValue ?? 0;
                       const isPositiveSector = sectorChange >= 0;
                       
                       let advances = 0;
@@ -551,6 +885,20 @@ const SectoralFlow: React.FC = () => {
                                   {isPositiveSector ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
                                   {isPositiveSector ? '+' : ''}{sectorChange.toFixed(2)}%
                                 </div>
+                                <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-bold tracking-wide">
+                                  <span className="rounded-full border border-slate-700/50 bg-[#0f1520] px-2.5 py-1 text-slate-300">
+                                    Equal Avg {equalWeightChange >= 0 ? '+' : ''}{equalWeightChange.toFixed(2)}%
+                                  </span>
+                                  <span className="rounded-full border border-slate-700/50 bg-[#0f1520] px-2.5 py-1 text-slate-300">
+                                    Breadth {(sectorData?.breadth ?? 0) >= 0 ? '+' : ''}{(sectorData?.breadth ?? 0).toFixed(1)}%
+                                  </span>
+                                  <span className="rounded-full border border-slate-700/50 bg-[#0f1520] px-2.5 py-1 text-slate-300">
+                                    Conviction {(sectorData?.convictionScore ?? 0).toFixed(0)}%
+                                  </span>
+                                  <span className="rounded-full border border-slate-700/50 bg-[#0f1520] px-2.5 py-1 text-slate-300">
+                                    {sectorData?.tradeSetup ?? 'Mixed'}
+                                  </span>
+                                </div>
                               </div>
                               <span className="text-[10px] font-black text-slate-400 bg-[#0f1520] shadow-inner border border-slate-700/50 px-2.5 py-1 rounded-lg tracking-widest uppercase">
                                 {totalTracked} ASSETS
@@ -573,6 +921,30 @@ const SectoralFlow: React.FC = () => {
                                   {declines} stocks ({declinePct.toFixed(2)}% Down)
                                 </span>
                               </div>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-3 px-5 pt-4">
+                            <div className="rounded-xl border border-emerald-500/15 bg-emerald-500/8 px-3 py-3">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300">Leader</p>
+                              <p className="mt-1 text-sm font-black text-white">{sectorData?.leader?.symbol || '--'}</p>
+                              <p className="text-xs text-emerald-300">
+                                {formatSignedPct(sectorData?.leader?.change)}
+                              </p>
+                            </div>
+                            <div className="rounded-xl border border-red-500/15 bg-red-500/8 px-3 py-3">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-red-300">Laggard</p>
+                              <p className="mt-1 text-sm font-black text-white">{sectorData?.laggard?.symbol || '--'}</p>
+                              <p className="text-xs text-red-300">
+                                {formatSignedPct(sectorData?.laggard?.change)}
+                              </p>
+                            </div>
+                            <div className="rounded-xl border border-indigo-500/15 bg-indigo-500/8 px-3 py-3">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-300">Setup</p>
+                              <p className="mt-1 text-sm font-black text-white">{sectorData?.tradeSetup || 'Mixed'}</p>
+                              <p className="text-xs text-indigo-300">
+                                Conviction {(sectorData?.convictionScore ?? 0).toFixed(0)}%
+                              </p>
                             </div>
                           </div>
 
