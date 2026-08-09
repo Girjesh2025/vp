@@ -174,6 +174,10 @@ const fetchDirectFallback = async (symbol: string): Promise<PriceData | null> =>
              price: Number(close.toFixed(2)),
              change: Number(change.toFixed(2)),
              previousClose: data.previousClose !== undefined ? Number(data.previousClose.toFixed(2)) : undefined,
+             open: typeof data.open === 'number' ? Number(data.open.toFixed(2)) : undefined,
+             high: typeof data.high === 'number' ? Number(data.high.toFixed(2)) : undefined,
+             low: typeof data.low === 'number' ? Number(data.low.toFixed(2)) : undefined,
+             volume: typeof data.volume === 'number' ? data.volume : undefined,
              high52: data.high52 !== undefined ? Number(data.high52.toFixed(2)) : undefined,
              low52: data.low52 !== undefined ? Number(data.low52.toFixed(2)) : undefined,
            };
@@ -189,6 +193,10 @@ const fetchDirectFallback = async (symbol: string): Promise<PriceData | null> =>
             price: Number(close.toFixed(2)),
             change: Number(change.toFixed(2)),
             previousClose: meta.previousClose !== undefined && meta.previousClose !== null ? Number(meta.previousClose.toFixed(2)) : undefined,
+            open: typeof meta.regularMarketOpen === 'number' ? Number(meta.regularMarketOpen.toFixed(2)) : undefined,
+            high: typeof meta.regularMarketDayHigh === 'number' ? Number(meta.regularMarketDayHigh.toFixed(2)) : undefined,
+            low: typeof meta.regularMarketDayLow === 'number' ? Number(meta.regularMarketDayLow.toFixed(2)) : undefined,
+            volume: typeof meta.regularMarketVolume === 'number' ? meta.regularMarketVolume : undefined,
             high52: meta.fiftyTwoWeekHigh !== undefined ? Number(meta.fiftyTwoWeekHigh.toFixed(2)) : undefined,
             low52: meta.fiftyTwoWeekLow !== undefined ? Number(meta.fiftyTwoWeekLow.toFixed(2)) : undefined
           };
@@ -686,6 +694,10 @@ export const fetchStockPrice = async (symbol: string): Promise<PriceData | null>
                   price: Number(data.close.toFixed(2)),
                   change: Number(change.toFixed(2)),
                   previousClose: data.previousClose !== undefined ? data.previousClose : undefined,
+                  open: typeof data.open === 'number' ? Number(data.open.toFixed(2)) : undefined,
+                  high: typeof data.high === 'number' ? Number(data.high.toFixed(2)) : undefined,
+                  low: typeof data.low === 'number' ? Number(data.low.toFixed(2)) : undefined,
+                  volume: typeof data.volume === 'number' ? data.volume : undefined,
                   high52: data.high52 !== undefined ? data.high52 : undefined,
                   low52: data.low52 !== undefined ? data.low52 : undefined,
                 };
@@ -729,6 +741,10 @@ export const fetchStockPrice = async (symbol: string): Promise<PriceData | null>
             price: Number(data.close.toFixed(2)),
             change: Number(change.toFixed(2)),
             previousClose: data.previousClose !== undefined ? data.previousClose : undefined,
+            open: typeof data.open === 'number' ? Number(data.open.toFixed(2)) : undefined,
+            high: typeof data.high === 'number' ? Number(data.high.toFixed(2)) : undefined,
+            low: typeof data.low === 'number' ? Number(data.low.toFixed(2)) : undefined,
+            volume: typeof data.volume === 'number' ? data.volume : undefined,
             high52: data.high52 !== undefined ? data.high52 : undefined,
             low52: data.low52 !== undefined ? data.low52 : undefined,
           };

@@ -13,6 +13,10 @@ import {
   Loader2,
   ExternalLink,
   PlayCircle,
+  Zap,
+  Star,
+  Clock,
+  Target,
   X
 } from 'lucide-react';
 import { fetchStockPrice, fetchHistoricalOHLCV, fetchMultipleStockPrices, fetchIntradayPrices } from '../utils/priceApi';
@@ -43,12 +47,27 @@ interface MarketEyeData {
   symbol: string;
   price: number;
   change: number;
+  previousClose?: number;
+  open?: number;
+  high?: number;
+  low?: number;
+  volume?: number;
+  high52?: number;
+  low52?: number;
+
+  // Intraday Hunter (Relative Strength)
+  rsAlpha: number;
+  rsScore: number;
+  rsTrend: 'STRONG BUY' | 'OUTPERFORM' | 'NEUTRAL' | 'WEAK' | 'BREAKDOWN';
+  hunterScore: number;
+
+  // Breakout Gems
+  breakoutType: '52W HIGH' | 'DAY HIGH' | 'DAY LOW' | 'STRONG SURGE' | 'HEAVY DROP' | 'RANGE BREAK' | 'MOMENTUM';
+  breakoutTrigger: string;
   signalPct: number;
   time: string;
   rFac: number;
   isBull: boolean;
-  high52?: number;
-  low52?: number;
 }
 
 interface WeeklySignal {
@@ -313,56 +332,80 @@ const MarketEye = () => {
               const symbol = symbolWithSuffix.replace('.NS', '');
               const stockChange = data.change || 0;
               const absChange = Math.abs(stockChange);
+              const currentPrice = data.price || 0;
+              const dayHigh = data.high || currentPrice;
+              const dayLow = data.low || currentPrice;
+              const high52 = data.high52 || currentPrice;
+              const low52 = data.low52 || currentPrice;
               
-              // Base Signal % is absolute change (fallback)
-              const signalPct = absChange;
-              
-              // --- Advanced Wall Street R.Fac (Relative Factor) Calculation ---
+              // --- Benchmark & Relative Strength (RS / Alpha) Calculation ---
               const isBank = BANK_NIFTY_SYMBOLS.includes(symbol);
               const benchmarkChange = isBank ? baselineBankNiftyChange : baselineNiftyChange;
               
-              // 1. Pure Alpha (Relative Momentum)
-              const pureAlpha = stockChange - benchmarkChange;
+              // 1. Pure Alpha vs Benchmark (Signed e.g. +3.47% or -5.57%)
+              const rsAlpha = Number((stockChange - benchmarkChange).toFixed(2));
               
-              // 2. Structural Trend Context (Distance to 52W High/Low)
-              let trendMultiplier = 1.0;
-              if (data.high52 && data.low52 && data.price) {
-                const range = data.high52 - data.low52;
-                if (range > 0) {
-                  // Position in 52w range (0 to 1). 1 = at 52w high, 0 = at 52w low
-                  const posInRange = (data.price - data.low52) / range;
-                  // If in top 20% of 52w range, boost bullish RS. If in bottom 20%, boost bearish RS.
-                  if (pureAlpha > 0 && posInRange > 0.8) trendMultiplier = 1.3;
-                  else if (pureAlpha < 0 && posInRange < 0.2) trendMultiplier = 1.3;
-                  // Mean reversion penalty (choppy middle of the range)
-                  else if (posInRange > 0.4 && posInRange < 0.6) trendMultiplier = 0.85;
-                }
+              // 2. Structural 52-Week Range Position (0 to 1)
+              const range52 = (data.high52 && data.low52 && data.high52 > data.low52) ? (data.high52 - data.low52) : 0;
+              const rangePos = range52 > 0 && currentPrice ? (currentPrice - data.low52!) / range52 : 0.5;
+              
+              // 3. RS Score (1 to 99 percentile ranking)
+              const rawScore = 50 + (rsAlpha * 8.5) + (rangePos * 20 - 10);
+              const rsScore = Math.min(99, Math.max(5, Math.round(rawScore)));
+              
+              // 4. RS Trend / Action signal
+              let rsTrend: MarketEyeData['rsTrend'] = 'NEUTRAL';
+              if (rsScore >= 80 && stockChange > 0) rsTrend = 'STRONG BUY';
+              else if (rsScore >= 60 && stockChange > 0) rsTrend = 'OUTPERFORM';
+              else if (rsScore <= 20 && stockChange < 0) rsTrend = 'BREAKDOWN';
+              else if (rsScore <= 40 && stockChange < 0) rsTrend = 'WEAK';
+              else rsTrend = rsAlpha >= 0 ? 'OUTPERFORM' : 'WEAK';
+
+              // Composite Hunter Score
+              const hunterScore = (Math.abs(rsAlpha) * 2.5 + absChange * 1.5) * (rsAlpha >= 0 ? 1.2 : 0.95);
+
+              // --- Breakout Type & Trigger Classification ---
+              const dist52wH = high52 > 0 ? ((high52 - currentPrice) / high52) * 100 : 999;
+              const distDayH = dayHigh > 0 ? ((dayHigh - currentPrice) / dayHigh) * 100 : 999;
+              const distDayL = dayLow > 0 ? ((currentPrice - dayLow) / dayLow) * 100 : 999;
+
+              let breakoutType: MarketEyeData['breakoutType'] = 'MOMENTUM';
+              let breakoutTrigger = '';
+
+              if (dist52wH <= 1.5 && stockChange > 0) {
+                breakoutType = '52W HIGH';
+                breakoutTrigger = dist52wH <= 0.2 ? 'New 52W High' : `${dist52wH.toFixed(1)}% to 52W High`;
+              } else if (distDayH <= 0.4 && stockChange >= 1.2) {
+                breakoutType = 'DAY HIGH';
+                breakoutTrigger = `Day High ₹${Math.round(dayHigh)}`;
+              } else if (distDayL <= 0.4 && stockChange <= -1.2) {
+                breakoutType = 'DAY LOW';
+                breakoutTrigger = `Day Low ₹${Math.round(dayLow)}`;
+              } else if (absChange >= 2.5) {
+                breakoutType = stockChange > 0 ? 'STRONG SURGE' : 'HEAVY DROP';
+                breakoutTrigger = `${stockChange > 0 ? '+' : ''}${stockChange.toFixed(1)}% Move`;
+              } else {
+                breakoutType = 'RANGE BREAK';
+                breakoutTrigger = `${Math.abs(rsAlpha).toFixed(1)}% Alpha Surge`;
               }
+
+              const isBull = stockChange >= 0;
+              const signalPct = absChange;
               
-              // 3. Institutional Volatility Smoothing
-              // High volatility absolute moves are discounted slightly to find true underlying strength vs noise
-              const volSmoothing = Math.max(1, Math.sqrt(Math.abs(stockChange) / 2));
-              
-              const rFacRaw = (pureAlpha * trendMultiplier) / volSmoothing;
-              const rFac = Math.abs(rFacRaw);
-              const isBull = rFacRaw >= 0;
-              
-              // Generate a realistic recent breakout time today (between 9:15 AM and 3:30 PM)
+              // Generate realistic breakout event timestamp
               const now = new Date();
               let hash = 0;
               for (let j = 0; j < symbol.length; j++) hash = symbol.charCodeAt(j) + ((hash << 5) - hash);
               const totalMinsNow = now.getHours() * 60 + now.getMinutes();
-              const startMins = 9 * 60 + 15; // 9:15 AM
-              const endMins = 15 * 60 + 30; // 3:30 PM
-              
+              const startMins = 9 * 60 + 15;
+              const endMins = 15 * 60 + 30;
               const currentMarketMins = Math.min(endMins, Math.max(startMins, totalMinsNow));
               const elapsedMins = currentMarketMins - startMins;
               const maxElapsedMins = Math.min(375, elapsedMins);
-              
               const recentOffset = Math.max(0, maxElapsedMins - 120);
               const randomOffset = recentOffset + (Math.abs(hash) % Math.min(120, Math.max(1, maxElapsedMins)));
               const eventMinsRaw = startMins + randomOffset;
-              const eventMins = Math.min(15 * 60 + 30, eventMinsRaw); // Hard cap at 3:30 PM
+              const eventMins = Math.min(15 * 60 + 30, eventMinsRaw);
               const hour = Math.floor(eventMins / 60);
               const min = eventMins % 60;
               const time = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
@@ -371,12 +414,23 @@ const MarketEye = () => {
                 symbol,
                 price: data.price,
                 change: stockChange,
+                previousClose: data.previousClose,
+                open: data.open,
+                high: data.high,
+                low: data.low,
+                volume: data.volume,
+                high52: data.high52,
+                low52: data.low52,
+                rsAlpha,
+                rsScore,
+                rsTrend,
+                hunterScore,
+                breakoutType,
+                breakoutTrigger,
                 signalPct,
                 time,
-                rFac,
-                isBull,
-                high52: data.high52,
-                low52: data.low52
+                rFac: Math.abs(rsAlpha),
+                isBull
               });
             }
           }
@@ -389,9 +443,9 @@ const MarketEye = () => {
 
       // Real Intraday Breakout calculation for top candidates
       const sortedByAbsChange = [...results].sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
-      const candidates = sortedByAbsChange.slice(0, 20); // Top 20 most volatile stocks today
+      const candidates = sortedByAbsChange.slice(0, 20);
 
-      // Fetch intraday historical data in batches for top candidates to find real surges/drops
+      // Fetch intraday historical data in batches for top candidates to refine timestamps
       const intradayPromise = async () => {
         for (let i = 0; i < candidates.length; i += 5) {
           if (!isMounted) return;
@@ -406,47 +460,29 @@ const MarketEye = () => {
                 ]);
 
                 if (intraday && Array.isArray(intraday) && intraday.length >= 5) {
-                  // Calculate true intraday breakout
                   const prices = intraday;
                   const currentPrice = candidate.price;
                   const isBull = candidate.change >= 0;
-                  
-                  // Look at last 12 candles (1 hour of 5-min candles)
                   const recentPrices = prices.slice(-12);
                   
                   if (isBull) {
                     const localMin = Math.min(...recentPrices);
                     const minIndex = recentPrices.lastIndexOf(localMin);
-                    const surge = ((currentPrice - localMin) / localMin) * 100;
-                    
                     const totalIndex = Math.max(0, prices.length - 12 + minIndex);
-                    
-                    // Indian Market Hours: 9:15 AM to 3:30 PM (375 minutes total)
                     const eventMinsRaw = (9 * 60 + 15) + (totalIndex * 5);
-                    const eventMins = Math.min(15 * 60 + 30, eventMinsRaw); // Cap at 3:30 PM
+                    const eventMins = Math.min(15 * 60 + 30, eventMinsRaw);
                     const hour = Math.floor(eventMins / 60);
                     const min = eventMins % 60;
-                    const time = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
-                    
-                    // Replace fallback signal with actual intraday surge if it's significant
-                    candidate.signalPct = surge > 0 ? surge : candidate.signalPct;
-                    candidate.time = time;
+                    candidate.time = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
                   } else {
                     const localMax = Math.max(...recentPrices);
                     const maxIndex = recentPrices.lastIndexOf(localMax);
-                    const drop = ((localMax - currentPrice) / localMax) * 100;
-                    
                     const totalIndex = Math.max(0, prices.length - 12 + maxIndex);
-                    
-                    // Indian Market Hours: 9:15 AM to 3:30 PM (375 minutes total)
                     const eventMinsRaw = (9 * 60 + 15) + (totalIndex * 5);
-                    const eventMins = Math.min(15 * 60 + 30, eventMinsRaw); // Cap at 3:30 PM
+                    const eventMins = Math.min(15 * 60 + 30, eventMinsRaw);
                     const hour = Math.floor(eventMins / 60);
                     const min = eventMins % 60;
-                    const time = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
-                    
-                    candidate.signalPct = drop > 0 ? drop : candidate.signalPct;
-                    candidate.time = time;
+                    candidate.time = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
                   }
                 }
               } catch (e) {
@@ -689,63 +725,53 @@ const MarketEye = () => {
     .sort((a, b) => (a.price / (a.low52 || 1)) - (b.price / (b.low52 || 1)))
     .slice(0, 5);
   
-  // Breakout Gems: Advanced Wall Street Volume/Surge Proxy Scanner
+  // Breakout Gems: Wall Street Pro Volume & High-Probability Breakout Scanner
   const breakouts = [...marketData]
     .filter(d => d.symbol.toLowerCase().includes(breakoutSearch.toLowerCase()))
     .filter(d => {
       const absMove = Math.abs(d.change);
+      const isKeyBreakout = d.breakoutType === '52W HIGH' || d.breakoutType === 'DAY HIGH' || d.breakoutType === 'DAY LOW';
+      const isSignificant = absMove >= 0.75 || isKeyBreakout;
+      if (!isSignificant) return false;
 
-      // Always show big movers (>= 2% move) in Breakout Gems
-      const isBigMover = absMove >= 2;
-
-      // 1. Must have a meaningful absolute move today (noise filter)
-      const passesNoiseFilter = absMove >= 0.75;
-
-      // 2. The recent intraday surge/drop (signalPct) must be significant compared to its daily move
-      // This identifies stocks that are actively breaking out *right now* rather than just gapped up in the morning
-      const isActiveBreakout = d.signalPct >= (absMove * 0.4);
-
-      // 3. For non-big-movers, require alignment with the relative strength trend
-      const isAlignedWithTrend = (d.change > 0 && d.isBull) || (d.change < 0 && !d.isBull);
-
-      const meetsCriteria = isBigMover || (passesNoiseFilter && isActiveBreakout && isAlignedWithTrend);
-
-      if (breakoutFilter === 'Bullish') return meetsCriteria && d.change > 0;
-      if (breakoutFilter === 'Bearish') return meetsCriteria && d.change < 0;
-      return meetsCriteria; // 'All Signals'
+      if (breakoutFilter === 'Bullish') return d.change > 0;
+      if (breakoutFilter === 'Bearish') return d.change < 0;
+      return true; // 'All Signals'
     })
     .sort((a, b) => {
-      const aBig = Math.abs(a.change) >= 2 ? 1 : 0;
-      const bBig = Math.abs(b.change) >= 2 ? 1 : 0;
-      if (aBig !== bBig) return bBig - aBig;
+      // Prioritize 52W High and Day High/Low breakouts first
+      const getPriority = (item: MarketEyeData) => {
+        if (item.breakoutType === '52W HIGH') return 4;
+        if (item.breakoutType === 'DAY HIGH' || item.breakoutType === 'DAY LOW') return 3;
+        if (item.breakoutType === 'STRONG SURGE' || item.breakoutType === 'HEAVY DROP') return 2;
+        return 1;
+      };
+      const prioDiff = getPriority(b) - getPriority(a);
+      if (prioDiff !== 0) return prioDiff;
 
-      const absDiff = Math.abs(b.change) - Math.abs(a.change);
-      if (absDiff !== 0) return absDiff;
-
-      return b.signalPct - a.signalPct;
+      return Math.abs(b.change) - Math.abs(a.change);
     })
     .slice(0, 8);
     
+  // Intraday Hunter: Institutional Relative Strength & Alpha Radar
   const boosters = [...marketData]
-    .map((d) => {
-      const absMove = Math.abs(d.change || 0);
-      const rs = d.rFac || 0;
-      const activeMove = d.signalPct || 0;
-      const aligned = (d.change > 0 && d.isBull) || (d.change < 0 && !d.isBull);
-      const score = (rs * 1.6 + activeMove * 1.2 + absMove * 0.8) * (aligned ? 1.15 : 0.85);
-      return { ...d, hunterScore: score };
-    })
     .filter(d => d.symbol.toLowerCase().includes(boostSearch.toLowerCase()))
     .filter(d => {
+      const absAlpha = Math.abs(d.rsAlpha);
       const absMove = Math.abs(d.change);
-      const qualifies = (d.rFac >= 0.35 && absMove >= 0.4) || absMove >= 2 || d.signalPct >= 1.2;
+      const qualifies = absAlpha >= 0.25 || absMove >= 0.6 || d.rsScore >= 65 || d.rsScore <= 35;
       if (!qualifies) return false;
 
-      if (boostFilter === 'Bullish') return d.change > 0;
-      if (boostFilter === 'Bearish') return d.change < 0;
+      if (boostFilter === 'Bullish') return d.rsAlpha > 0 && d.change >= 0;
+      if (boostFilter === 'Bearish') return d.rsAlpha < 0 && d.change <= 0;
       return true;
     })
-    .sort((a, b) => b.hunterScore - a.hunterScore)
+    .sort((a, b) => {
+      if (boostFilter === 'Bullish') return b.rsAlpha - a.rsAlpha;
+      if (boostFilter === 'Bearish') return a.rsAlpha - b.rsAlpha;
+      // All Signals: Sort by largest absolute Alpha divergence
+      return Math.abs(b.rsAlpha) - Math.abs(a.rsAlpha);
+    })
     .slice(0, 8);
 
   const filteredWeeklyBreakouts = weeklyBreakouts
@@ -1280,7 +1306,7 @@ const MarketEye = () => {
           {/* Breakout Beacon & Intraday Boost grids */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 w-full min-w-0">
             
-            {/* BREAKOUT BEACON */}
+            {/* BREAKOUT GEMS */}
             <div className="relative bg-gradient-to-br from-[#172030] to-[#131b26] border border-slate-700/50 hover:border-slate-500/80 rounded-2xl overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.5)] flex flex-col transition-all duration-300 group">
               {/* Top glowing line for a premium feel */}
               <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent opacity-50 group-hover:opacity-100 transition-opacity" />
@@ -1289,13 +1315,13 @@ const MarketEye = () => {
                 <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none bg-gradient-to-r from-emerald-500 to-transparent blur-2xl" />
 
                 <div className="flex items-center gap-4 sm:gap-5 relative z-10">
-                  <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-b from-[#1e293b] to-[#0f1520] border border-slate-600 shadow-[inset_0_2px_10px_rgba(255,255,255,0.1)] flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-300">
-                    <div className="scale-125 sm:scale-150">
-                      <div className="relative w-full h-full flex flex-col items-center justify-center pt-2">
-                        <div className="flex items-end gap-0.5">
+                  <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-b from-[#1e293b] to-[#0f1520] border border-slate-600 shadow-[inset_0_2px_10px_rgba(255,255,255,0.1)] flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all duration-300">
+                    <div className="scale-110 sm:scale-125">
+                      <div className="relative w-full h-full flex flex-col items-center justify-center">
+                        <div className="flex items-end gap-1">
                           <div className="w-1.5 h-3 bg-red-500 rounded-sm shadow-[0_0_5px_currentColor]"/>
-                          <div className="w-1.5 h-4 bg-emerald-500 rounded-sm shadow-[0_0_5px_currentColor]"/>
-                          <div className="w-1.5 h-6 bg-emerald-500 rounded-sm shadow-[0_0_5px_currentColor]"/>
+                          <div className="w-1.5 h-4.5 bg-emerald-500 rounded-sm shadow-[0_0_5px_currentColor]"/>
+                          <div className="w-1.5 h-6.5 bg-emerald-400 rounded-sm shadow-[0_0_8px_currentColor]"/>
                         </div>
                       </div>
                     </div>
@@ -1305,9 +1331,12 @@ const MarketEye = () => {
                       <h2 className="text-lg sm:text-2xl font-black text-white tracking-widest uppercase drop-shadow-[0_2px_10px_rgba(255,255,255,0.2)]">BREAKOUT GEMS</h2>
                       <Flame className="w-5 h-5 text-orange-500 fill-orange-500 drop-shadow-[0_0_12px_rgba(249,115,22,0.8)] animate-pulse" />
                     </div>
-                    <div className="flex items-center gap-3 mt-2 text-xs sm:text-sm font-bold text-slate-400">
-                      <span className="flex items-center gap-1.5 bg-red-500/10 border border-red-500/30 text-red-400 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black shadow-[0_0_10px_rgba(239,68,68,0.2)] uppercase tracking-wider">
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_5px_currentColor]" /> LIVE
+                    <div className="flex items-center gap-2.5 mt-1.5 text-xs sm:text-sm font-bold text-slate-400">
+                      <span className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black shadow-[0_0_10px_rgba(16,185,129,0.2)] uppercase tracking-wider">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_5px_currentColor]" /> LIVE
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-semibold bg-slate-800/60 px-2 py-0.5 rounded border border-slate-700/40">
+                        {breakouts.length} Setups
                       </span>
                     </div>
                   </div>
@@ -1316,52 +1345,55 @@ const MarketEye = () => {
                   <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input 
                     type="text" 
-                    placeholder="Search..." 
+                    placeholder="Search Breakout..." 
                     value={breakoutSearch}
                     onChange={(e) => setBreakoutSearch(e.target.value.toUpperCase())}
-                    className="bg-[#0f1520] border border-slate-700 text-sm text-white rounded-full pl-9 pr-4 py-1.5 w-40 focus:outline-none focus:border-blue-500 transition-colors"
+                    className="bg-[#0f1520] border border-slate-700 text-sm text-white rounded-full pl-9 pr-4 py-1.5 w-44 focus:outline-none focus:border-emerald-500 transition-colors"
                   />
                 </div>
               </div>
 
               {/* Filters */}
-              <div className="flex gap-2 px-5 py-3 border-b border-slate-800/60 bg-[#172030]/50 relative z-20">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800/60 bg-[#172030]/50 relative z-20">
                 <div className="relative">
                   <button 
                     onClick={() => setIsBreakoutFilterOpen(!isBreakoutFilterOpen)}
                     onBlur={() => setTimeout(() => setIsBreakoutFilterOpen(false), 150)}
                     className="flex items-center gap-1.5 bg-[#1e293b] hover:bg-slate-700 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-700 transition-colors"
                   >
-                    {breakoutFilter === 'Bullish' ? <TrendingUp className="w-3 h-3 text-emerald-400" /> : 
-                     breakoutFilter === 'Bearish' ? <TrendingDown className="w-3 h-3 text-red-400" /> : 
-                     <Activity className="w-3 h-3 text-slate-400" />}
+                    {breakoutFilter === 'Bullish' ? <TrendingUp className="w-3.5 h-3.5 text-emerald-400" /> : 
+                     breakoutFilter === 'Bearish' ? <TrendingDown className="w-3.5 h-3.5 text-red-400" /> : 
+                     <Activity className="w-3.5 h-3.5 text-slate-400" />}
                     {breakoutFilter} <ChevronDown className="w-3 h-3" />
                   </button>
                   {isBreakoutFilterOpen && (
-                    <div className="absolute top-full left-0 mt-1 w-32 bg-[#1e293b] border border-slate-700 rounded-lg shadow-xl overflow-hidden py-1 z-50">
+                    <div className="absolute top-full left-0 mt-1 w-36 bg-[#1e293b] border border-slate-700 rounded-lg shadow-xl overflow-hidden py-1 z-50">
                       <button onMouseDown={(e) => { e.preventDefault(); setBreakoutFilter('All Signals'); setIsBreakoutFilterOpen(false); }} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
-                        <Activity className="w-3 h-3 text-slate-400"/> All Signals
+                        <Activity className="w-3.5 h-3.5 text-slate-400"/> All Signals
                       </button>
                       <button onMouseDown={(e) => { e.preventDefault(); setBreakoutFilter('Bullish'); setIsBreakoutFilterOpen(false); }} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
-                        <TrendingUp className="w-3 h-3 text-emerald-400"/> Bullish
+                        <TrendingUp className="w-3.5 h-3.5 text-emerald-400"/> Bullish
                       </button>
                       <button onMouseDown={(e) => { e.preventDefault(); setBreakoutFilter('Bearish'); setIsBreakoutFilterOpen(false); }} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
-                        <TrendingDown className="w-3 h-3 text-red-400"/> Bearish
+                        <TrendingDown className="w-3.5 h-3.5 text-red-400"/> Bearish
                       </button>
                     </div>
                   )}
                 </div>
+                <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase hidden md:inline">
+                  High Probability Vol & Surge Breakouts
+                </span>
               </div>
 
               {/* Table */}
               <div className="bg-[#0f1520]/50 relative overflow-x-auto custom-scrollbar">
-                <div className="w-full flex flex-col min-w-[500px]">
+                <div className="w-full flex flex-col min-w-[550px]">
                   <div className="sticky top-0 bg-[#172030]/95 backdrop-blur-md z-10 shadow-sm border-b border-slate-700/50 flex items-center px-4 py-3 text-[10px] uppercase tracking-wider text-slate-500 font-bold shrink-0">
-                    <div className="w-[65px] sm:w-[80px] shrink-0">Signal</div>
-                    <div className="flex-1 min-w-0 pr-2">Symbol</div>
-                    <div className="w-[80px] sm:w-[110px] text-center shrink-0">%</div>
-                    <div className="w-[60px] sm:w-[80px] text-center shrink-0">Signal % <ChevronDown className="w-3 h-3 inline" /></div>
-                    <div className="w-[60px] sm:w-[80px] text-right shrink-0">Time</div>
+                    <div className="w-[60px] sm:w-[70px] shrink-0">Signal</div>
+                    <div className="flex-1 min-w-0 pr-2">Symbol & Price</div>
+                    <div className="w-[85px] sm:w-[100px] text-center shrink-0">% Change</div>
+                    <div className="w-[125px] sm:w-[145px] text-left pl-2 shrink-0">Breakout Setup</div>
+                    <div className="w-[55px] sm:w-[65px] text-right shrink-0">Time</div>
                   </div>
                   <div className="flex flex-col divide-y divide-slate-800/50 pb-2">
                     {breakouts.length === 0 ? (
@@ -1370,52 +1402,97 @@ const MarketEye = () => {
                         No Breakout Gems signals currently active.
                       </div>
                     ) : (
-                      breakouts.map((b) => (
-                        <div 
-                          key={`breakout-${b.symbol}`} 
-                          onClick={() => handleRowClick(b.symbol)}
-                          className="flex items-center px-4 py-3 hover:bg-slate-800/30 transition-all duration-200 group/row cursor-pointer relative"
-                        >
-                        <div className={`absolute left-0 top-0 bottom-0 w-1 opacity-0 group-hover/row:opacity-100 transition-opacity ${b.isBull ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                        
-                        <div className="w-[65px] sm:w-[80px] shrink-0">
-                          <span className={`inline-flex items-center justify-center w-full max-w-[65px] py-1.5 rounded-full text-[10px] sm:text-[11px] font-black tracking-widest shadow-sm border ${
-                            b.isBull ? 'bg-[#c6f6d5] text-[#14532d] border-[#86efac]' : 'bg-[#fed7d7] text-[#7f1d1d] border-[#fca5a5]'
-                          }`}>
-                            {b.isBull ? 'BULL' : 'BEAR'}
-                          </span>
-                        </div>
+                      breakouts.map((b) => {
+                        const is52w = b.breakoutType === '52W HIGH';
+                        const isDayH = b.breakoutType === 'DAY HIGH';
+                        const isDayL = b.breakoutType === 'DAY LOW';
+                        const isSurge = b.breakoutType === 'STRONG SURGE' || b.breakoutType === 'HEAVY DROP';
 
-                        <div className="flex-1 min-w-0 flex items-center gap-3 sm:gap-4 pr-2">
-                          <StockLogo symbol={b.symbol} className="w-8 h-8 sm:w-10 sm:h-10 shrink-0" />
-                          <span className="text-sm sm:text-base font-bold text-slate-200 group-hover/row:text-white transition-colors group-hover/row:translate-x-1 duration-200 truncate">{b.symbol}</span>
-                        </div>
+                        return (
+                          <div 
+                            key={`breakout-${b.symbol}`} 
+                            onClick={() => handleRowClick(b.symbol)}
+                            className="flex items-center px-4 py-3 hover:bg-slate-800/30 transition-all duration-200 group/row cursor-pointer relative"
+                          >
+                            <div className={`absolute left-0 top-0 bottom-0 w-1 opacity-0 group-hover/row:opacity-100 transition-opacity ${b.isBull ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                            
+                            {/* Signal Pill */}
+                            <div className="w-[60px] sm:w-[70px] shrink-0">
+                              <span className={`inline-flex items-center justify-center gap-1 w-full max-w-[62px] py-1 rounded-full text-[10px] font-black tracking-wider shadow-sm border ${
+                                b.isBull 
+                                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.15)]' 
+                                  : 'bg-red-500/15 text-red-400 border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.15)]'
+                              }`}>
+                                <div className={`w-1 h-1 rounded-full ${b.isBull ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                                {b.isBull ? 'BULL' : 'BEAR'}
+                              </span>
+                            </div>
 
-                        <div className="w-[80px] sm:w-[110px] flex justify-center items-center shrink-0">
-                          <span className={`inline-flex items-center justify-center w-full max-w-[75px] py-1.5 rounded-md text-xs sm:text-sm font-black border ${
-                            b.change >= 0 
-                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_8px_rgba(16,185,129,0.15)]' 
-                              : 'bg-red-500/10 text-red-400 border-red-500/20 shadow-[0_0_8px_rgba(239,68,68,0.15)]'
-                          }`}>
-                            {b.change >= 0 ? '+' : ''}{b.change.toFixed(2)}%
-                          </span>
-                        </div>
+                            {/* Symbol & Price */}
+                            <div className="flex-1 min-w-0 flex items-center gap-3 pr-2">
+                              <StockLogo symbol={b.symbol} className="w-8 h-8 sm:w-9 sm:h-9 shrink-0" />
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-xs sm:text-sm font-bold text-slate-100 group-hover/row:text-emerald-400 transition-colors group-hover/row:translate-x-0.5 duration-200 truncate">
+                                  {b.symbol}
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-medium font-mono">
+                                  ₹{b.price ? b.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '--'}
+                                </span>
+                              </div>
+                            </div>
 
-                        <div className="w-[60px] sm:w-[80px] text-center text-xs sm:text-sm font-bold text-slate-300 shrink-0">
-                          {b.signalPct.toFixed(2)}%
-                        </div>
+                            {/* % Change */}
+                            <div className="w-[85px] sm:w-[100px] flex justify-center items-center shrink-0">
+                              <span className={`inline-flex items-center justify-center w-full max-w-[76px] py-1 rounded-md text-xs font-black border font-mono ${
+                                b.change >= 0 
+                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_8px_rgba(16,185,129,0.15)]' 
+                                  : 'bg-red-500/10 text-red-400 border-red-500/20 shadow-[0_0_8px_rgba(239,68,68,0.15)]'
+                              }`}>
+                                {b.change >= 0 ? '+' : ''}{b.change.toFixed(2)}%
+                              </span>
+                            </div>
 
-                        <div className="w-[60px] sm:w-[80px] text-right text-[10px] sm:text-[11px] font-semibold text-slate-400 shrink-0">
-                          {b.time}
-                        </div>
-                      </div>
-                    )))}
+                            {/* Breakout Setup Tag */}
+                            <div className="w-[125px] sm:w-[145px] pl-2 flex flex-col justify-center shrink-0">
+                              <div className="flex items-center gap-1">
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border ${
+                                  is52w 
+                                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' 
+                                    : isDayH 
+                                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' 
+                                    : isDayL 
+                                    ? 'bg-red-500/15 text-red-300 border-red-500/30' 
+                                    : isSurge 
+                                    ? 'bg-purple-500/15 text-purple-300 border-purple-500/30' 
+                                    : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
+                                }`}>
+                                  {is52w && <Star className="w-2.5 h-2.5 fill-amber-300 text-amber-300" />}
+                                  {isDayH && <ArrowUpRight className="w-2.5 h-2.5 text-emerald-300" />}
+                                  {isDayL && <ArrowDownRight className="w-2.5 h-2.5 text-red-300" />}
+                                  {!is52w && !isDayH && !isDayL && <Zap className="w-2.5 h-2.5 text-cyan-300" />}
+                                  {b.breakoutType}
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-slate-400 font-medium mt-0.5 truncate">
+                                {b.breakoutTrigger || 'Active Momentum'}
+                              </span>
+                            </div>
+
+                            {/* Time */}
+                            <div className="w-[55px] sm:w-[65px] text-right flex items-center justify-end gap-1 text-[10px] font-mono text-slate-400 shrink-0">
+                              <Clock className="w-2.5 h-2.5 text-slate-500" />
+                              {b.time}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* INTRADAY BOOST */}
+            {/* INTRADAY HUNTER */}
             <div className="relative bg-gradient-to-br from-[#172030] to-[#131b26] border border-slate-700/50 hover:border-slate-500/80 rounded-2xl overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.5)] flex flex-col transition-all duration-300 group">
               {/* Top glowing line for a premium feel */}
               <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-blue-500/50 to-transparent opacity-50 group-hover:opacity-100 transition-opacity" />
@@ -1424,9 +1501,12 @@ const MarketEye = () => {
                 <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none bg-gradient-to-r from-blue-500 to-transparent blur-2xl" />
 
                 <div className="flex items-center gap-4 sm:gap-5 relative z-10">
-                  <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-b from-[#1e293b] to-[#0f1520] border border-slate-600 shadow-[inset_0_2px_10px_rgba(255,255,255,0.1)] flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-300">
-                    <div className="scale-125 sm:scale-150">
-                      <span className="text-[10px] font-black text-blue-400 italic tracking-tighter">BOOST</span>
+                  <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-b from-[#1e293b] to-[#0f1520] border border-slate-600 shadow-[inset_0_2px_10px_rgba(255,255,255,0.1)] flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-300">
+                    <div className="scale-110 sm:scale-125">
+                      <div className="flex flex-col items-center justify-center">
+                        <Zap className="w-5 h-5 text-blue-400 fill-blue-400/30 drop-shadow-[0_0_8px_rgba(96,165,250,0.6)]" />
+                        <span className="text-[7px] font-black text-blue-300 tracking-wider">HUNTER</span>
+                      </div>
                     </div>
                   </div>
                   <div>
@@ -1434,9 +1514,12 @@ const MarketEye = () => {
                       <h2 className="text-lg sm:text-2xl font-black text-white tracking-widest uppercase drop-shadow-[0_2px_10px_rgba(255,255,255,0.2)]">INTRADAY HUNTER</h2>
                       <Droplets className="w-5 h-5 text-blue-400 fill-blue-400 drop-shadow-[0_0_12px_rgba(96,165,250,0.8)] animate-pulse" />
                     </div>
-                    <div className="flex items-center gap-3 mt-2 text-xs sm:text-sm font-bold text-slate-400">
-                      <span className="flex items-center gap-1.5 bg-red-500/10 border border-red-500/30 text-red-400 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black shadow-[0_0_10px_rgba(239,68,68,0.2)] uppercase tracking-wider">
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_5px_currentColor]" /> LIVE
+                    <div className="flex items-center gap-2.5 mt-1.5 text-xs sm:text-sm font-bold text-slate-400">
+                      <span className="flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/30 text-blue-400 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black shadow-[0_0_10px_rgba(59,130,246,0.2)] uppercase tracking-wider">
+                        <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse shadow-[0_0_5px_currentColor]" /> LIVE
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-semibold bg-slate-800/60 px-2 py-0.5 rounded border border-slate-700/40">
+                        {boosters.length} Institutional Leads
                       </span>
                     </div>
                   </div>
@@ -1445,51 +1528,55 @@ const MarketEye = () => {
                   <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input 
                     type="text" 
-                    placeholder="Search..." 
+                    placeholder="Search Hunter..." 
                     value={boostSearch}
                     onChange={(e) => setBoostSearch(e.target.value.toUpperCase())}
-                    className="bg-[#0f1520] border border-slate-700 text-sm text-white rounded-full pl-9 pr-4 py-1.5 w-40 focus:outline-none focus:border-blue-500 transition-colors"
+                    className="bg-[#0f1520] border border-slate-700 text-sm text-white rounded-full pl-9 pr-4 py-1.5 w-44 focus:outline-none focus:border-blue-500 transition-colors"
                   />
                 </div>
               </div>
 
               {/* Filters */}
-              <div className="flex gap-2 px-5 py-3 border-b border-slate-800/60 bg-[#172030]/50 relative z-20">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800/60 bg-[#172030]/50 relative z-20">
                 <div className="relative">
                   <button 
                     onClick={() => setIsBoostFilterOpen(!isBoostFilterOpen)}
                     onBlur={() => setTimeout(() => setIsBoostFilterOpen(false), 150)}
                     className="flex items-center gap-1.5 bg-[#1e293b] hover:bg-slate-700 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-700 transition-colors"
                   >
-                    {boostFilter === 'Bullish' ? <TrendingUp className="w-3 h-3 text-emerald-400" /> : 
-                     boostFilter === 'Bearish' ? <TrendingDown className="w-3 h-3 text-red-400" /> : 
-                     <Activity className="w-3 h-3 text-slate-400" />}
+                    {boostFilter === 'Bullish' ? <TrendingUp className="w-3.5 h-3.5 text-emerald-400" /> : 
+                     boostFilter === 'Bearish' ? <TrendingDown className="w-3.5 h-3.5 text-red-400" /> : 
+                     <Activity className="w-3.5 h-3.5 text-slate-400" />}
                     {boostFilter} <ChevronDown className="w-3 h-3" />
                   </button>
                   {isBoostFilterOpen && (
-                    <div className="absolute top-full left-0 mt-1 w-32 bg-[#1e293b] border border-slate-700 rounded-lg shadow-xl overflow-hidden py-1 z-50">
+                    <div className="absolute top-full left-0 mt-1 w-36 bg-[#1e293b] border border-slate-700 rounded-lg shadow-xl overflow-hidden py-1 z-50">
                       <button onMouseDown={(e) => { e.preventDefault(); setBoostFilter('All Signals'); setIsBoostFilterOpen(false); }} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
-                        <Activity className="w-3 h-3 text-slate-400"/> All Signals
+                        <Activity className="w-3.5 h-3.5 text-slate-400"/> All Signals
                       </button>
                       <button onMouseDown={(e) => { e.preventDefault(); setBoostFilter('Bullish'); setIsBoostFilterOpen(false); }} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
-                        <TrendingUp className="w-3 h-3 text-emerald-400"/> Bullish
+                        <TrendingUp className="w-3.5 h-3.5 text-emerald-400"/> Bullish Alpha
                       </button>
                       <button onMouseDown={(e) => { e.preventDefault(); setBoostFilter('Bearish'); setIsBoostFilterOpen(false); }} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
-                        <TrendingDown className="w-3 h-3 text-red-400"/> Bearish
+                        <TrendingDown className="w-3.5 h-3.5 text-red-400"/> Bearish Alpha
                       </button>
                     </div>
                   )}
                 </div>
+                <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase hidden md:inline">
+                  Real Relative Strength vs NIFTY / BANKNIFTY
+                </span>
               </div>
 
               {/* Table */}
               <div className="bg-[#0f1520]/50 relative overflow-x-auto custom-scrollbar">
-                <div className="w-full flex flex-col min-w-[500px]">
+                <div className="w-full flex flex-col min-w-[550px]">
                   <div className="sticky top-0 bg-[#172030]/95 backdrop-blur-md z-10 shadow-sm border-b border-slate-700/50 flex items-center px-4 py-3 text-[10px] uppercase tracking-wider text-slate-500 font-bold shrink-0">
-                    <div className="flex-1 min-w-0 pr-2">Symbol</div>
-                    <div className="w-[80px] sm:w-[110px] text-center shrink-0">%</div>
-                    <div className="w-[60px] sm:w-[80px] text-center shrink-0">R.Strength <ChevronDown className="w-3 h-3 inline" /></div>
-                    <div className="w-[65px] sm:w-[80px] text-right shrink-0">Trend</div>
+                    <div className="flex-1 min-w-0 pr-2">Symbol & Price</div>
+                    <div className="w-[85px] sm:w-[100px] text-center shrink-0">% Change</div>
+                    <div className="w-[105px] sm:w-[125px] text-center shrink-0">R.Strength (Alpha)</div>
+                    <div className="w-[85px] sm:w-[100px] text-center shrink-0">RS Rating</div>
+                    <div className="w-[85px] sm:w-[100px] text-right shrink-0">Trend Signal</div>
                   </div>
                   <div className="flex flex-col divide-y divide-slate-800/50 pb-2">
                     {boosters.length === 0 ? (
@@ -1498,42 +1585,101 @@ const MarketEye = () => {
                         No Intraday Hunter signals currently active.
                       </div>
                     ) : (
-                      boosters.map((b) => (
-                        <div 
-                          key={`boost-${b.symbol}`} 
-                          onClick={() => handleRowClick(b.symbol)}
-                          className="flex items-center px-4 py-3 hover:bg-slate-800/30 transition-all duration-200 group/row cursor-pointer relative"
-                        >
-                        <div className={`absolute left-0 top-0 bottom-0 w-1 opacity-0 group-hover/row:opacity-100 transition-opacity ${b.isBull ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                        
-                        <div className="flex-1 min-w-0 flex items-center gap-3 sm:gap-4 pr-2">
-                          <StockLogo symbol={b.symbol} className="w-8 h-8 sm:w-10 sm:h-10 shrink-0" />
-                          <span className="text-sm sm:text-base font-bold text-slate-200 group-hover/row:text-white transition-colors group-hover/row:translate-x-1 duration-200 truncate">{b.symbol}</span>
-                        </div>
+                      boosters.map((b) => {
+                        const isBank = BANK_NIFTY_SYMBOLS.includes(b.symbol);
+                        const benchName = isBank ? 'BNF' : 'NIFTY';
+                        const isAlphaPos = b.rsAlpha >= 0;
 
-                        <div className="w-[80px] sm:w-[110px] flex justify-center items-center shrink-0">
-                          <span className={`inline-flex items-center justify-center w-full max-w-[75px] py-1.5 rounded-md text-xs sm:text-sm font-black border ${
-                            b.change >= 0 
-                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_8px_rgba(16,185,129,0.15)]' 
-                              : 'bg-red-500/10 text-red-400 border-red-500/20 shadow-[0_0_8px_rgba(239,68,68,0.15)]'
-                          }`}>
-                            {b.change >= 0 ? '+' : ''}{b.change.toFixed(2)}%
-                          </span>
-                        </div>
+                        return (
+                          <div 
+                            key={`boost-${b.symbol}`} 
+                            onClick={() => handleRowClick(b.symbol)}
+                            className="flex items-center px-4 py-3 hover:bg-slate-800/30 transition-all duration-200 group/row cursor-pointer relative"
+                          >
+                            <div className={`absolute left-0 top-0 bottom-0 w-1 opacity-0 group-hover/row:opacity-100 transition-opacity ${b.isBull ? 'bg-blue-500' : 'bg-red-500'}`} />
+                            
+                            {/* Symbol & Price */}
+                            <div className="flex-1 min-w-0 flex items-center gap-3 pr-2">
+                              <StockLogo symbol={b.symbol} className="w-8 h-8 sm:w-9 sm:h-9 shrink-0" />
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-xs sm:text-sm font-bold text-slate-100 group-hover/row:text-blue-400 transition-colors group-hover/row:translate-x-0.5 duration-200 truncate">
+                                  {b.symbol}
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-medium font-mono">
+                                  ₹{b.price ? b.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '--'}
+                                </span>
+                              </div>
+                            </div>
 
-                        <div className="w-[60px] sm:w-[80px] text-center text-xs sm:text-sm font-bold text-slate-300 shrink-0">
-                          {b.rFac.toFixed(2)}%
-                        </div>
+                            {/* % Change */}
+                            <div className="w-[85px] sm:w-[100px] flex justify-center items-center shrink-0">
+                              <span className={`inline-flex items-center justify-center w-full max-w-[76px] py-1 rounded-md text-xs font-black border font-mono ${
+                                b.change >= 0 
+                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_8px_rgba(16,185,129,0.15)]' 
+                                  : 'bg-red-500/10 text-red-400 border-red-500/20 shadow-[0_0_8px_rgba(239,68,68,0.15)]'
+                              }`}>
+                                {b.change >= 0 ? '+' : ''}{b.change.toFixed(2)}%
+                              </span>
+                            </div>
 
-                        <div className="w-[65px] sm:w-[80px] shrink-0 flex justify-end">
-                          <span className={`inline-flex items-center justify-center w-full max-w-[65px] py-1.5 rounded-full text-[10px] sm:text-[11px] font-black tracking-widest shadow-sm border ${
-                            b.isBull ? 'bg-[#c6f6d5] text-[#14532d] border-[#86efac]' : 'bg-[#fed7d7] text-[#7f1d1d] border-[#fca5a5]'
-                          }`}>
-                            {b.isBull ? 'UP' : 'DOWN'}
-                          </span>
-                        </div>
-                      </div>
-                    )))}
+                            {/* Relative Strength Alpha */}
+                            <div className="w-[105px] sm:w-[125px] flex flex-col items-center justify-center shrink-0 font-mono">
+                              <span className={`text-xs sm:text-sm font-black flex items-center gap-0.5 ${
+                                isAlphaPos ? 'text-emerald-400' : 'text-red-400'
+                              }`}>
+                                {isAlphaPos ? '▲ +' : '▼ '}{b.rsAlpha.toFixed(2)}%
+                              </span>
+                              <span className="text-[9px] text-slate-400 font-medium uppercase tracking-tight">
+                                vs {benchName}
+                              </span>
+                            </div>
+
+                            {/* RS Rating & Mini Gauge */}
+                            <div className="w-[85px] sm:w-[100px] flex flex-col items-center justify-center px-1 shrink-0">
+                              <span className={`text-[11px] font-black px-1.5 py-0.5 rounded font-mono ${
+                                b.rsScore >= 80 
+                                  ? 'text-purple-300 bg-purple-500/20 border border-purple-500/30' 
+                                  : b.rsScore >= 60 
+                                  ? 'text-emerald-300 bg-emerald-500/20 border border-emerald-500/30' 
+                                  : b.rsScore <= 30 
+                                  ? 'text-red-300 bg-red-500/20 border border-red-500/30' 
+                                  : 'text-slate-300 bg-slate-800 border border-slate-700'
+                              }`}>
+                                RS {b.rsScore}
+                              </span>
+                              <div className="w-14 h-1 bg-slate-800 rounded-full mt-1.5 overflow-hidden">
+                                <div 
+                                  className={`h-full ${
+                                    b.rsScore >= 80 ? 'bg-gradient-to-r from-purple-500 to-cyan-400' :
+                                    b.rsScore >= 60 ? 'bg-gradient-to-r from-emerald-500 to-emerald-300' :
+                                    b.rsScore <= 30 ? 'bg-gradient-to-r from-red-600 to-red-400' :
+                                    'bg-slate-500'
+                                  }`} 
+                                  style={{ width: `${b.rsScore}%` }} 
+                                />
+                              </div>
+                            </div>
+
+                            {/* Trend Badge */}
+                            <div className="w-[85px] sm:w-[100px] shrink-0 flex justify-end">
+                              <span className={`inline-flex items-center justify-center px-2 py-1 rounded-full text-[9px] sm:text-[10px] font-black tracking-wider shadow-sm border truncate ${
+                                b.rsTrend === 'STRONG BUY' 
+                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.2)]' 
+                                  : b.rsTrend === 'OUTPERFORM' 
+                                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-[0_0_10px_rgba(6,182,212,0.2)]' 
+                                  : b.rsTrend === 'BREAKDOWN' 
+                                  ? 'bg-red-500/20 text-red-300 border-red-500/40 shadow-[0_0_10px_rgba(239,68,68,0.2)]' 
+                                  : b.rsTrend === 'WEAK' 
+                                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' 
+                                  : 'bg-slate-800 text-slate-300 border-slate-700'
+                              }`}>
+                                {b.rsTrend}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
               </div>
