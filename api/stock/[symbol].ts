@@ -5,6 +5,7 @@ const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
 const YAHOO_SYMBOL_ALIASES: Record<string, string> = {
   SBI: 'SBIN',
   'L&T': 'LT',
+  TATAMOTORS: 'TMCV',
 };
 
 const normalizeYahooBaseSymbol = (symbol: string): string => {

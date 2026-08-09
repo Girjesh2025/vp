@@ -167,6 +167,7 @@ let lastGiftNiftyFetch = 0;
 const YAHOO_SYMBOL_ALIASES = {
   SBI: 'SBIN',
   'L&T': 'LT',
+  TATAMOTORS: 'TMCV',
 };
 
 const normalizeYahooBaseSymbol = (symbol) => {
@@ -815,7 +816,7 @@ async function fetchYahooFundamentals(symbol) {
         return {
           symbol: symbol.replace(/\.NS$/, '').replace(/\.BO$/, ''),
           price: q.regularMarketPrice || q.regularMarketPreviousClose || 0,
-          change: (q.regularMarketChangePercent || 0) * 100,
+          change: q.regularMarketChangePercent || 0,
           high52: q.fiftyTwoWeekHigh || 0,
           low52: q.fiftyTwoWeekLow || 0,
           peRatio: q.trailingPE || q.forwardPE || 0,
@@ -1301,14 +1302,66 @@ app.get('/api/broker/fyers/holdings', async (req, res) => {
   }
 });
 
-// FII/DII Mock Route
-app.get('/api/fii-dii', (req, res) => {
-  const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-  const mockData = [
-    { category: 'FII/FPI', netValue: '-8692.00', date },
-    { category: 'DII', netValue: '7979.00', date }
-  ];
-  res.json(mockData);
+let cachedFiiDiiData = null;
+let lastFiiDiiDataFetch = 0;
+const FII_DII_CACHE_TTL_MS = 10 * 60 * 1000;
+
+// FII/DII Live Route (NSE API)
+app.get('/api/fii-dii', async (req, res) => {
+  const now = Date.now();
+  if (cachedFiiDiiData && (now - lastFiiDiiDataFetch) < FII_DII_CACHE_TTL_MS) {
+    return res.json(cachedFiiDiiData);
+  }
+
+  // 1. Direct NSE API with headers & cookies
+  try {
+    const base = 'https://www.nseindia.com';
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept': 'application/json,text/plain,*/*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Referer': 'https://www.nseindia.com/reports/fii-dii',
+    };
+
+    const homeRes = await fetchWithTimeout(base, { headers }, 5000).catch(() => null);
+    const cookies = homeRes ? buildNseCookieHeader(homeRes.headers.raw()['set-cookie']) : '';
+    const reqHeaders = { ...headers };
+    if (cookies) reqHeaders['Cookie'] = cookies;
+
+    const nseRes = await fetchWithTimeout('https://www.nseindia.com/api/fiidiiTradeReact', { headers: reqHeaders }, 7000);
+    if (nseRes.ok) {
+      const data = await nseRes.json();
+      if (Array.isArray(data) && data.length >= 2) {
+        cachedFiiDiiData = data;
+        lastFiiDiiDataFetch = now;
+        return res.json(data);
+      }
+    }
+  } catch (e) {
+    console.warn('[Proxy FII/DII] Direct NSE fetch error:', e.message);
+  }
+
+  // 2. Fallback via stock-nse-india
+  try {
+    const data = await nseIndia.getDataByEndpoint('/api/fiidiiTradeReact');
+    if (Array.isArray(data) && data.length >= 2) {
+      cachedFiiDiiData = data;
+      lastFiiDiiDataFetch = now;
+      return res.json(data);
+    }
+  } catch (e) {
+    console.warn('[Proxy FII/DII] stock-nse-india fallback error:', e.message);
+  }
+
+  if (cachedFiiDiiData) {
+    return res.json(cachedFiiDiiData);
+  }
+
+  const date = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  res.json([
+    { category: 'FII/FPI', netValue: '0.00', date },
+    { category: 'DII', netValue: '0.00', date }
+  ]);
 });
 
 // Proxy route for News (Google News RSS)

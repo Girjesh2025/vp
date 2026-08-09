@@ -255,15 +255,20 @@ const MarketEye = () => {
               sparkline: bankNiftyHist ? bankNiftyHist.map(v => ({ value: v })) : mockBankNiftySparkline
             } : null
           });
-          setAllNewsData(newsRes); // Keep all items for pagination
+          if (newsRes) setAllNewsData(newsRes);
           if (fiiDiiRes && Array.isArray(fiiDiiRes)) {
-             const fiiItem = fiiDiiRes.find(d => d.category === 'FII/FPI');
-             const diiItem = fiiDiiRes.find(d => d.category === 'DII');
+             const fiiItem = fiiDiiRes.find((d: any) => d.category?.includes('FII') || d.category?.includes('FPI'));
+             const diiItem = fiiDiiRes.find((d: any) => d.category?.includes('DII'));
              if (fiiItem && diiItem) {
+                const parseNet = (v: any) => {
+                  if (typeof v === 'number') return v;
+                  if (typeof v === 'string') return parseFloat(v.replace(/,/g, '')) || 0;
+                  return 0;
+                };
                 setFiiDiiData({
-                   fii: parseFloat(fiiItem.netValue),
-                   dii: parseFloat(diiItem.netValue),
-                   date: fiiItem.date
+                   fii: parseNet(fiiItem.netValue),
+                   dii: parseNet(diiItem.netValue),
+                   date: fiiItem.date || diiItem.date || ''
                 });
              }
           }
@@ -920,7 +925,7 @@ const MarketEye = () => {
                   <div className="flex items-center justify-between mb-1 z-10">
                     <h3 className="text-[12px] font-bold text-slate-300 tracking-widest uppercase">FII/DII Cash</h3>
                     <span className="text-[9px] font-bold text-slate-400 bg-[#0f1520] px-2 py-0.5 rounded border border-slate-700/50 shadow-sm">
-                      {fiiDiiData ? fiiDiiData.date.substring(0, 6) : 'Prov'}
+                      {fiiDiiData && fiiDiiData.date ? fiiDiiData.date.replace(/-/g, ' ').substring(0, 6).trim() : 'Live'}
                     </span>
                   </div>
 
@@ -936,7 +941,7 @@ const MarketEye = () => {
                             {fiiDiiData && fiiDiiData.fii >= 0 ? 'Net Buy' : 'Net Sell'}
                           </span>
                           <span className={`text-sm font-black leading-none ${fiiDiiData && fiiDiiData.fii >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {fiiDiiData ? (fiiDiiData.fii >= 0 ? '+' : '') + fiiDiiData.fii.toLocaleString() : '-8,692'}
+                            {fiiDiiData ? (fiiDiiData.fii >= 0 ? '+' : '') + Math.round(fiiDiiData.fii).toLocaleString('en-IN') : '--'}
                             <span className={`text-[9px] font-bold ml-0.5 ${fiiDiiData && fiiDiiData.fii >= 0 ? 'text-emerald-500/60' : 'text-red-500/60'}`}>Cr</span>
                           </span>
                         </div>
@@ -949,7 +954,7 @@ const MarketEye = () => {
                             {fiiDiiData && fiiDiiData.dii >= 0 ? 'Net Buy' : 'Net Sell'}
                           </span>
                           <span className={`text-sm font-black leading-none ${fiiDiiData && fiiDiiData.dii >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {fiiDiiData ? (fiiDiiData.dii >= 0 ? '+' : '') + fiiDiiData.dii.toLocaleString() : '+7,979'}
+                            {fiiDiiData ? (fiiDiiData.dii >= 0 ? '+' : '') + Math.round(fiiDiiData.dii).toLocaleString('en-IN') : '--'}
                             <span className={`text-[9px] font-bold ml-0.5 ${fiiDiiData && fiiDiiData.dii >= 0 ? 'text-emerald-500/60' : 'text-red-500/60'}`}>Cr</span>
                           </span>
                         </div>
@@ -959,11 +964,29 @@ const MarketEye = () => {
                       </div>
                     </div>
 
-                    {/* Progress Bar showing proportion */}
-                    <div className="w-full h-1.5 bg-[#0f1520] rounded-full overflow-hidden flex shadow-inner">
-                      <div className="h-full bg-gradient-to-r from-red-600 to-red-400 shadow-[0_0_10px_rgba(239,68,68,0.5)]" style={{ width: '52.1%' }} />
-                      <div className="h-full bg-gradient-to-r from-emerald-400 to-emerald-600 shadow-[0_0_10px_rgba(16,185,129,0.5)]" style={{ width: '47.9%' }} />
-                    </div>
+                    {/* Progress Bar showing dynamic proportion */}
+                    {(() => {
+                      const fiiAbs = Math.abs(fiiDiiData?.fii || 0);
+                      const diiAbs = Math.abs(fiiDiiData?.dii || 0);
+                      const totalFlow = (fiiAbs + diiAbs) || 1;
+                      const fiiWidth = (fiiAbs / totalFlow) * 100;
+                      const diiWidth = 100 - fiiWidth;
+                      const fiiIsPos = (fiiDiiData?.fii ?? 0) >= 0;
+                      const diiIsPos = (fiiDiiData?.dii ?? 0) >= 0;
+
+                      return (
+                        <div className="w-full h-1.5 bg-[#0f1520] rounded-full overflow-hidden flex shadow-inner">
+                          <div 
+                            className={`h-full ${fiiIsPos ? 'bg-gradient-to-r from-emerald-600 to-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-gradient-to-r from-red-600 to-red-400 shadow-[0_0_10px_rgba(239,68,68,0.5)]'} transition-all duration-500`} 
+                            style={{ width: `${fiiWidth}%` }} 
+                          />
+                          <div 
+                            className={`h-full ${diiIsPos ? 'bg-gradient-to-r from-emerald-400 to-emerald-600 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-gradient-to-r from-red-400 to-red-600 shadow-[0_0_10px_rgba(239,68,68,0.5)]'} transition-all duration-500`} 
+                            style={{ width: `${diiWidth}%` }} 
+                          />
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
