@@ -914,10 +914,21 @@ const OptionsDecode = () => {
       null
     )?.strike ?? null;
 
-    const maxPainStrike = rows.reduce<StrikeRow | null>(
-      (best, item) => (item.totalOi > (best?.totalOi ?? -1) ? item : best),
-      null
-    )?.strike ?? null;
+    // True Mathematical Max Pain (aggregate buyer loss minimization)
+    let minLoss = Number.POSITIVE_INFINITY;
+    let maxPainStrike: number | null = null;
+    rows.forEach((target) => {
+      const s = target.strike;
+      let totalLoss = 0;
+      rows.forEach((r) => {
+        if (s > r.strike) totalLoss += (s - r.strike) * r.ceOi;
+        else if (s < r.strike) totalLoss += (r.strike - s) * r.peOi;
+      });
+      if (totalLoss < minLoss) {
+        minLoss = totalLoss;
+        maxPainStrike = s;
+      }
+    });
 
     const atmRow = rows.find((item) => item.isATM) ?? null;
     const ivs = atmRow ? [atmRow.ceIv, atmRow.peIv].filter((value) => value > 0) : [];
