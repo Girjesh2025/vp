@@ -16,9 +16,7 @@ const Register: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const redirectUrl = typeof window !== 'undefined'
-      ? `${window.location.origin}/app`
-      : 'https://paperprofit.in/app';
+    const redirectUrl = import.meta.env.VITE_AUTH_REDIRECT_URL || 'https://paperprofit.in/app';
 
     const { data, error } = await supabase.auth.signUp({
       email, password,
