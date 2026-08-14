@@ -16,12 +16,20 @@ const Register: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    const redirectUrl = typeof window !== 'undefined'
+      ? `${window.location.origin}/app`
+      : 'https://paperprofit.in/app';
+
     const { data, error } = await supabase.auth.signUp({
       email, password,
-      options: { data: { full_name: name } },
+      options: {
+        data: { full_name: name },
+        emailRedirectTo: redirectUrl,
+      },
     });
     if (error) { setError(error.message); setLoading(false); }
     else { setSuccess(true); setLoading(false); if (data.session) navigate('/app'); }
+
   };
 
   const inputStyle: React.CSSProperties = {

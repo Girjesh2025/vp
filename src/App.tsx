@@ -1,10 +1,11 @@
-import { Routes, Route, useNavigate } from 'react-router-dom'
+import React, { useEffect } from 'react'
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import LandingPage from './LandingPage'
 import StockPortfolioApp from './StockPortfolioApp'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ProtectedRoute from './components/ProtectedRoute'
-import { AuthProvider } from './contexts/AuthContext'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 import SectorRotation from './components/tools/SectorRotation'
 import GlobalMarket from './components/tools/GlobalMarket'
 import SectoralFlow from './components/tools/SectoralFlow'
@@ -14,6 +15,18 @@ import './App.css'
 
 function AppRoutes() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const { user } = useAuth()
+
+  // Auto redirect to /app if returning from email confirmation link with token in URL hash
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash
+      if (hash.includes('access_token=') || hash.includes('type=signup') || hash.includes('type=recovery')) {
+        navigate('/app', { replace: true })
+      }
+    }
+  }, [navigate, user, location.pathname])
 
   return (
     <Routes>
