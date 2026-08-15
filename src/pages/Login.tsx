@@ -147,9 +147,22 @@ const Login: React.FC = () => {
 
             {/* Password */}
             <div>
-              <label style={{ display:'block', color:'rgba(255,255,255,0.7)', fontSize:'13px', fontWeight:600, marginBottom:'8px' }}>
-                Password
-              </label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <label style={{ color: 'rgba(255,255,255,0.7)', fontSize: '13px', fontWeight: 600 }}>
+                  Password
+                </label>
+                <Link
+                  to="/forgot-password"
+                  style={{
+                    color: '#10b981', fontSize: '12px', fontWeight: 600, textDecoration: 'none',
+                    transition: 'color 0.2s'
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.color = '#34d399')}
+                  onMouseLeave={e => (e.currentTarget.style.color = '#10b981')}
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <div style={{ position:'relative' }}>
                 <div style={{ position:'absolute', left:'14px', top:'50%', transform:'translateY(-50%)', zIndex:1 }}>
                   <Lock size={16} color="rgba(16,185,129,0.6)" />

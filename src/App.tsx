@@ -4,6 +4,8 @@ import LandingPage from './LandingPage'
 import StockPortfolioApp from './StockPortfolioApp'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 import ProtectedRoute from './components/ProtectedRoute'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import SectorRotation from './components/tools/SectorRotation'
@@ -18,11 +20,13 @@ function AppRoutes() {
   const location = useLocation()
   const { user } = useAuth()
 
-  // Auto redirect to /app if returning from email confirmation link with token in URL hash
+  // Auto redirect to /reset-password for password recovery or /app for signup confirmation
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const hash = window.location.hash
-      if (hash.includes('access_token=') || hash.includes('type=signup') || hash.includes('type=recovery')) {
+      if (hash.includes('type=recovery')) {
+        navigate('/reset-password', { replace: true })
+      } else if (hash.includes('access_token=') || hash.includes('type=signup')) {
         navigate('/app', { replace: true })
       }
     }
@@ -36,6 +40,8 @@ function AppRoutes() {
       />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route
         path="/app"
         element={
