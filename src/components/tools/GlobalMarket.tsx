@@ -114,38 +114,7 @@ const GlobalMarket: React.FC = () => {
                   console.log('Failed to fetch GIFT Nifty from EODHD endpoint');
                 }
 
-                try {
-                  // Fallback to external scrape only when EODHD symbol is not configured or unavailable.
-                  const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent('https://in.investing.com/indices/gift-nifty-50-c1-futures')}`);
-                  const htmlData = await response.json();
-                  
-                  if (htmlData && htmlData.contents) {
-                    let priceMatch = htmlData.contents.match(/data-test="instrument-price-last"[^>]*>([\d,.]+)<\/div>/);
-                    let changeMatch = htmlData.contents.match(/data-test="instrument-price-change"[^>]*>([+-]?[\d,.]+)<\/div>/);
-                    let changePctMatch = htmlData.contents.match(/data-test="instrument-price-change-percent"[^>]*>\(([+-]?[\d,.]+)%\)<\/div>/);
-                    if (!priceMatch) priceMatch = htmlData.contents.match(/class="text-5xl[^>]*>([\d,.]+)<\/div>/);
-
-                    const scrapedPrice = priceMatch?.[1] ? parseFloat(priceMatch[1].replace(/,/g, '')) : 0;
-                    const scrapedChange = changeMatch?.[1] ? parseFloat(changeMatch[1].replace(/,/g, '').replace('+', '')) : 0;
-                    const scrapedChangePercent = changePctMatch?.[1] ? parseFloat(changePctMatch[1].replace(/,/g, '').replace('+', '')) : 0;
-
-                    if (!isNaN(scrapedPrice) && scrapedPrice > 0) {
-                      return {
-                        ...idx,
-                        price: scrapedPrice,
-                        change: scrapedChange,
-                        changePercent: scrapedChangePercent,
-                        status: getMarketStatus(idx.region, idx.symbol),
-                        lastUpdate: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                        link: 'https://in.investing.com/indices/gift-nifty-50-c1-futures',
-                        sourceNote: 'External live source',
-                        isEstimated: false
-                      };
-                    }
-                  }
-                } catch (e) {
-                  console.log('Failed to scrape Investing.com for GIFT Nifty');
-                }
+                // Backend /api/global/gift-nifty handles live source with server-side fallbacks
 
                 {
                   return {

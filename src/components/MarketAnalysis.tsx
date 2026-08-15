@@ -40,21 +40,17 @@ interface IndexData {
 const CACHE_KEY = 'market_analysis_cache';
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-// Race 3 proxies — whichever responds first wins
-const PROXIES = [
-  (url: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-  (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-  (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-];
-
-// Bulk fetch all 21 indices in ONE request
+// Bulk fetch all indices in ONE request via backend serverless proxy
 const fetchAllIndices = async (symbols: string[], signal: AbortSignal): Promise<Map<string, { price: number; change: number; prevClose: number }> | null> => {
   const symbolString = symbols.map(encodeURIComponent).join(',');
-  const directUrl = `/api/yahoo?symbols=${symbolString}`;
+  const directUrls = [
+    `/api/yahoo/spark?symbols=${symbolString}&range=1d&interval=1d`,
+    `/api/yahoo?symbols=${symbolString}&range=1d&interval=1d`
+  ];
   
-  const parseYahooData = (data: any, resolve: any) => {
+  const parseYahooData = (data: any) => {
     if (data && typeof data === 'object' && Object.keys(data).length > 0) {
-      const result = new Map();
+      const result = new Map<string, { price: number; change: number; prevClose: number }>();
       for (const [sym, info] of Object.entries(data)) {
         const sparkInfo = info as any;
         if (sparkInfo && Array.isArray(sparkInfo.close) && sparkInfo.close.length > 0) {
@@ -64,55 +60,23 @@ const fetchAllIndices = async (symbols: string[], signal: AbortSignal): Promise<
           result.set(sym, { price, change, prevClose });
         }
       }
-      resolve(result);
-      return true;
+      return result.size > 0 ? result : null;
     }
-    return false;
+    return null;
   };
 
-  return new Promise(async (resolve) => {
-    let settled = false;
-
-    // 1. First attempt: Native Vercel Serverless Function (fastest, no CORS, no limits)
+  for (const directUrl of directUrls) {
     try {
       const direct = await fetch(directUrl, { signal });
       if (direct.ok) {
         const data = await direct.json();
-        if (parseYahooData(data, resolve)) {
-          settled = true;
-          return; // Success! No need for public proxies
-        }
+        const parsed = parseYahooData(data);
+        if (parsed) return parsed;
       }
     } catch (_) { }
+  }
 
-    // 2. Fallback: Public Proxies Race (for local Vite dev primarily)
-    const url = `https://query1.finance.yahoo.com/v8/finance/spark?symbols=${symbolString}&interval=1d&range=1d`;
-    let pending = PROXIES.length;
-
-    PROXIES.forEach(async (buildUrl) => {
-      if (settled) return;
-      try {
-        const r = await fetch(buildUrl(url), { signal });
-        if (!r.ok) throw new Error('bad status');
-        const raw = await r.json();
-        
-        let data = raw;
-        if (typeof raw?.contents === 'string') {
-          try { data = JSON.parse(raw.contents); } catch { throw new Error('parse error'); }
-        }
-        
-        if (!settled && parseYahooData(data, resolve)) {
-          settled = true;
-        }
-      } catch (_) {
-      } finally {
-        pending--;
-        if (pending === 0 && !settled) resolve(null);
-      }
-    });
-
-    if (pending === 0 && !settled) resolve(null);
-  });
+  return null;
 };
 
 const getHeatColor = (change: number | null): { bg: string; border: string; text: string } => {

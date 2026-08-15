@@ -64,30 +64,6 @@ const getMockPrice = (symbol: string): PriceData => {
   };
 };
 
-// More reliable proxy services
-const PROXY_SERVICES = [
-  {
-    name: 'vite-proxy',
-    url: '/api/stock/',
-    transform: (data: any) => data
-  },
-  {
-    name: 'corsproxy',
-    url: 'https://corsproxy.io/?',
-    transform: (data: any) => data
-  },
-  {
-    name: 'allorigins',
-    url: 'https://api.allorigins.win/get?url=',
-    transform: (data: any) => JSON.parse(data.contents)
-  },
-  {
-    name: 'codetabs',
-    url: 'https://api.codetabs.com/v1/proxy?quest=',
-    transform: (data: any) => data
-  }
-];
-
 const resolveBaseUrl = (): string => {
   const envBase = (import.meta as any)?.env?.VITE_API_BASE_URL;
   if (typeof envBase === 'string' && envBase.trim().length > 0) {
@@ -99,10 +75,7 @@ const resolveBaseUrl = (): string => {
 
 export const getApiBaseUrl = (): string => resolveBaseUrl();
 
-// Removed broker fetching completely
-
 // Check if a symbol is a global index or futures symbol (e.g. ^DJI, ^NSEI, YM=F)
-// These must NOT be converted via toEODHDSymbols — send directly to proxy
 const isGlobalOrIndexSymbol = (symbol: string): boolean => {
   return symbol.startsWith('^') || symbol.includes('=');
 };
@@ -134,76 +107,40 @@ const toYahooSymbol = (symbol: string): string => {
 };
 
 const fetchDirectFallback = async (symbol: string): Promise<PriceData | null> => {
-  // Try Yahoo via our Vite proxy or other proxies.
   const yahooSymbol = toYahooSymbol(symbol);
-  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}`;
-  for (const p of PROXY_SERVICES) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout per proxy
-      
-      const targetUrl = p.name === 'vite-proxy' 
-        ? `${p.url}${encodeURIComponent(yahooSymbol)}?source=yahoo` 
-        : `${p.url}${encodeURIComponent(yahooUrl)}`;
+  try {
+    const baseUrl = resolveBaseUrl();
+    const targetUrl = `${baseUrl}/api/stock/${encodeURIComponent(yahooSymbol)}?source=yahoo`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
 
-      const r = await fetch(targetUrl, { 
-        method: 'GET',
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-      
-      if (!r.ok) continue;
-      
-      let raw;
-      if (p.name === 'allorigins') {
-         const json = await r.json();
-         raw = JSON.parse(json.contents);
-      } else {
-         raw = await r.json();
-      }
-      
-        const data = p.transform ? p.transform(raw) : raw;
-      
-      if (p.name === 'vite-proxy') {
-        // vite-proxy returns our normalized PriceData format directly
-        if (data && typeof data.close === 'number') {
-           const close = data.close;
-           const prevClose = data.previousClose ?? close;
-           const change = prevClose ? ((close - prevClose) / prevClose) * 100 : 0;
-           return {
-             price: Number(close.toFixed(2)),
-             change: Number(change.toFixed(2)),
-             previousClose: data.previousClose !== undefined ? Number(data.previousClose.toFixed(2)) : undefined,
-             open: typeof data.open === 'number' ? Number(data.open.toFixed(2)) : undefined,
-             high: typeof data.high === 'number' ? Number(data.high.toFixed(2)) : undefined,
-             low: typeof data.low === 'number' ? Number(data.low.toFixed(2)) : undefined,
-             volume: typeof data.volume === 'number' ? data.volume : undefined,
-             high52: data.high52 !== undefined ? Number(data.high52.toFixed(2)) : undefined,
-             low52: data.low52 !== undefined ? Number(data.low52.toFixed(2)) : undefined,
-           };
-        }
-      }
+    const r = await fetch(targetUrl, {
+      method: 'GET',
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
 
-      const meta = data?.chart?.result?.[0]?.meta;
-        if (meta && (typeof meta.regularMarketPrice === 'number' || typeof meta.previousClose === 'number')) {
-          const close = meta.regularMarketPrice ?? meta.previousClose ?? 0;
-          const prevClose = meta.previousClose ?? close;
-          const change = prevClose ? ((close - prevClose) / prevClose) * 100 : 0;
-          return {
-            price: Number(close.toFixed(2)),
-            change: Number(change.toFixed(2)),
-            previousClose: meta.previousClose !== undefined && meta.previousClose !== null ? Number(meta.previousClose.toFixed(2)) : undefined,
-            open: typeof meta.regularMarketOpen === 'number' ? Number(meta.regularMarketOpen.toFixed(2)) : undefined,
-            high: typeof meta.regularMarketDayHigh === 'number' ? Number(meta.regularMarketDayHigh.toFixed(2)) : undefined,
-            low: typeof meta.regularMarketDayLow === 'number' ? Number(meta.regularMarketDayLow.toFixed(2)) : undefined,
-            volume: typeof meta.regularMarketVolume === 'number' ? meta.regularMarketVolume : undefined,
-            high52: meta.fiftyTwoWeekHigh !== undefined ? Number(meta.fiftyTwoWeekHigh.toFixed(2)) : undefined,
-            low52: meta.fiftyTwoWeekLow !== undefined ? Number(meta.fiftyTwoWeekLow.toFixed(2)) : undefined
-          };
-        }
-    } catch (e) {
-      console.warn(`[Yahoo Fallback] Error using proxy ${p.name}:`, e);
+    if (r.ok) {
+      const data = await r.json();
+      if (data && typeof data.close === 'number') {
+        const close = data.close;
+        const prevClose = data.previousClose ?? close;
+        const change = prevClose ? ((close - prevClose) / prevClose) * 100 : 0;
+        return {
+          price: Number(close.toFixed(2)),
+          change: Number(change.toFixed(2)),
+          previousClose: data.previousClose !== undefined ? Number(data.previousClose.toFixed(2)) : undefined,
+          open: typeof data.open === 'number' ? Number(data.open.toFixed(2)) : undefined,
+          high: typeof data.high === 'number' ? Number(data.high.toFixed(2)) : undefined,
+          low: typeof data.low === 'number' ? Number(data.low.toFixed(2)) : undefined,
+          volume: typeof data.volume === 'number' ? data.volume : undefined,
+          high52: data.high52 !== undefined ? Number(data.high52.toFixed(2)) : undefined,
+          low52: data.low52 !== undefined ? Number(data.low52.toFixed(2)) : undefined,
+        };
+      }
     }
+  } catch (e) {
+    console.warn(`[Yahoo Fallback] Error fetching ${symbol}:`, e);
   }
   return null;
 };
@@ -241,39 +178,7 @@ export const fetchHistoricalPrices = async (symbol: string, days: number = 60): 
     console.warn(`[Historical] Backend proxy failed for ${symbol}:`, e);
   }
 
-  // 2. Fallback to external PROXY_SERVICES
-  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?range=6mo&interval=1d`;
-
-  for (const p of PROXY_SERVICES) {
-    try {
-      const queryPart = yahooUrl.includes('?') ? yahooUrl.substring(yahooUrl.indexOf('?')) : '';
-      const targetUrl = p.name === 'vite-proxy' 
-        ? `${p.url}${yahooSymbol}${queryPart}&historical=true` 
-        : `${p.url}${encodeURIComponent(yahooUrl)}`;
-
-      const r = await fetch(targetUrl, { method: 'GET' });
-      if (!r.ok) continue;
-      const raw = await r.json();
-      const data = p.transform(raw);
-      const result = data?.chart?.result?.[0];
-      if (!result) continue;
-
-      const closes: number[] = result.indicators?.quote?.[0]?.close ?? [];
-      // Filter out null/undefined/0 entries that Yahoo sometimes includes
-      const validCloses = closes.filter((c: number | null) => typeof c === 'number' && c > 0) as number[];
-
-      if (validCloses.length >= 20) {
-        // Return the most recent `days` prices with oldest first
-        const subset = validCloses.slice(-days);
-        console.log(`✅ [Historical] Got ${subset.length} real prices for ${symbol} via ${p.name}`);
-        return subset;
-      }
-    } catch (e) {
-      console.warn(`[Historical] ${p.name} failed for ${symbol}:`, e);
-    }
-  }
-
-  throw new Error(`fetchHistoricalPrices: Unable to obtain real historical data for ${symbol}. All proxies failed.`);
+  throw new Error(`fetchHistoricalPrices: Unable to obtain real historical data for ${symbol}.`);
 };
 
 export interface StockFundamentals {
@@ -376,66 +281,7 @@ export const fetchHistoricalOHLCV = async (
     console.warn(`[OHLCV] Backend proxy failed for ${symbol}:`, e);
   }
 
-  // 2. Fallback to external PROXY_SERVICES
-  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?range=${encodeURIComponent(range)}&interval=${encodeURIComponent(interval)}`;
-
-  for (const p of PROXY_SERVICES) {
-    try {
-      const queryPart = yahooUrl.includes('?') ? yahooUrl.substring(yahooUrl.indexOf('?')) : '';
-      const targetUrl = p.name === 'vite-proxy'
-        ? `${p.url}${encodeURIComponent(yahooSymbol)}${queryPart}`
-        : `${p.url}${encodeURIComponent(yahooUrl)}`;
-
-      const r = await fetch(targetUrl, { method: 'GET' });
-      if (!r.ok) continue;
-      const raw = await r.json();
-      const data = p.transform(raw);
-      const result = data?.chart?.result?.[0];
-      if (!result) continue;
-
-      const timestamps: number[] = result.timestamp ?? [];
-      const quote = result.indicators?.quote?.[0];
-      const opens: Array<number | null> = quote?.open ?? [];
-      const highs: Array<number | null> = quote?.high ?? [];
-      const lows: Array<number | null> = quote?.low ?? [];
-      const closes: Array<number | null> = quote?.close ?? [];
-      const volumes: Array<number | null> = quote?.volume ?? [];
-
-      const out: YahooOHLCVBar[] = [];
-      for (let i = 0; i < timestamps.length; i++) {
-        const open = opens[i];
-        const high = highs[i];
-        const low = lows[i];
-        const close = closes[i];
-        const volume = volumes[i];
-
-        if (
-          typeof open !== 'number' || open <= 0 ||
-          typeof high !== 'number' || high <= 0 ||
-          typeof low !== 'number' || low <= 0 ||
-          typeof close !== 'number' || close <= 0
-        ) continue;
-
-        out.push({
-          timestamp: timestamps[i],
-          open,
-          high,
-          low,
-          close,
-          volume: typeof volume === 'number' && volume >= 0 ? volume : 0,
-        });
-      }
-
-      if (out.length >= 10) {
-        const sliced = typeof bars === 'number' ? out.slice(-bars) : out;
-        return sliced;
-      }
-    } catch (e) {
-      console.warn(`[OHLCV] ${p.name} failed for ${symbol}:`, e);
-    }
-  }
-
-  throw new Error(`fetchHistoricalOHLCV: Unable to obtain OHLCV data for ${symbol}. All proxies failed.`);
+  throw new Error(`fetchHistoricalOHLCV: Unable to obtain OHLCV data for ${symbol}.`);
 };
 
 /**
@@ -460,7 +306,6 @@ export const fetchIntradayPrices = async (symbol: string): Promise<number[]> => 
           const validCloses = closes.filter((c: number | null) => typeof c === 'number' && c > 0) as number[];
           
           if (validCloses.length > 0) {
-            console.log(`✅ [Intraday] Got ${validCloses.length} data points for ${symbol} via backend proxy`);
             return validCloses;
           }
         }
@@ -470,43 +315,7 @@ export const fetchIntradayPrices = async (symbol: string): Promise<number[]> => 
     }
   }
 
-  // Fallback to PROXY_SERVICES
-  const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?range=1d&interval=5m`;
-  for (const p of PROXY_SERVICES) {
-    try {
-      const queryPart = yahooUrl.includes('?') ? yahooUrl.substring(yahooUrl.indexOf('?')) : '';
-      const targetUrl = p.name === 'vite-proxy' 
-        ? `${p.url}${yahooSymbol}${queryPart}` 
-        : `${p.url}${encodeURIComponent(yahooUrl)}`;
-
-      const r = await fetch(targetUrl, { method: 'GET' });
-      if (!r.ok) continue;
-      
-      let raw;
-      // Handle different proxy response formats
-      if (p.name === 'allorigins') {
-         const json = await r.json();
-         raw = JSON.parse(json.contents);
-      } else {
-         raw = await r.json();
-      }
-      
-      const result = raw?.chart?.result?.[0];
-      if (!result) continue;
-
-      const closes: number[] = result.indicators?.quote?.[0]?.close ?? [];
-      const validCloses = closes.filter((c: number | null) => typeof c === 'number' && c > 0) as number[];
-
-      if (validCloses.length > 0) {
-        console.log(`✅ [Intraday] Got ${validCloses.length} data points for ${symbol} via ${p.name}`);
-        return validCloses;
-      }
-    } catch (e) {
-      console.warn(`[Intraday] ${p.name} failed for ${symbol}:`, e);
-    }
-  }
-
-  throw new Error(`fetchIntradayPrices: Unable to obtain intraday data for ${symbol}. All proxies failed.`);
+  throw new Error(`fetchIntradayPrices: Unable to obtain intraday data for ${symbol}.`);
 };
 
 /**
