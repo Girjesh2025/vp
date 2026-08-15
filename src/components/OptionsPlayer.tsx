@@ -4,14 +4,88 @@ import { ResponsiveContainer, Treemap, Tooltip, AreaChart, Area, XAxis, YAxis, C
 import { createChart, CandlestickSeries, ColorType, CrosshairMode, type CandlestickData, type UTCTimestamp } from 'lightweight-charts';
 import { fetchStockPrice, fetchHistoricalPrices, fetchHistoricalOHLCV } from '../utils/priceApi';
 
-// Nifty 50 subset for the Money Flux Treemap
-const NIFTY_50_SYMBOLS = [
-  'RELIANCE', 'TCS', 'HDFCBANK', 'ICICIBANK', 'INFY', 'ITC', 'SBI', 'L&T',
-  'BAJFINANCE', 'BHARTIARTL', 'KOTAKBANK', 'HINDUNILVR', 'AXISBANK',
-  'ASIANPAINT', 'MARUTI', 'HCLTECH', 'SUNPHARMA', 'TITAN', 'ULTRACEMCO',
-  'TATASTEEL', 'WIPRO', 'BAJAJFINSV', 'NESTLEIND', 'POWERGRID', 'M&M',
-  'NTPC', 'JSWSTEEL'
-];
+export interface IndexMeta {
+  id: string;
+  name: string;
+  title1: string;
+  title2: string;
+  yahooSymbol: string;
+  optionsSymbol: string;
+  symbols: string[];
+}
+
+export const INDEX_CONFIG: Record<string, IndexMeta> = {
+  'NSE:NIFTY': {
+    id: 'NSE:NIFTY',
+    name: 'NIFTY 50',
+    title1: 'NIFTY',
+    title2: '50',
+    yahooSymbol: '^NSEI',
+    optionsSymbol: 'NIFTY',
+    symbols: [
+      'RELIANCE', 'TCS', 'HDFCBANK', 'ICICIBANK', 'INFY', 'ITC', 'SBIN', 'LT',
+      'BAJFINANCE', 'BHARTIARTL', 'KOTAKBANK', 'HINDUNILVR', 'AXISBANK',
+      'ASIANPAINT', 'MARUTI', 'HCLTECH', 'SUNPHARMA', 'TITAN', 'ULTRACEMCO',
+      'TATASTEEL', 'WIPRO', 'BAJAJFINSV', 'NESTLEIND', 'POWERGRID', 'M&M',
+      'NTPC', 'JSWSTEEL'
+    ]
+  },
+  'NSE:BANKNIFTY': {
+    id: 'NSE:BANKNIFTY',
+    name: 'BANK NIFTY',
+    title1: 'BANK',
+    title2: 'NIFTY',
+    yahooSymbol: '^NSEBANK',
+    optionsSymbol: 'BANKNIFTY',
+    symbols: [
+      'HDFCBANK', 'ICICIBANK', 'SBIN', 'AXISBANK', 'KOTAKBANK',
+      'INDUSINDBK', 'PNB', 'AUBANK', 'BANKBARODA', 'FEDERALBNK',
+      'IDFCFIRSTB', 'BANDHANBNK'
+    ]
+  },
+  'BSE:SENSEX': {
+    id: 'BSE:SENSEX',
+    name: 'SENSEX',
+    title1: 'BSE',
+    title2: 'SENSEX',
+    yahooSymbol: '^BSESN',
+    optionsSymbol: 'NIFTY',
+    symbols: [
+      'RELIANCE', 'TCS', 'HDFCBANK', 'ICICIBANK', 'INFY', 'ITC', 'SBIN', 'LT',
+      'BHARTIARTL', 'KOTAKBANK', 'HINDUNILVR', 'AXISBANK', 'BAJFINANCE',
+      'ASIANPAINT', 'MARUTI', 'HCLTECH', 'SUNPHARMA', 'TITAN', 'ULTRACEMCO',
+      'TATASTEEL', 'WIPRO', 'BAJAJFINSV', 'NESTLEIND', 'POWERGRID', 'M&M',
+      'NTPC', 'JSWSTEEL', 'TECHM', 'INDUSINDBK'
+    ]
+  },
+  'NSE:FINNIFTY': {
+    id: 'NSE:FINNIFTY',
+    name: 'FIN NIFTY',
+    title1: 'FIN',
+    title2: 'NIFTY',
+    yahooSymbol: '^CNXFIN',
+    optionsSymbol: 'FINNIFTY',
+    symbols: [
+      'HDFCBANK', 'ICICIBANK', 'SBIN', 'AXISBANK', 'KOTAKBANK',
+      'BAJFINANCE', 'BAJAJFINSV', 'HDFCLIFE', 'SBILIFE', 'CHOLAFIN',
+      'MUTHOOTFIN', 'SHRIRAMFIN', 'PFC', 'RECLTD', 'ICICIPRULI'
+    ]
+  },
+  'NSE:MIDCPNIFTY': {
+    id: 'NSE:MIDCPNIFTY',
+    name: 'MIDCAP NIFTY',
+    title1: 'MIDCAP',
+    title2: 'NIFTY',
+    yahooSymbol: 'NIFTY_MIDCAP_100.NS',
+    optionsSymbol: 'MIDCPNIFTY',
+    symbols: [
+      'HDFCAMC', 'FEDERALBNK', 'IDFCFIRSTB', 'ASHOKLEY', 'AUROPHARMA',
+      'BHARATFORG', 'COFORGE', 'CONCOR', 'CUMMINSIND', 'DIXON',
+      'GODREJPROP', 'HINDPETRO', 'INDHOTEL', 'JUBLFOOD', 'LUPIN',
+      'MAXHEALTH', 'MPHASIS', 'PERSISTENT', 'POLYCAB', 'SAIL', 'TRENT', 'VOLTAS'
+    ]
+  }
+};
 
 const formatFluxChange = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
 
@@ -310,14 +384,22 @@ const Gauge = ({ value, title, displayValue, id }: { value: number, title: strin
 
 
 const OptionsPlayer = () => {
+  const [chartConfig, setChartConfig] = useState({ symbol: "NSE:NIFTY", interval: "D" });
+  const currentIndex = INDEX_CONFIG[chartConfig.symbol] || INDEX_CONFIG['NSE:NIFTY'];
   const [moneyFluxData, setMoneyFluxData] = useState<any[]>([]);
   const [sentimentValue, setSentimentValue] = useState(65); // Default to slightly bullish
   const [pcrValue, setPcrValue] = useState(70); // Default to slightly bullish
   const [rawPcr, setRawPcr] = useState<number>(1.2);
-  const [niftyData, setNiftyData] = useState<{price: number, pts: number, percent: number} | null>(null);
+  const [indexData, setIndexData] = useState<{
+    title1: string;
+    title2: string;
+    name: string;
+    price: number;
+    pts: number;
+    percent: number;
+  } | null>(null);
   const [liveMovers, setLiveMovers] = useState<any[]>([]);
 
-  const [chartConfig, setChartConfig] = useState({ symbol: "NSE:NIFTY", interval: "D" });
   const [chartMode, setChartMode] = useState<'internal' | 'tradingview'>('internal');
   const [internalSeries, setInternalSeries] = useState<Array<{ i: number; price: number }>>([]);
   const [internalLoading, setInternalLoading] = useState(false);
@@ -331,8 +413,8 @@ const OptionsPlayer = () => {
     return {
       'NSE:NIFTY': '^NSEI',
       'NSE:BANKNIFTY': '^NSEBANK',
-      'NSE:FINNIFTY': '^NSEI',
-      'NSE:MIDCPNIFTY': '^NSEI',
+      'NSE:FINNIFTY': '^CNXFIN',
+      'NSE:MIDCPNIFTY': 'NIFTY_MIDCAP_100.NS',
       'BSE:SENSEX': '^BSESN',
     };
   }, []);
@@ -460,13 +542,24 @@ const OptionsPlayer = () => {
   const STOCK_DOMAINS: Record<string, string> = {
     RELIANCE: 'ril.com', TCS: 'tcs.com', HDFCBANK: 'hdfcbank.com',
     ICICIBANK: 'icicibank.com', INFY: 'infosys.com', ITC: 'itcportal.com',
-    SBI: 'sbi.co.in', 'L&T': 'larsentoubro.com', BAJFINANCE: 'bajajfinserv.in',
-    BHARTIARTL: 'airtel.in', KOTAKBANK: 'kotak.com', HINDUNILVR: 'hul.co.in',
-    AXISBANK: 'axisbank.com', ASIANPAINT: 'asianpaints.com', MARUTI: 'marutisuzuki.com',
-    HCLTECH: 'hcltech.com', SUNPHARMA: 'sunpharma.com', TITAN: 'titancompany.in',
-    ULTRACEMCO: 'ultratechcement.com', TATASTEEL: 'tatasteel.com', WIPRO: 'wipro.com',
-    BAJAJFINSV: 'bajajfinserv.in', NESTLEIND: 'nestle.in', POWERGRID: 'powergridindia.com',
-    'M&M': 'mahindra.com', NTPC: 'ntpc.co.in', JSWSTEEL: 'jsw.in',
+    SBI: 'sbi.co.in', SBIN: 'sbi.co.in', 'L&T': 'larsentoubro.com', LT: 'larsentoubro.com',
+    BAJFINANCE: 'bajajfinserv.in', BHARTIARTL: 'airtel.in', KOTAKBANK: 'kotak.com',
+    HINDUNILVR: 'hul.co.in', AXISBANK: 'axisbank.com', ASIANPAINT: 'asianpaints.com',
+    MARUTI: 'marutisuzuki.com', HCLTECH: 'hcltech.com', SUNPHARMA: 'sunpharma.com',
+    TITAN: 'titancompany.in', ULTRACEMCO: 'ultratechcement.com', TATASTEEL: 'tatasteel.com',
+    WIPRO: 'wipro.com', BAJAJFINSV: 'bajajfinserv.in', NESTLEIND: 'nestle.in',
+    POWERGRID: 'powergridindia.com', 'M&M': 'mahindra.com', NTPC: 'ntpc.co.in',
+    JSWSTEEL: 'jsw.in', TECHM: 'techmahindra.com', TATAMOTORS: 'tatamotors.com',
+    INDUSINDBK: 'indusind.com', PNB: 'pnbindia.in', AUBANK: 'aubank.in',
+    BANKBARODA: 'bankofbaroda.in', FEDERALBNK: 'federalbank.co.in', IDFCFIRSTB: 'idfcfirstbank.com',
+    BANDHANBNK: 'bandhanbank.com', HDFCLIFE: 'hdfclife.com', SBILIFE: 'sbilife.co.in',
+    CHOLAFIN: 'cholamandalam.com', MUTHOOTFIN: 'muthootfinance.com', SHRIRAMFIN: 'shriramfinance.in',
+    PFC: 'pfcindia.com', RECLTD: 'recindia.nic.in', ICICIPRULI: 'iciciprulife.com',
+    ICICIGI: 'icicilombard.com', TRENT: 'trentlimited.com', POLYCAB: 'polycab.com',
+    DIXON: 'dixoninfo.com', ASHOKLEY: 'ashokleyland.com', AUROPHARMA: 'aurobindo.com',
+    COFORGE: 'coforge.com', PERSISTENT: 'persistent.com', CONCOR: 'concorindia.co.in',
+    VOLTAS: 'myvoltas.com', LUPIN: 'lupin.com', JUBLFOOD: 'jubilantfoodworks.com',
+    MAXHEALTH: 'maxhealthcare.in', HDFCAMC: 'hdfcfund.com'
   };
 
   useEffect(() => {
@@ -501,32 +594,39 @@ const OptionsPlayer = () => {
 
   useEffect(() => {
     let isMounted = true;
+    const targetConfig = INDEX_CONFIG[chartConfig.symbol] || INDEX_CONFIG['NSE:NIFTY'];
+
     const loadData = async () => {
-      // 1. Fetch Live Nifty 50 Data
+      // 1. Fetch Live Selected Index Data
       try {
-        const nifty = await fetchStockPrice('^NSEI');
-        if (nifty && isMounted) {
-          const pts = nifty.previousClose ? (nifty.price - nifty.previousClose) : (nifty.price * nifty.change / 100);
-          setNiftyData({
-            price: nifty.price,
+        const idxQuote = await fetchStockPrice(targetConfig.yahooSymbol);
+        if (idxQuote && isMounted) {
+          const pts = idxQuote.previousClose ? (idxQuote.price - idxQuote.previousClose) : (idxQuote.price * idxQuote.change / 100);
+          setIndexData({
+            title1: targetConfig.title1,
+            title2: targetConfig.title2,
+            name: targetConfig.name,
+            price: idxQuote.price,
             pts: Number(pts.toFixed(2)),
-            percent: nifty.change
+            percent: idxQuote.change
           });
         }
       } catch (e) {
-        console.warn('Failed to fetch Nifty 50', e);
+        console.warn(`Failed to fetch ${targetConfig.name}`, e);
       }
 
-      // 2. Fetch Money Flux and Movers Data
+      // 2. Fetch Money Flux and Movers Data for the Selected Index's Constituents
       const results: any[] = [];
       const batchSize = 10;
+      const symbolsToFetch = targetConfig.symbols;
       
-      for (let i = 0; i < NIFTY_50_SYMBOLS.length; i += batchSize) {
-        const batch = NIFTY_50_SYMBOLS.slice(i, i + batchSize);
+      for (let i = 0; i < symbolsToFetch.length; i += batchSize) {
+        const batch = symbolsToFetch.slice(i, i + batchSize);
         await Promise.allSettled(
           batch.map(async (symbol) => {
             try {
-              const data = await fetchStockPrice(`${symbol}.NS`);
+              const ticker = symbol.includes('.') ? symbol : `${symbol}.NS`;
+              const data = await fetchStockPrice(ticker);
               if (data && isMounted) {
                 // Determine color based on percentage change
                 let fill = '#e11d48'; // Rose 600 (Dark Red)
@@ -534,10 +634,10 @@ const OptionsPlayer = () => {
                 if (data.change > 2) fill = '#059669'; // Emerald 600 (Darker Green)
                 if (data.change < -2) fill = '#be123c'; // Rose 700 (Darker Red)
                 
-                // Size based on roughly standard market cap weighting
+                // Size based on market cap weighting
                 let size = 100;
-                if (['RELIANCE', 'HDFCBANK', 'ICICIBANK', 'INFY'].includes(symbol)) size = 500;
-                else if (['TCS', 'ITC', 'L&T', 'SBI'].includes(symbol)) size = 300;
+                if (['RELIANCE', 'HDFCBANK', 'ICICIBANK', 'INFY', 'TCS', 'SBIN', 'LT'].includes(symbol)) size = 500;
+                else if (['ITC', 'AXISBANK', 'KOTAKBANK', 'BHARTIARTL', 'BAJFINANCE'].includes(symbol)) size = 300;
 
                 const pts = data.previousClose ? (data.price - data.previousClose) : (data.price * data.change / 100);
 
@@ -573,7 +673,7 @@ const OptionsPlayer = () => {
         });
 
         setMoneyFluxData([{
-          name: 'NIFTY50',
+          name: targetConfig.name,
           children: [...enrichedResults].sort((a, b) => b.size - a.size)
         }]);
         
@@ -585,8 +685,7 @@ const OptionsPlayer = () => {
         
         // 3. Fetch Real Options Chain for PCR
         try {
-          const indexSymbol = chartConfig.symbol.replace('NSE:', '').replace('BSE:', '').replace('1!', '');
-          const optionsResponse = await fetch(`/api/options/${indexSymbol}`);
+          const optionsResponse = await fetch(`/api/options/${encodeURIComponent(targetConfig.optionsSymbol)}`);
           if (optionsResponse.ok) {
             const optionsData = await optionsResponse.json();
             if (optionsData && optionsData.filtered) {
@@ -662,8 +761,8 @@ const OptionsPlayer = () => {
   }, [moneyFluxChildren]);
 
   const moneyFluxTreemapData = useMemo(
-    () => [{ name: 'NIFTY50', children: [...moneyFluxChildren].sort((a: any, b: any) => b.size - a.size) }],
-    [moneyFluxChildren]
+    () => [{ name: currentIndex.name, children: [...moneyFluxChildren].sort((a: any, b: any) => b.size - a.size) }],
+    [currentIndex.name, moneyFluxChildren]
   );
 
   return (
@@ -750,16 +849,18 @@ const OptionsPlayer = () => {
             </div>
             
             <div className="flex flex-col xl:flex-row gap-4">
-              {/* Nifty 50 Card */}
+              {/* Selected Index Card */}
               <div className="w-full xl:w-56 bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-5 flex flex-col items-center justify-center shrink-0 shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent"></div>
-                <div className="text-3xl font-black text-blue-500 italic mb-3 tracking-tighter drop-shadow-md relative z-10">NIFTY<br/><span className="text-white">50</span></div>
+                <div className="text-3xl font-black text-blue-500 italic mb-3 tracking-tighter drop-shadow-md relative z-10 text-center leading-tight">
+                  {currentIndex.title1}<br/><span className="text-white">{currentIndex.title2}</span>
+                </div>
                 <div className="flex items-center gap-2 relative z-10">
-                  <span className={`font-bold text-sm ${niftyData && niftyData.pts >= 0 ? 'text-emerald-400 drop-shadow-[0_0_5px_rgba(52,211,153,0.5)]' : 'text-red-400 drop-shadow-[0_0_5px_rgba(248,113,113,0.5)]'}`}>
-                    {niftyData ? `${niftyData.pts > 0 ? 'UP' : 'DOWN'} ${Math.abs(niftyData.pts)} pts` : 'Loading...'}
+                  <span className={`font-bold text-sm ${indexData && indexData.pts >= 0 ? 'text-emerald-400 drop-shadow-[0_0_5px_rgba(52,211,153,0.5)]' : 'text-red-400 drop-shadow-[0_0_5px_rgba(248,113,113,0.5)]'}`}>
+                    {indexData ? `${indexData.pts >= 0 ? 'UP' : 'DOWN'} ${Math.abs(indexData.pts).toFixed(1)} pts` : 'Loading...'}
                   </span>
                   <span className="text-slate-300 text-xs font-medium">
-                    {niftyData ? `${niftyData.percent > 0 ? '↑' : '↓'} ${Math.abs(niftyData.percent)} %` : ''}
+                    {indexData ? `${indexData.percent >= 0 ? '↑' : '↓'} ${Math.abs(indexData.percent).toFixed(2)} %` : ''}
                   </span>
                 </div>
               </div>
@@ -966,7 +1067,7 @@ const OptionsPlayer = () => {
                       <h2 className="text-base font-bold text-white tracking-wide">Money Flux</h2>
                       <Info className="w-4 h-4 text-slate-400" />
                     </div>
-                    <p className="mt-1 text-[11px] uppercase tracking-[0.24em] text-slate-500">Institutional Heatmap</p>
+                    <p className="mt-1 text-[11px] uppercase tracking-[0.24em] text-slate-500">{currentIndex.name} Institutional Heatmap</p>
                   </div>
                   <div className="flex items-center gap-2 text-[11px] font-bold">
                     <span className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-emerald-300">
