@@ -717,6 +717,7 @@ const OptionsPlayer = () => {
           return {
             symbol: m.name,
             pts: m.pts,
+            change: m.change,
             color: isPos ? 'text-emerald-400' : 'text-rose-400',
             logoColor
           };
@@ -796,7 +797,13 @@ const OptionsPlayer = () => {
           <select
             className="bg-transparent text-sm font-medium text-slate-300 outline-none cursor-pointer hover:text-white transition-colors"
             value={chartConfig.symbol}
-            onChange={(e) => setChartConfig(prev => ({ ...prev, symbol: e.target.value }))}
+            onChange={(e) => {
+              const newSym = e.target.value;
+              setChartConfig(prev => ({ ...prev, symbol: newSym }));
+              setIndexData(null);
+              setLiveMovers([]);
+              setMoneyFluxData([]);
+            }}
           >
             <option value="NSE:NIFTY">Index: NIFTY 50</option>
             <option value="BSE:SENSEX">Index: SENSEX</option>
@@ -888,9 +895,16 @@ const OptionsPlayer = () => {
                     </div>
                     <div className="flex flex-col min-w-0">
                       <span className="text-[11px] font-bold text-slate-200 truncate">{mover.symbol}</span>
-                      <span className={`text-[11px] font-bold ${mover.color} drop-shadow-md`}>
-                        {mover.pts > 0 ? '+' : ''}{mover.pts}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-[11px] font-bold ${mover.color} drop-shadow-md`}>
+                          {mover.pts > 0 ? '+' : ''}{mover.pts}
+                        </span>
+                        {typeof mover.change === 'number' && (
+                          <span className={`text-[10px] font-medium opacity-80 ${mover.color}`}>
+                            {mover.change >= 0 ? '+' : ''}{mover.change.toFixed(1)}%
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
