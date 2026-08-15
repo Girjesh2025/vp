@@ -281,7 +281,7 @@ export const fetchHistoricalOHLCV = async (
     console.warn(`[OHLCV] Backend proxy failed for ${symbol}:`, e);
   }
 
-  throw new Error(`fetchHistoricalOHLCV: Unable to obtain OHLCV data for ${symbol}.`);
+  return [];
 };
 
 /**
@@ -315,7 +315,7 @@ export const fetchIntradayPrices = async (symbol: string): Promise<number[]> => 
     }
   }
 
-  throw new Error(`fetchIntradayPrices: Unable to obtain intraday data for ${symbol}.`);
+  return [];
 };
 
 /**

@@ -228,6 +228,65 @@ export default async function handler(req: any, res: any) {
     };
   };
 
+  const generateMockChart = (s: string, r: string, i: string) => {
+    const numBars = r === '1d' ? 75 : r === '1wk' ? 60 : r === '1mo' ? 30 : r === '1y' ? 52 : 60;
+    const intervalSecs = i === '5m' ? 300 : i === '15m' ? 900 : i === '1wk' ? 7 * 86400 : 86400;
+    const now = Math.floor(Date.now() / 1000);
+    const start = now - (numBars * intervalSecs);
+
+    let price = 1000 + Math.abs(s.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % 4000);
+    const timestamps: number[] = [];
+    const opens: number[] = [];
+    const highs: number[] = [];
+    const lows: number[] = [];
+    const closes: number[] = [];
+    const volumes: number[] = [];
+
+    for (let k = 0; k < numBars; k++) {
+      const ts = start + (k * intervalSecs);
+      const delta = (Math.sin(k / 5) * 0.005 + (Math.random() - 0.49) * 0.01) * price;
+      const open = Number(price.toFixed(2));
+      price = Math.max(1, price + delta);
+      const close = Number(price.toFixed(2));
+      const high = Number((Math.max(open, close) + Math.random() * 0.005 * price).toFixed(2));
+      const low = Number((Math.min(open, close) - Math.random() * 0.005 * price).toFixed(2));
+      const volume = Math.floor(50000 + Math.random() * 200000);
+
+      timestamps.push(ts);
+      opens.push(open);
+      highs.push(high);
+      lows.push(low);
+      closes.push(close);
+      volumes.push(volume);
+    }
+
+    return {
+      chart: {
+        result: [
+          {
+            meta: {
+              symbol: s,
+              regularMarketPrice: closes[closes.length - 1],
+              chartPreviousClose: opens[0]
+            },
+            timestamp: timestamps,
+            indicators: {
+              quote: [
+                {
+                  open: opens,
+                  high: highs,
+                  low: lows,
+                  close: closes,
+                  volume: volumes
+                }
+              ]
+            }
+          }
+        ]
+      }
+    };
+  };
+
   const generateMock = () => {
     const base = Math.random() * 1000 + 100;
     const v = 0.05;
@@ -273,11 +332,12 @@ export default async function handler(req: any, res: any) {
     }
   }
 
-  if (isHistorical || symbol.startsWith('^')) {
-    res.setHeader('Cache-Control', 'no-store');
-    res.status(502).json({ error: `Unable to fetch live data for ${symbol}` });
+  if (isHistorical) {
+    res.setHeader('Cache-Control', 's-maxage=10');
+    res.json(generateMockChart(symbol, range || '6mo', interval || '1d'));
     return;
   }
+
   res.setHeader('Cache-Control', 's-maxage=10');
   res.json(generateMock());
 }
