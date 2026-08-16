@@ -3,7 +3,7 @@ import ProfessionalHeader from '../ProfessionalHeader';
 import ProfessionalSidebar from '../ProfessionalSidebar';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, BarChart3, LayoutGrid, TrendingUp, TrendingDown, Activity, ExternalLink, RefreshCw } from 'lucide-react';
-import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, ReferenceLine } from 'recharts';
+import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, ReferenceLine, LabelList } from 'recharts';
 import { fetchStockPrice } from '../../utils/priceApi';
 import StockLogo from '../StockLogo';
 
@@ -124,24 +124,23 @@ const SECTOR_DEFINITIONS = [
 ];
 
 /** 
- * Compute a gradient color based on percentage change.
- * Deep red → orange → neutral → light green → deep green
+ * Compute a vibrant neon color based on percentage change.
  */
 const getHeatmapColor = (val: number): string => {
-    if (val <= -2.0) return '#b91c1c'; // Deep Red
-    if (val <= -1.0) return '#dc2626'; // Medium Red
-    if (val < 0) return '#ef4444'; // Light Red
-    if (val === 0) return '#475569'; // Neutral Gray
-    if (val < 1.0) return '#4ade80'; // Light Green
-    if (val < 2.0) return '#22c55e'; // Medium Green
-    return '#16a34a'; // Deep Green
-  };
+  if (val <= -2.0) return '#d50000'; // Deep Vivid Red
+  if (val <= -1.0) return '#ff1744'; // Electric Neon Red
+  if (val < 0) return '#ff5252'; // Bright Light Red
+  if (val === 0) return '#334155'; // Neutral Slate
+  if (val < 1.0) return '#00e676'; // Electric Neon Green
+  if (val < 2.0) return '#00c853'; // Vivid Emerald
+  return '#00b0ff'; // Super High Cyan / Green
+};
 
 /** Get a background glow color for heatmap tiles */
 const getHeatmapGlow = (val: number): string => {
-  if (val <= -1) return 'rgba(239,68,68,0.15)';
-  if (val >= 1) return 'rgba(34,197,94,0.15)';
-  return 'rgba(100,116,139,0.08)';
+  if (val <= -1) return 'rgba(255,23,68,0.35)';
+  if (val >= 1) return 'rgba(0,230,118,0.35)';
+  return 'rgba(100,116,139,0.1)';
 };
 
 const clamp = (value: number, min: number, max: number): number => {
@@ -200,6 +199,7 @@ const SectoralFlow: React.FC = () => {
   const [activeView, setActiveView] = useState<'chart' | 'heatmap'>('chart');
   const [highlightedSector, setHighlightedSector] = useState<string | null>(null);
   const [hoveredHeatmapTile, setHoveredHeatmapTile] = useState<string | null>(null);
+  const [sectorFilter, setSectorFilter] = useState<'all' | 'bullish' | 'bearish' | 'conviction'>('all');
   const [loadProgress, setLoadProgress] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
@@ -514,6 +514,29 @@ const SectoralFlow: React.FC = () => {
     );
   };
 
+  const filteredSectors = useMemo(() => {
+    if (sectorFilter === 'bullish') {
+      return SECTOR_DEFINITIONS.filter(sec => {
+        const sData = sectoralFlowData.find(s => s.name === sec.title);
+        return (sData?.displayChange ?? 0) > 0;
+      });
+    }
+    if (sectorFilter === 'bearish') {
+      return SECTOR_DEFINITIONS.filter(sec => {
+        const sData = sectoralFlowData.find(s => s.name === sec.title);
+        return (sData?.displayChange ?? 0) < 0;
+      });
+    }
+    if (sectorFilter === 'conviction') {
+      return [...SECTOR_DEFINITIONS].sort((a, b) => {
+        const sA = sectoralFlowData.find(s => s.name === a.title);
+        const sB = sectoralFlowData.find(s => s.name === b.title);
+        return (sB?.convictionScore ?? 0) - (sA?.convictionScore ?? 0);
+      });
+    }
+    return SECTOR_DEFINITIONS;
+  }, [sectorFilter, sectoralFlowData]);
+
   return (
     <div className="flex h-screen bg-[#0f1520] overflow-hidden text-slate-300">
       <ProfessionalSidebar activeTab="tools" onTabChange={handleTabChange} portfolioCount={0} />
@@ -614,52 +637,40 @@ const SectoralFlow: React.FC = () => {
                 </div>
 
                 {/* ─── Summary KPI Cards ─── */}
-                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-                  <div className="bg-[#131b26] rounded-xl p-4 border border-slate-800 relative overflow-hidden">
-                    <div className="absolute -top-4 -right-4 w-20 h-20 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Gaining</p>
-                    <p className="text-2xl font-black text-emerald-400">{gainingSectors}</p>
-                    <p className="text-[10px] text-slate-600 mt-1">sectors positive</p>
-                  </div>
-                  <div className="bg-[#131b26] rounded-xl p-4 border border-slate-800 relative overflow-hidden">
-                    <div className="absolute -top-4 -right-4 w-20 h-20 bg-red-500/10 rounded-full blur-2xl pointer-events-none" />
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Declining</p>
-                    <p className="text-2xl font-black text-red-400">{losingSectors}</p>
-                    <p className="text-[10px] text-slate-600 mt-1">sectors negative</p>
-                  </div>
-                  <div className="bg-[#131b26] rounded-xl p-4 border border-slate-800 relative overflow-hidden">
-                    <div className="absolute -top-4 -right-4 w-20 h-20 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Top Sector</p>
-                    <p className="text-lg font-black text-white">{topSector?.name || '-'}</p>
-                    <p className="text-[10px] text-emerald-400 font-bold mt-1">
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">
+                  <div className="bg-[#0e1622]/90 rounded-2xl p-4 border border-emerald-500/30 relative overflow-hidden shadow-[0_0_20px_rgba(0,230,118,0.08)]">
+                    <div className="absolute -top-6 -right-6 w-20 h-20 bg-emerald-500/20 rounded-full blur-xl pointer-events-none" />
+                    <p className="text-[10px] text-emerald-400 font-black uppercase tracking-[0.16em] mb-1">Top Leader</p>
+                    <p className="text-xl font-black text-white">{topSector?.name || '-'}</p>
+                    <p className="text-xs text-emerald-400 font-bold mt-1 font-mono">
                       {topSector ? formatSignedPct(topSector.displayChange) : '-'}
                     </p>
                   </div>
-                  <div className="bg-[#131b26] rounded-xl p-4 border border-slate-800 relative overflow-hidden">
-                    <div className="absolute -top-4 -right-4 w-20 h-20 bg-red-500/10 rounded-full blur-2xl pointer-events-none" />
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Bottom Sector</p>
-                    <p className="text-lg font-black text-white">{bottomSector?.name || '-'}</p>
-                    <p className="text-[10px] text-red-400 font-bold mt-1">
+                  <div className="bg-[#0e1622]/90 rounded-2xl p-4 border border-rose-500/30 relative overflow-hidden shadow-[0_0_20px_rgba(255,23,68,0.08)]">
+                    <div className="absolute -top-6 -right-6 w-20 h-20 bg-rose-500/20 rounded-full blur-xl pointer-events-none" />
+                    <p className="text-[10px] text-rose-400 font-black uppercase tracking-[0.16em] mb-1">Top Laggard</p>
+                    <p className="text-xl font-black text-white">{bottomSector?.name || '-'}</p>
+                    <p className="text-xs text-rose-400 font-bold mt-1 font-mono">
                       {bottomSector ? formatSignedPct(bottomSector.displayChange) : '-'}
                     </p>
                   </div>
-                  <div className="bg-[#131b26] rounded-xl p-4 border border-slate-800 relative overflow-hidden">
-                    <div className="absolute -top-4 -right-4 w-20 h-20 bg-sky-500/10 rounded-full blur-2xl pointer-events-none" />
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Coverage</p>
-                    <p className="text-2xl font-black text-sky-300">{coveragePct}%</p>
-                    <p className="text-[10px] text-slate-600 mt-1">{loadedSymbols} symbols loaded</p>
+                  <div className="bg-[#0e1622]/90 rounded-2xl p-4 border border-sky-500/30 relative overflow-hidden shadow-[0_0_20px_rgba(56,189,248,0.08)]">
+                    <div className="absolute -top-6 -right-6 w-20 h-20 bg-sky-500/20 rounded-full blur-xl pointer-events-none" />
+                    <p className="text-[10px] text-sky-400 font-black uppercase tracking-[0.16em] mb-1">Live Coverage</p>
+                    <p className="text-2xl font-black text-sky-300 font-mono">{coveragePct}%</p>
+                    <p className="text-[10px] text-slate-400 mt-1">{loadedSymbols} symbols loaded</p>
                   </div>
-                  <div className="bg-[#131b26] rounded-xl p-4 border border-slate-800 relative overflow-hidden">
-                    <div className="absolute -top-4 -right-4 w-20 h-20 bg-violet-500/10 rounded-full blur-2xl pointer-events-none" />
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Positive Breadth</p>
-                    <p className="text-2xl font-black text-violet-300">{positiveBreadthSectors}</p>
-                    <p className="text-[10px] text-slate-600 mt-1">sectors with more advancers</p>
+                  <div className="bg-[#0e1622]/90 rounded-2xl p-4 border border-violet-500/30 relative overflow-hidden shadow-[0_0_20px_rgba(168,85,247,0.08)]">
+                    <div className="absolute -top-6 -right-6 w-20 h-20 bg-violet-500/20 rounded-full blur-xl pointer-events-none" />
+                    <p className="text-[10px] text-violet-400 font-black uppercase tracking-[0.16em] mb-1">Market Breadth</p>
+                    <p className="text-2xl font-black text-violet-300 font-mono">{positiveBreadthSectors} / 12</p>
+                    <p className="text-[10px] text-slate-400 mt-1">sectors advancing</p>
                   </div>
-                  <div className="bg-[#131b26] rounded-xl p-4 border border-slate-800 relative overflow-hidden">
-                    <div className="absolute -top-4 -right-4 w-20 h-20 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">Best Setup</p>
+                  <div className="bg-[#0e1622]/90 rounded-2xl p-4 border border-amber-500/30 relative overflow-hidden shadow-[0_0_20px_rgba(245,158,11,0.08)] col-span-2 lg:col-span-1">
+                    <div className="absolute -top-6 -right-6 w-20 h-20 bg-amber-500/20 rounded-full blur-xl pointer-events-none" />
+                    <p className="text-[10px] text-amber-400 font-black uppercase tracking-[0.16em] mb-1">Best Setup</p>
                     <p className="text-lg font-black text-amber-300 truncate">{bestTradeSetup?.name || '-'}</p>
-                    <p className="text-[10px] text-slate-600 mt-1">{bestTradeSetup?.tradeSetup || '-'}</p>
+                    <p className="text-[10px] text-amber-200/80 mt-1 truncate">{bestTradeSetup?.tradeSetup || '-'}</p>
                   </div>
                 </div>
 
@@ -674,62 +685,73 @@ const SectoralFlow: React.FC = () => {
                 {/* ─── Main View: CHART or HEATMAP ─── */}
                 {activeView === 'chart' ? (
                   /* ════════════ CHART VIEW ════════════ */
-                  <div className="bg-[#131b26] border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800/60 bg-[#172030]">
+                  <div className="bg-[#0d131f] border border-slate-800/80 rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800/60 bg-[#111827]">
                       <div className="flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                        <h3 className="text-xs font-black text-slate-300 uppercase tracking-[0.15em]">Sector Momentum</h3>
+                        <div className="w-2.5 h-2.5 rounded-full bg-[#00e676] shadow-[0_0_10px_#00e676] animate-pulse" />
+                        <h3 className="text-xs font-black text-slate-200 uppercase tracking-[0.15em]">Sector Momentum (Live)</h3>
                       </div>
-                      <span className="text-[10px] text-slate-500 font-medium uppercase tracking-widest">Conviction-adjusted score using move, breadth, impulse and participation</span>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Conviction-adjusted score using move, breadth, impulse and participation</span>
                     </div>
-                    <div className="p-5 h-[500px]">
+                    <div className="p-5 h-[520px]">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={sectorMomentumLeaders} margin={{ top: 18, right: 12, left: -18, bottom: 34 }} barCategoryGap="24%">
+                        <BarChart data={sectorMomentumLeaders} margin={{ top: 28, right: 16, left: -14, bottom: 42 }} barCategoryGap="20%">
                           <defs>
-                            <linearGradient id="greenBar" x1="0" y1="1" x2="0" y2="0">
-                              <stop offset="0%" stopColor="#064e3b" stopOpacity={0.98} />
-                              <stop offset="65%" stopColor="#2bbd8a" stopOpacity={0.98} />
-                              <stop offset="100%" stopColor="#6ee7b7" stopOpacity={1} />
+                            <linearGradient id="neonGreenBar" x1="0" y1="1" x2="0" y2="0">
+                              <stop offset="0%" stopColor="#004d40" stopOpacity={0.9} />
+                              <stop offset="45%" stopColor="#00c853" stopOpacity={0.98} />
+                              <stop offset="85%" stopColor="#00e676" stopOpacity={1} />
+                              <stop offset="100%" stopColor="#b9f6ca" stopOpacity={1} />
                             </linearGradient>
-                            <linearGradient id="redBar" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="#7f1d1d" stopOpacity={0.98} />
-                              <stop offset="65%" stopColor="#ef4444" stopOpacity={0.98} />
-                              <stop offset="100%" stopColor="#fca5a5" stopOpacity={1} />
+                            <linearGradient id="neonRedBar" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#ff1744" stopOpacity={1} />
+                              <stop offset="45%" stopColor="#d50000" stopOpacity={0.98} />
+                              <stop offset="85%" stopColor="#880e4f" stopOpacity={0.9} />
+                              <stop offset="100%" stopColor="#310006" stopOpacity={0.9} />
                             </linearGradient>
                           </defs>
-                          <CartesianGrid strokeDasharray="2 4" vertical={false} stroke="#1e293b40" />
-                          <ReferenceLine y={0} stroke="#1f3348" strokeOpacity={0.9} />
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.06)" />
+                          <ReferenceLine y={0} stroke="rgba(255,255,255,0.25)" strokeWidth={1.5} />
                           <XAxis
                             dataKey="name"
                             type="category"
-                            axisLine={false}
+                            axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
                             tickLine={false}
-                            tick={{ fill: '#d6e0f0', fontSize: 10, fontWeight: 800 }}
-                            angle={-38}
+                            tick={{ fill: '#e2e8f0', fontSize: 11, fontWeight: 900 }}
+                            angle={-35}
                             textAnchor="end"
-                            tickMargin={4}
-                            height={40}
+                            tickMargin={8}
+                            height={48}
                           />
                           <YAxis
                             type="number"
                             axisLine={false}
                             tickLine={false}
-                            tick={{ fill: '#64748b', fontSize: 10, fontWeight: 600 }}
+                            tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 700 }}
                             domain={chartDomain}
                             tickFormatter={(v: number) => `${v > 0 ? '+' : ''}${v.toFixed(1)}%`}
                           />
-                          <Tooltip content={<CustomTooltip />} cursor={{ fill: '#172030', opacity: 0.18 }} />
-                          <Bar dataKey="value" radius={[10, 10, 3, 3]} barSize={32} minPointSize={5}>
+                          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+                          <Bar dataKey="value" radius={[8, 8, 8, 8]} barSize={34} minPointSize={4}>
+                            <LabelList
+                              dataKey="value"
+                              position="top"
+                              formatter={(val: number) => `${val > 0 ? '+' : ''}${val.toFixed(1)}%`}
+                              fill="#f8fafc"
+                              fontSize={11}
+                              fontWeight={900}
+                              offset={8}
+                            />
                             {sectorMomentumLeaders.map((entry, index) => (
                               <Cell
                                 key={`cell-${index}`}
-                                fill={entry.value >= 0 ? 'url(#greenBar)' : 'url(#redBar)'}
+                                fill={entry.value >= 0 ? 'url(#neonGreenBar)' : 'url(#neonRedBar)'}
                                 onClick={() => scrollToSector(entry.name)}
                                 style={{
                                   cursor: 'pointer',
                                   filter: entry.value >= 0
-                                    ? 'drop-shadow(0 8px 14px rgba(16,185,129,0.18))'
-                                    : 'drop-shadow(0 8px 14px rgba(239,68,68,0.16))'
+                                    ? 'drop-shadow(0 0 10px rgba(0,230,118,0.75)) drop-shadow(0 0 20px rgba(0,230,118,0.35))'
+                                    : 'drop-shadow(0 0 10px rgba(255,23,68,0.75)) drop-shadow(0 0 20px rgba(255,23,68,0.35))'
                                 }}
                               />
                             ))}
@@ -822,7 +844,7 @@ const SectoralFlow: React.FC = () => {
 
                 {/* ─── Sector Breakdown ─── */}
                 <div className="mt-8 pb-10">
-                  <div className="flex justify-between items-end mb-6">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-6">
                     <div className="flex items-center gap-3">
                       <div className="w-1.5 h-10 bg-gradient-to-b from-violet-500 to-indigo-600 rounded-full shadow-[0_0_10px_rgba(139,92,246,0.5)]" />
                       <div>
@@ -830,10 +852,58 @@ const SectoralFlow: React.FC = () => {
                         <p className="text-[11px] text-slate-400 font-bold tracking-[0.2em] uppercase mt-1">Live Component Prices • Click stock to open chart</p>
                       </div>
                     </div>
+
+                    {/* Sector Filters for high productivity */}
+                    <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-xl bg-[#111827] border border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => setSectorFilter('all')}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-black transition-all ${
+                          sectorFilter === 'all'
+                            ? 'bg-blue-600/30 text-sky-300 border border-sky-400/40 shadow-[0_0_10px_rgba(56,189,248,0.25)]'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        All (12)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSectorFilter('bullish')}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-black transition-all ${
+                          sectorFilter === 'bullish'
+                            ? 'bg-emerald-600/30 text-emerald-300 border border-emerald-400/40 shadow-[0_0_10px_rgba(0,230,118,0.25)]'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        🚀 Bullish Leaders
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSectorFilter('bearish')}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-black transition-all ${
+                          sectorFilter === 'bearish'
+                            ? 'bg-rose-600/30 text-rose-300 border border-rose-400/40 shadow-[0_0_10px_rgba(255,23,68,0.25)]'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        🔻 Bearish Laggards
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSectorFilter('conviction')}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-black transition-all ${
+                          sectorFilter === 'conviction'
+                            ? 'bg-amber-600/30 text-amber-300 border border-amber-400/40 shadow-[0_0_10px_rgba(245,158,11,0.25)]'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        ⚡ High Conviction
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
-                    {SECTOR_DEFINITIONS.map((sector) => {
+                    {filteredSectors.map((sector) => {
                       const sectorData = sectoralFlowData.find(s => s.name === sector.title);
                       const sectorChange = sectorData?.displayChange ?? 0;
                       const equalWeightChange = sectorData?.equalWeightValue ?? 0;
