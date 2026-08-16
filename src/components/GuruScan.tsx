@@ -35,7 +35,7 @@ const GURUS: GuruProfile[] = [
     quote: 'Expect the best, plan for the worst, and trade what you see, not what you think.',
     accentColor: '#00e676',
     icon: <TrendingUp className="w-5 h-5 text-emerald-400" />,
-    imageUrl: 'https://unavatar.io/twitter/markminervini'
+    imageUrl: '/gurus/minervini.jpg'
   },
   {
     id: 'buffett',
@@ -45,7 +45,7 @@ const GURUS: GuruProfile[] = [
     quote: 'It is far better to buy a wonderful company at a fair price than a fair company at a wonderful price.',
     accentColor: '#38bdf8',
     icon: <Shield className="w-5 h-5 text-sky-400" />,
-    imageUrl: 'https://unavatar.io/twitter/WarrenBuffett'
+    imageUrl: '/gurus/buffett.jpg'
   },
   {
     id: 'jhunjhunwala',
@@ -55,7 +55,7 @@ const GURUS: GuruProfile[] = [
     quote: 'Anticipate trend and benefit from it. Traders should go against human nature.',
     accentColor: '#f59e0b',
     icon: <Zap className="w-5 h-5 text-amber-400" />,
-    imageUrl: 'https://wsrv.nl/?url=upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Rakesh_Jhunjhunwala.jpg/440px-Rakesh_Jhunjhunwala.jpg&w=400&h=400&fit=cover'
+    imageUrl: '/gurus/jhunjhunwala.jpg'
   },
   {
     id: 'graham',
@@ -65,7 +65,7 @@ const GURUS: GuruProfile[] = [
     quote: 'The essence of investment management is the management of risks, not the management of returns.',
     accentColor: '#a855f7',
     icon: <DollarSign className="w-5 h-5 text-purple-400" />,
-    imageUrl: 'https://wsrv.nl/?url=upload.wikimedia.org/wikipedia/commons/2/2a/Benjamin_Graham_%281894-1976%29_portrait_on_23_March_1950.jpg&w=400&h=400&fit=cover'
+    imageUrl: '/gurus/graham.jpg'
   },
   {
     id: 'lynch',
@@ -75,7 +75,7 @@ const GURUS: GuruProfile[] = [
     quote: 'Know what you own, and know why you own it.',
     accentColor: '#ec4899',
     icon: <Star className="w-5 h-5 text-pink-400" />,
-    imageUrl: 'https://wsrv.nl/?url=upload.wikimedia.org/wikipedia/commons/thumb/d/d4/Peter_Lynch.jpg/440px-Peter_Lynch.jpg&w=400&h=400&fit=cover'
+    imageUrl: '/gurus/lynch.jpg'
   },
   {
     id: 'oneil',
@@ -85,7 +85,7 @@ const GURUS: GuruProfile[] = [
     quote: 'The whole secret to winning big in the stock market is to not be right all the time, but to lose the least amount possible when you are wrong.',
     accentColor: '#f43f5e',
     icon: <Activity className="w-5 h-5 text-rose-400" />,
-    imageUrl: 'https://wsrv.nl/?url=upload.wikimedia.org/wikipedia/en/b/b3/William_J._O%27Neil_%281933-2023%29_in_2018.jpg&w=400&h=400&fit=cover'
+    imageUrl: '/gurus/oneil.jpg'
   }
 ];
 
@@ -403,46 +403,41 @@ export default function GuruScan() {
               key={guru.id}
               type="button"
               onClick={() => setActiveGuruId(guru.id)}
-              className={`flex flex-col p-3 rounded-2xl border text-left transition-all duration-200 cursor-pointer select-none relative overflow-hidden group ${
+              className={`flex flex-col items-center text-center p-3.5 rounded-2xl border transition-all duration-200 cursor-pointer select-none relative overflow-hidden group ${
                 isActive
-                  ? 'bg-[#101520] border-sky-500/60 shadow-[0_0_20px_rgba(56,189,248,0.12)]'
+                  ? 'bg-[#101520] border-sky-500/80 shadow-[0_0_25px_rgba(56,189,248,0.15)] ring-1 ring-sky-500/50'
                   : 'bg-[#0c1017] border-slate-800 hover:border-slate-700 hover:bg-[#101520]'
               }`}
             >
               {/* Active Indicator Top Stripe */}
               {isActive && (
-                <div className="absolute top-0 left-0 right-0 h-1 bg-sky-400" />
+                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-sky-400 to-indigo-500" />
               )}
 
-              <div className="flex items-center justify-between mb-2">
-                <div className="relative">
-                  <img 
-                    src={guru.imageUrl} 
-                    alt={guru.name} 
-                    referrerPolicy="no-referrer"
-                    className={`w-11 h-11 rounded-xl object-cover border-2 transition ${
-                      isActive ? 'border-sky-400' : 'border-slate-800'
-                    }`}
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(guru.name)}&background=101520&color=fff`;
-                    }}
-                  />
-                  <div className="absolute -bottom-1 -right-1 p-1 rounded-md bg-[#0c1017] border border-slate-700 shadow">
-                    {guru.icon}
-                  </div>
-                </div>
+              {/* Large, Crystal Clear Portrait - NO FACE OVERLAYS */}
+              <div className="relative mb-2.5">
+                <img 
+                  src={guru.imageUrl} 
+                  alt={guru.name} 
+                  className={`w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover shadow-md transition-transform duration-200 group-hover:scale-105 ${
+                    isActive ? 'border-2 border-sky-400 shadow-sky-500/20' : 'border border-slate-800'
+                  }`}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(guru.name)}&background=101520&color=fff`;
+                  }}
+                />
                 
                 {isActive && (
-                  <span className="w-2 h-2 rounded-full bg-sky-400 animate-ping" />
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-sky-400 ring-2 ring-[#0c1017] animate-pulse" />
                 )}
               </div>
 
-              <h3 className={`font-black text-xs sm:text-sm truncate mt-1 ${
-                isActive ? 'text-white' : 'text-slate-300 group-hover:text-white'
+              <h3 className={`font-black text-xs sm:text-sm tracking-tight truncate w-full ${
+                isActive ? 'text-white' : 'text-slate-200 group-hover:text-white'
               }`}>
                 {guru.name}
               </h3>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-0.5 truncate">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5 truncate w-full">
                 {guru.title}
               </p>
             </button>
