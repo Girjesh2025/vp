@@ -544,8 +544,8 @@ const SectoralFlow: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         <ProfessionalHeader />
         
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar">
-          <div className="max-w-[1400px] mx-auto space-y-6">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar bg-[#080c14]">
+          <div className="w-full max-w-[1700px] mx-auto space-y-6">
             
             {/* Nav Back */}
             <button onClick={() => navigate('/app')} className="flex items-center gap-2 text-slate-400 hover:text-white text-sm font-medium transition-colors group">
@@ -636,41 +636,36 @@ const SectoralFlow: React.FC = () => {
                   </div>
                 </div>
 
-                {/* ─── Summary KPI Cards ─── */}
-                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">
-                  <div className="bg-[#0e1622]/90 rounded-2xl p-4 border border-emerald-500/30 relative overflow-hidden shadow-[0_0_20px_rgba(0,230,118,0.08)]">
-                    <div className="absolute -top-6 -right-6 w-20 h-20 bg-emerald-500/20 rounded-full blur-xl pointer-events-none" />
-                    <p className="text-[10px] text-emerald-400 font-black uppercase tracking-[0.16em] mb-1">Top Leader</p>
+                {/* ─── Summary KPI Cards (Clean Solid Fintech Style) ─── */}
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                  <div className="bg-[#0c1017] rounded-xl p-4 border border-slate-800/90">
+                    <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider mb-1">Top Leader</p>
                     <p className="text-xl font-black text-white">{topSector?.name || '-'}</p>
                     <p className="text-xs text-emerald-400 font-bold mt-1 font-mono">
                       {topSector ? formatSignedPct(topSector.displayChange) : '-'}
                     </p>
                   </div>
-                  <div className="bg-[#0e1622]/90 rounded-2xl p-4 border border-rose-500/30 relative overflow-hidden shadow-[0_0_20px_rgba(255,23,68,0.08)]">
-                    <div className="absolute -top-6 -right-6 w-20 h-20 bg-rose-500/20 rounded-full blur-xl pointer-events-none" />
-                    <p className="text-[10px] text-rose-400 font-black uppercase tracking-[0.16em] mb-1">Top Laggard</p>
+                  <div className="bg-[#0c1017] rounded-xl p-4 border border-slate-800/90">
+                    <p className="text-[10px] text-rose-400 font-bold uppercase tracking-wider mb-1">Top Laggard</p>
                     <p className="text-xl font-black text-white">{bottomSector?.name || '-'}</p>
                     <p className="text-xs text-rose-400 font-bold mt-1 font-mono">
                       {bottomSector ? formatSignedPct(bottomSector.displayChange) : '-'}
                     </p>
                   </div>
-                  <div className="bg-[#0e1622]/90 rounded-2xl p-4 border border-sky-500/30 relative overflow-hidden shadow-[0_0_20px_rgba(56,189,248,0.08)]">
-                    <div className="absolute -top-6 -right-6 w-20 h-20 bg-sky-500/20 rounded-full blur-xl pointer-events-none" />
-                    <p className="text-[10px] text-sky-400 font-black uppercase tracking-[0.16em] mb-1">Live Coverage</p>
+                  <div className="bg-[#0c1017] rounded-xl p-4 border border-slate-800/90">
+                    <p className="text-[10px] text-sky-400 font-bold uppercase tracking-wider mb-1">Live Coverage</p>
                     <p className="text-2xl font-black text-sky-300 font-mono">{coveragePct}%</p>
                     <p className="text-[10px] text-slate-400 mt-1">{loadedSymbols} symbols loaded</p>
                   </div>
-                  <div className="bg-[#0e1622]/90 rounded-2xl p-4 border border-violet-500/30 relative overflow-hidden shadow-[0_0_20px_rgba(168,85,247,0.08)]">
-                    <div className="absolute -top-6 -right-6 w-20 h-20 bg-violet-500/20 rounded-full blur-xl pointer-events-none" />
-                    <p className="text-[10px] text-violet-400 font-black uppercase tracking-[0.16em] mb-1">Market Breadth</p>
+                  <div className="bg-[#0c1017] rounded-xl p-4 border border-slate-800/90">
+                    <p className="text-[10px] text-violet-400 font-bold uppercase tracking-wider mb-1">Market Breadth</p>
                     <p className="text-2xl font-black text-violet-300 font-mono">{positiveBreadthSectors} / 12</p>
                     <p className="text-[10px] text-slate-400 mt-1">sectors advancing</p>
                   </div>
-                  <div className="bg-[#0e1622]/90 rounded-2xl p-4 border border-amber-500/30 relative overflow-hidden shadow-[0_0_20px_rgba(245,158,11,0.08)] col-span-2 lg:col-span-1">
-                    <div className="absolute -top-6 -right-6 w-20 h-20 bg-amber-500/20 rounded-full blur-xl pointer-events-none" />
-                    <p className="text-[10px] text-amber-400 font-black uppercase tracking-[0.16em] mb-1">Best Setup</p>
+                  <div className="bg-[#0c1017] rounded-xl p-4 border border-slate-800/90 col-span-2 lg:col-span-1">
+                    <p className="text-[10px] text-amber-400 font-bold uppercase tracking-wider mb-1">Best Setup</p>
                     <p className="text-lg font-black text-amber-300 truncate">{bestTradeSetup?.name || '-'}</p>
-                    <p className="text-[10px] text-amber-200/80 mt-1 truncate">{bestTradeSetup?.tradeSetup || '-'}</p>
+                    <p className="text-[10px] text-slate-400 mt-1 truncate">{bestTradeSetup?.tradeSetup || '-'}</p>
                   </div>
                 </div>
 
@@ -685,39 +680,37 @@ const SectoralFlow: React.FC = () => {
                 {/* ─── Main View: CHART or HEATMAP ─── */}
                 {activeView === 'chart' ? (
                   /* ════════════ CHART VIEW ════════════ */
-                  <div className="bg-[#0d131f] border border-slate-800/80 rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800/60 bg-[#111827]">
-                      <div className="flex items-center gap-3">
-                        <div className="w-2.5 h-2.5 rounded-full bg-[#00e676] shadow-[0_0_10px_#00e676] animate-pulse" />
+                  <div className="bg-[#0c1017] border border-slate-800 rounded-2xl overflow-hidden">
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-[#101520]">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-2 h-2 rounded-full bg-[#00e676]" />
                         <h3 className="text-xs font-black text-slate-200 uppercase tracking-[0.15em]">Sector Momentum (Live)</h3>
                       </div>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Conviction-adjusted score using move, breadth, impulse and participation</span>
+                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Conviction-adjusted score using move, breadth, impulse and participation</span>
                     </div>
                     <div className="p-5 h-[520px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={sectorMomentumLeaders} margin={{ top: 28, right: 16, left: -14, bottom: 42 }} barCategoryGap="20%">
                           <defs>
                             <linearGradient id="neonGreenBar" x1="0" y1="1" x2="0" y2="0">
-                              <stop offset="0%" stopColor="#004d40" stopOpacity={0.9} />
-                              <stop offset="45%" stopColor="#00c853" stopOpacity={0.98} />
-                              <stop offset="85%" stopColor="#00e676" stopOpacity={1} />
-                              <stop offset="100%" stopColor="#b9f6ca" stopOpacity={1} />
+                              <stop offset="0%" stopColor="#004d40" stopOpacity={1} />
+                              <stop offset="50%" stopColor="#00c853" stopOpacity={1} />
+                              <stop offset="100%" stopColor="#00e676" stopOpacity={1} />
                             </linearGradient>
                             <linearGradient id="neonRedBar" x1="0" y1="0" x2="0" y2="1">
                               <stop offset="0%" stopColor="#ff1744" stopOpacity={1} />
-                              <stop offset="45%" stopColor="#d50000" stopOpacity={0.98} />
-                              <stop offset="85%" stopColor="#880e4f" stopOpacity={0.9} />
-                              <stop offset="100%" stopColor="#310006" stopOpacity={0.9} />
+                              <stop offset="50%" stopColor="#d50000" stopOpacity={1} />
+                              <stop offset="100%" stopColor="#3e0007" stopOpacity={1} />
                             </linearGradient>
                           </defs>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.06)" />
-                          <ReferenceLine y={0} stroke="rgba(255,255,255,0.25)" strokeWidth={1.5} />
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                          <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" strokeWidth={1} />
                           <XAxis
                             dataKey="name"
                             type="category"
                             axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
                             tickLine={false}
-                            tick={{ fill: '#e2e8f0', fontSize: 11, fontWeight: 900 }}
+                            tick={{ fill: '#cbd5e1', fontSize: 11, fontWeight: 800 }}
                             angle={-35}
                             textAnchor="end"
                             tickMargin={8}
@@ -727,19 +720,19 @@ const SectoralFlow: React.FC = () => {
                             type="number"
                             axisLine={false}
                             tickLine={false}
-                            tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 700 }}
+                            tick={{ fill: '#64748b', fontSize: 11, fontWeight: 700 }}
                             domain={chartDomain}
                             tickFormatter={(v: number) => `${v > 0 ? '+' : ''}${v.toFixed(1)}%`}
                           />
-                          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-                          <Bar dataKey="value" radius={[8, 8, 8, 8]} barSize={34} minPointSize={4}>
+                          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+                          <Bar dataKey="value" radius={[6, 6, 6, 6]} barSize={34} minPointSize={4}>
                             <LabelList
                               dataKey="value"
                               position="top"
                               formatter={(val: number) => `${val > 0 ? '+' : ''}${val.toFixed(1)}%`}
-                              fill="#f8fafc"
+                              fill="#f1f5f9"
                               fontSize={11}
-                              fontWeight={900}
+                              fontWeight={800}
                               offset={8}
                             />
                             {sectorMomentumLeaders.map((entry, index) => (
@@ -747,12 +740,7 @@ const SectoralFlow: React.FC = () => {
                                 key={`cell-${index}`}
                                 fill={entry.value >= 0 ? 'url(#neonGreenBar)' : 'url(#neonRedBar)'}
                                 onClick={() => scrollToSector(entry.name)}
-                                style={{
-                                  cursor: 'pointer',
-                                  filter: entry.value >= 0
-                                    ? 'drop-shadow(0 0 10px rgba(0,230,118,0.75)) drop-shadow(0 0 20px rgba(0,230,118,0.35))'
-                                    : 'drop-shadow(0 0 10px rgba(255,23,68,0.75)) drop-shadow(0 0 20px rgba(255,23,68,0.35))'
-                                }}
+                                style={{ cursor: 'pointer' }}
                               />
                             ))}
                           </Bar>
@@ -928,67 +916,60 @@ const SectoralFlow: React.FC = () => {
                         <div 
                           key={sector.title} 
                           ref={el => (sectorRefs.current[sector.title] = el)}
-                          className={`relative group bg-gradient-to-br from-[#172030] to-[#0f1520] border rounded-2xl overflow-hidden shadow-xl scroll-mt-24 transition-all duration-500 hover:shadow-[0_8px_30px_rgba(0,0,0,0.4)] ${
+                          className={`relative group bg-[#0c1017] border rounded-2xl overflow-hidden scroll-mt-24 transition-all ${
                             highlightedSector === sector.title 
-                              ? 'border-violet-500 ring-4 ring-violet-500/30 scale-[1.02]' 
-                              : 'border-slate-700/50 hover:border-slate-500/50 hover:-translate-y-1'
+                              ? 'border-indigo-500 ring-2 ring-indigo-500/40' 
+                              : 'border-slate-800 hover:border-slate-700'
                           }`}
                         >
-                          {/* Subtle glow behind the card header */}
-                          <div className="absolute top-0 left-0 w-full h-32 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" style={{
-                            background: `linear-gradient(to bottom, ${isPositiveSector ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'}, transparent)`
-                          }} />
-
                           {/* Sector Header */}
-                          <div className="relative flex flex-col p-5 border-b border-slate-700/50" style={{
-                            background: `linear-gradient(135deg, ${isPositiveSector ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'}, transparent)`
-                          }}>
+                          <div className="relative flex flex-col p-4.5 border-b border-slate-800 bg-[#101520]">
                             <div className="flex justify-between items-start w-full">
                               <div>
-                                <h3 className="font-extrabold text-base text-white tracking-widest drop-shadow-md flex items-center gap-2">
+                                <h3 className="font-extrabold text-sm text-white tracking-wider flex items-center gap-2">
                                   {sector.ext || sector.title}
-                                  <span className="flex items-center gap-1.5 bg-red-500/10 border border-red-500/30 text-red-400 px-2 py-0.5 rounded-full text-[9px] font-black shadow-[0_0_10px_rgba(239,68,68,0.2)] uppercase tracking-wider">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_5px_currentColor]" /> LIVE
+                                  <span className="flex items-center gap-1.5 bg-red-500/10 border border-red-500/30 text-red-400 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> LIVE
                                   </span>
                                 </h3>
-                                <div className={`text-sm font-black mt-1 flex items-center gap-1.5 ${isPositiveSector ? 'text-emerald-400' : 'text-red-400'}`}>
+                                <div className={`text-base font-black mt-1 flex items-center gap-1.5 ${isPositiveSector ? 'text-emerald-400' : 'text-rose-400'}`}>
                                   {isPositiveSector ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
                                   {isPositiveSector ? '+' : ''}{sectorChange.toFixed(2)}%
                                 </div>
-                                <div className="mt-2 flex flex-wrap gap-2 text-[10px] font-bold tracking-wide">
-                                  <span className="rounded-full border border-slate-700/50 bg-[#0f1520] px-2.5 py-1 text-slate-300">
+                                <div className="mt-2.5 flex flex-wrap gap-1.5 text-[10px] font-bold">
+                                  <span className="rounded-md border border-slate-800 bg-[#090d14] px-2 py-0.5 text-slate-300">
                                     Equal Avg {equalWeightChange >= 0 ? '+' : ''}{equalWeightChange.toFixed(2)}%
                                   </span>
-                                  <span className="rounded-full border border-slate-700/50 bg-[#0f1520] px-2.5 py-1 text-slate-300">
+                                  <span className="rounded-md border border-slate-800 bg-[#090d14] px-2 py-0.5 text-slate-300">
                                     Breadth {(sectorData?.breadth ?? 0) >= 0 ? '+' : ''}{(sectorData?.breadth ?? 0).toFixed(1)}%
                                   </span>
-                                  <span className="rounded-full border border-slate-700/50 bg-[#0f1520] px-2.5 py-1 text-slate-300">
+                                  <span className="rounded-md border border-slate-800 bg-[#090d14] px-2 py-0.5 text-slate-300">
                                     Conviction {(sectorData?.convictionScore ?? 0).toFixed(0)}%
                                   </span>
-                                  <span className="rounded-full border border-slate-700/50 bg-[#0f1520] px-2.5 py-1 text-slate-300">
+                                  <span className={`rounded-md border px-2 py-0.5 ${isPositiveSector ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : 'border-rose-500/30 bg-rose-500/10 text-rose-300'}`}>
                                     {sectorData?.tradeSetup ?? 'Mixed'}
                                   </span>
                                 </div>
                               </div>
-                              <span className="text-[10px] font-black text-slate-400 bg-[#0f1520] shadow-inner border border-slate-700/50 px-2.5 py-1 rounded-lg tracking-widest uppercase">
+                              <span className="text-[10px] font-bold text-slate-400 bg-[#090d14] border border-slate-800 px-2.5 py-1 rounded-md tracking-wider uppercase">
                                 {totalTracked} ASSETS
                               </span>
                             </div>
                             
                             {/* Breadth Progress Bar */}
-                            <div className="w-full mt-5 space-y-2">
-                              <div className="w-full h-2.5 rounded-full flex overflow-hidden bg-slate-800/50 shadow-inner">
-                                <div className="h-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] transition-all duration-500" style={{ width: `${advancePct}%` }} />
-                                <div className="h-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)] transition-all duration-500" style={{ width: `${declinePct}%` }} />
+                            <div className="w-full mt-4 space-y-1.5">
+                              <div className="w-full h-2 rounded-full flex overflow-hidden bg-slate-900">
+                                <div className="h-full bg-[#00e676] transition-all duration-500" style={{ width: `${advancePct}%` }} />
+                                <div className="h-full bg-[#ff1744] transition-all duration-500" style={{ width: `${declinePct}%` }} />
                               </div>
-                              <div className="flex justify-between items-center text-[10px] font-bold tracking-wide">
+                              <div className="flex justify-between items-center text-[10px] font-bold">
                                 <span className="text-emerald-400 flex items-center gap-1.5">
-                                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_5px_currentColor]" />
-                                  {advances} stocks ({advancePct.toFixed(2)}% Up)
+                                  <div className="w-2 h-2 rounded-full bg-[#00e676]" />
+                                  {advances} stocks ({advancePct.toFixed(1)}% Up)
                                 </span>
-                                <span className="text-red-400 flex items-center gap-1.5">
-                                  <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_5px_currentColor]" />
-                                  {declines} stocks ({declinePct.toFixed(2)}% Down)
+                                <span className="text-rose-400 flex items-center gap-1.5">
+                                  <div className="w-2 h-2 rounded-full bg-[#ff1744]" />
+                                  {declines} stocks ({declinePct.toFixed(1)}% Down)
                                 </span>
                               </div>
                             </div>
