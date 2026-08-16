@@ -3,6 +3,7 @@ import { Info } from 'lucide-react';
 import { ResponsiveContainer, Treemap, Tooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { createChart, CandlestickSeries, ColorType, CrosshairMode, type CandlestickData, type UTCTimestamp } from 'lightweight-charts';
 import { fetchStockPrice, fetchHistoricalPrices, fetchHistoricalOHLCV } from '../utils/priceApi';
+import StockLogo from './StockLogo';
 
 export interface IndexMeta {
   id: string;
@@ -931,12 +932,8 @@ const OptionsPlayer = () => {
               {/* Movers Grid */}
               <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                 {topMovers.map(mover => (
-                  <div key={mover.symbol} className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-3 flex items-center gap-3 shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] hover:bg-white/10 transition-all cursor-pointer group">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10 flex items-center justify-center shrink-0 shadow-[0_2px_10px_rgba(0,0,0,0.3)] group-hover:scale-105 transition-transform overflow-hidden">
-                      <span className={`text-xs font-black ${mover.logoColor} tracking-wider`}>
-                        {mover.symbol.substring(0, 3)}
-                      </span>
-                    </div>
+                   <div key={mover.symbol} className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-3 flex items-center gap-3 shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] hover:bg-white/10 transition-all cursor-pointer group">
+                    <StockLogo symbol={mover.symbol} className="w-10 h-10 group-hover:scale-105 transition-transform" />
                     <div className="flex flex-col min-w-0">
                       <span className="text-[11px] font-bold text-slate-200 truncate">{mover.symbol}</span>
                       <div className="flex items-center gap-1.5">
