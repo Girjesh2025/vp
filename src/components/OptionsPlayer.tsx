@@ -147,14 +147,35 @@ const getFluxPalette = (change: number, strength?: number) => {
 };
 
 const SimpleFluxTile = (props: any) => {
-  const { depth, x, y, width, height, name, change = 0, strength } = props;
+  const { depth, x, y, width, height } = props;
   if (depth < 1 || width <= 2 || height <= 2) return null;
 
-  const palette = getFluxPalette(change, strength);
-  const showLabel = width > 40 && height > 22;
-  const showPercent = width > 52 && height > 36;
-  const displayName = name.length > 9 && width < 80 ? `${name.slice(0, 7)}..` : name;
-  const changeFormatted = `${change >= 0 ? '+' : ''}${typeof change === 'number' ? change.toFixed(1) : 0}%`;
+  const name = props.name || props.payload?.name || '';
+  const change = typeof props.change === 'number' 
+    ? props.change 
+    : typeof props.payload?.change === 'number' 
+      ? props.payload.change 
+      : 0;
+
+  // Ultra-vivid Electric Neon Colors
+  const isPos = change > 0;
+  const isNeg = change < 0;
+
+  let fillColor = '#1e293b';
+  let strokeColor = '#475569';
+
+  if (isPos) {
+    fillColor = change >= 1.5 ? '#00e676' : '#10b981';
+    strokeColor = change >= 1.5 ? '#b9f6ca' : '#6ee7b7';
+  } else if (isNeg) {
+    fillColor = change <= -1.5 ? '#ff1744' : '#f43f5e';
+    strokeColor = change <= -1.5 ? '#ff8a80' : '#fda4af';
+  }
+
+  const showLabel = width > 38 && height > 22;
+  const showPercent = width > 50 && height > 36;
+  const displayName = name.length > 8 && width < 74 ? `${name.slice(0, 6)}..` : name;
+  const changeFormatted = `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`;
 
   return (
     <g>
@@ -163,13 +184,13 @@ const SimpleFluxTile = (props: any) => {
         y={y + 1}
         width={Math.max(width - 2, 0)}
         height={Math.max(height - 2, 0)}
-        rx={5}
-        ry={5}
-        fill={palette.outer}
-        stroke={palette.edge}
-        strokeWidth={1.2}
+        rx={6}
+        ry={6}
+        fill={fillColor}
+        stroke={strokeColor}
+        strokeWidth={1.5}
         style={{
-          filter: 'drop-shadow(0 2px 5px rgba(0,0,0,0.4))',
+          filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.45))',
         }}
       />
       {showLabel && (
@@ -178,11 +199,11 @@ const SimpleFluxTile = (props: any) => {
           y={showPercent ? y + height / 2 - 6 : y + height / 2}
           fill="#ffffff"
           stroke="none"
-          fontSize={width > 90 && height > 45 ? 11 : 9.5}
+          fontSize={width > 85 && height > 42 ? 11.5 : 10}
           textAnchor="middle"
           dominantBaseline="middle"
-          fontWeight="800"
-          style={{ textShadow: '0 1px 3px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.6)' }}
+          fontWeight="900"
+          style={{ textShadow: '0 1px 3px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.7)' }}
         >
           {displayName}
         </text>
@@ -193,11 +214,11 @@ const SimpleFluxTile = (props: any) => {
           y={y + height / 2 + 8}
           fill="#ffffff"
           stroke="none"
-          fontSize={width > 90 && height > 45 ? 10 : 8.5}
+          fontSize={width > 85 && height > 42 ? 10.5 : 9}
           textAnchor="middle"
           dominantBaseline="middle"
-          fontWeight="700"
-          style={{ textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}
+          fontWeight="800"
+          style={{ textShadow: '0 1px 3px rgba(0,0,0,0.95)' }}
         >
           {changeFormatted}
         </text>
@@ -911,21 +932,9 @@ const OptionsPlayer = () => {
               <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                 {topMovers.map(mover => (
                   <div key={mover.symbol} className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-3 flex items-center gap-3 shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] hover:bg-white/10 transition-all cursor-pointer group">
-                    <div className="w-10 h-10 rounded-full bg-white/10 border border-white/5 flex items-center justify-center shrink-0 shadow-[0_0_10px_rgba(255,255,255,0.05)] group-hover:scale-105 transition-transform overflow-hidden">
-                      {STOCK_DOMAINS[mover.symbol] ? (
-                        <img
-                          src={`https://www.google.com/s2/favicons?domain=${STOCK_DOMAINS[mover.symbol]}&sz=64`}
-                          alt={mover.symbol}
-                          className="w-6 h-6 object-contain rounded-sm"
-                          onError={(e) => {
-                            const target = e.currentTarget;
-                            target.style.display = 'none';
-                            target.nextElementSibling?.classList.remove('hidden');
-                          }}
-                        />
-                      ) : null}
-                      <span className={`text-sm font-black ${mover.logoColor} drop-shadow-md ${STOCK_DOMAINS[mover.symbol] ? 'hidden' : ''}`}>
-                        {mover.symbol.substring(0, 2)}
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10 flex items-center justify-center shrink-0 shadow-[0_2px_10px_rgba(0,0,0,0.3)] group-hover:scale-105 transition-transform overflow-hidden">
+                      <span className={`text-xs font-black ${mover.logoColor} tracking-wider`}>
+                        {mover.symbol.substring(0, 3)}
                       </span>
                     </div>
                     <div className="flex flex-col min-w-0">
