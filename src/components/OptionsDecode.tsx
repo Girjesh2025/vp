@@ -156,65 +156,7 @@ const INDEX_TICKER_MAP: Record<Instrument, string> = {
   MIDCPNIFTY: 'NIFTY_MID_SELECT.NS',
 };
 
-const TRADINGVIEW_SYMBOL_MAP: Record<Instrument, string> = {
-  NIFTY: 'INDEX:NIFTY50',
-  BANKNIFTY: 'INDEX:BANKNIFTY',
-  FINNIFTY: 'INDEX:FINNIFTY',
-  MIDCPNIFTY: 'INDEX:MIDCPNIFTY',
-};
 
-const TradingViewEmbed: React.FC<{ instrument: Instrument; interval: IntervalOption }> = ({ instrument, interval }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    container.innerHTML = '';
-
-    const tvSymbol = TRADINGVIEW_SYMBOL_MAP[instrument] || `NSE:${instrument}`;
-    const tvInterval = interval === '1m' ? '1' : interval === '3m' ? '3' : interval === '15m' ? '15' : '5';
-
-    const script = document.createElement('script');
-    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
-    script.type = 'text/javascript';
-    script.async = true;
-    script.innerHTML = JSON.stringify({
-      autosize: true,
-      symbol: tvSymbol,
-      interval: tvInterval,
-      timezone: 'Asia/Kolkata',
-      theme: 'dark',
-      style: '1',
-      locale: 'in',
-      backgroundColor: '#0b0d10',
-      gridColor: 'rgba(255, 255, 255, 0.04)',
-      enable_publishing: false,
-      hide_side_toolbar: false,
-      allow_symbol_change: true,
-      save_image: true,
-      calendar: false,
-      support_host: 'https://www.tradingview.com',
-    });
-
-    const widgetDiv = document.createElement('div');
-    widgetDiv.className = 'tradingview-widget-container__widget';
-    widgetDiv.style.height = '100%';
-    widgetDiv.style.width = '100%';
-
-    container.appendChild(widgetDiv);
-    container.appendChild(script);
-
-    return () => {
-      if (container) {
-        container.innerHTML = '';
-      }
-    };
-  }, [instrument, interval]);
-
-  return (
-    <div className="tradingview-widget-container h-full w-full" ref={containerRef} style={{ height: '640px' }} />
-  );
-};
 
 const formatCompact = (value: number) => {
   const absValue = Math.abs(value);
@@ -726,7 +668,6 @@ const OptionsDecode = () => {
   const [selectedExpiry, setSelectedExpiry] = useState<string | null>(null);
   const [chainTimestamp, setChainTimestamp] = useState<string | null>(null);
   const [clockLabel, setClockLabel] = useState(getToolbarTimeLabel());
-  const [chartEngine, setChartEngine] = useState<'smartOi' | 'tradingview'>('smartOi');
   const [chartBars, setChartBars] = useState<YahooOHLCVBar[]>([]);
   const [candles, setCandles] = useState<CandlestickData<UTCTimestamp>[]>([]);
   const [chartLoading, setChartLoading] = useState(true);
@@ -1837,32 +1778,6 @@ const OptionsDecode = () => {
                   Historical
                 </button>
               </div>
-
-              {/* Chart Engine Switcher */}
-              <div className="flex rounded-xl border border-white/10 bg-white/[0.02] p-1">
-                <button
-                  type="button"
-                  onClick={() => setChartEngine('smartOi')}
-                  className={`rounded-lg px-2.5 py-1.5 text-xs font-black transition-all ${
-                    chartEngine === 'smartOi'
-                      ? 'bg-blue-500/25 text-sky-300 border border-sky-400/40 shadow-[0_0_12px_rgba(56,189,248,0.25)]'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  ⚡ Smart OI
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setChartEngine('tradingview')}
-                  className={`rounded-lg px-2.5 py-1.5 text-xs font-black transition-all ${
-                    chartEngine === 'tradingview'
-                      ? 'bg-blue-500/25 text-sky-300 border border-sky-400/40 shadow-[0_0_12px_rgba(56,189,248,0.25)]'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  📈 TradingView Pro
-                </button>
-              </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -1871,12 +1786,12 @@ const OptionsDecode = () => {
                   Refreshing chain...
                 </div>
               )}
-              {chartLoading && chartEngine === 'smartOi' && (
+              {chartLoading && (
                 <div className="rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-3 py-2 text-xs font-bold text-cyan-300">
                   Refreshing chart...
                 </div>
               )}
-              {isModeledSession && chartEngine === 'smartOi' && (
+              {isModeledSession && (
                 <div className="rounded-xl border border-violet-500/25 bg-violet-500/10 px-3 py-2 text-xs font-bold text-violet-300">
                   Session replay
                 </div>
@@ -1899,17 +1814,12 @@ const OptionsDecode = () => {
 
           <div className="grid gap-4 p-4 xl:grid-cols-[1.38fr_0.92fr]">
             <div className="overflow-hidden rounded-[22px] border border-white/6 bg-[#0b0d10] shadow-[0_18px_50px_rgba(0,0,0,0.34)]">
-              {chartEngine === 'tradingview' ? (
-                <div className="relative h-[640px] bg-[#0b0d10]">
-                  <TradingViewEmbed instrument={instrument} interval={interval} />
+              <div className="relative h-[640px] bg-[#0b0d10]">
+                <div className="pointer-events-none absolute left-3 top-2 z-10 flex items-center gap-2 text-[11px] font-black">
+                  <span className="text-slate-300">{instrument}</span>
+                  <span className="h-1 w-1 rounded-full bg-slate-500" />
+                  <span className="rounded border border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-sky-300">Smart OI</span>
                 </div>
-              ) : (
-                <div className="relative h-[640px] bg-[#0b0d10]">
-                  <div className="pointer-events-none absolute left-3 top-2 z-10 flex items-center gap-2 text-[11px] font-black">
-                    <span className="text-slate-300">{instrument}</span>
-                    <span className="h-1 w-1 rounded-full bg-slate-500" />
-                    <span className="rounded border border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-sky-300">Smart OI</span>
-                  </div>
 
                   {/* ONLY show tooltip when cursor is actively hovering over candles! */}
                   {chartHover && (
@@ -1940,8 +1850,7 @@ const OptionsDecode = () => {
                     <div ref={chartHostRef} className="h-full w-full" />
                   )}
                 </div>
-              )}
-            </div>
+              </div>
 
             <div className="space-y-4">
               <div className="rounded-[22px] border border-white/8 bg-[#050a14] p-3">
