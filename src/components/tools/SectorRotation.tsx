@@ -7,7 +7,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { 
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, LabelList,
-  Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis 
+  AreaChart, Area, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis 
 } from 'recharts';
 
 import { fetchSectorRawMonthly } from '../../utils/priceApi';
@@ -129,6 +129,21 @@ const SectorRotation: React.FC = () => {
     const handler = (e: MouseEvent) => {
       if (yearRef.current && !yearRef.current.contains(e.target as Node))
         setYearMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  type ChartType = 'bar' | 'radar' | 'area';
+  const [chartType, setChartType]                 = React.useState<ChartType>('bar');
+  const [chartTypeMenuOpen, setChartTypeMenuOpen] = React.useState(false);
+  const chartTypeRef = React.useRef<HTMLDivElement>(null);
+
+  // Close chart type dropdown on outside click
+  React.useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (chartTypeRef.current && !chartTypeRef.current.contains(e.target as Node))
+        setChartTypeMenuOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -440,8 +455,38 @@ const SectorRotation: React.FC = () => {
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#101520] border border-slate-700 rounded-lg text-xs font-bold text-slate-300">
-                      Bar Chart
+
+                    {/* Chart Type Selector Dropdown */}
+                    <div className="relative" ref={chartTypeRef}>
+                      <button
+                        type="button"
+                        onClick={() => setChartTypeMenuOpen(o => !o)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#101520] border border-slate-700 rounded-lg text-xs font-bold text-slate-200 cursor-pointer hover:bg-slate-800 transition select-none"
+                      >
+                        <span>{chartType === 'bar' ? 'Bar Chart' : chartType === 'radar' ? 'Radar Chart' : 'Area Chart'}</span>
+                        <ChevronDown className={`w-3 h-3 transition-transform ${chartTypeMenuOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                      {chartTypeMenuOpen && (
+                        <div className="absolute right-0 top-full mt-1 z-50 bg-[#101520] border border-slate-700 rounded-lg shadow-xl min-w-[130px] overflow-hidden py-1">
+                          {[
+                            { id: 'bar', label: 'Bar Chart' },
+                            { id: 'area', label: 'Area Chart' },
+                            { id: 'radar', label: 'Radar Chart' }
+                          ].map(item => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => { setChartType(item.id as ChartType); setChartTypeMenuOpen(false); }}
+                              className={`w-full text-left px-3.5 py-2 text-xs font-bold transition-colors flex items-center justify-between ${
+                                chartType === item.id ? 'bg-blue-600/30 text-sky-300' : 'text-slate-300 hover:bg-slate-800'
+                              }`}
+                            >
+                              {item.label}
+                              {chartType === item.id && <span className="text-sky-300">✓</span>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -503,6 +548,82 @@ const SectorRotation: React.FC = () => {
                       selectedMetric === 'capitalFlow'     ? 'Capital Flow' :
                       selectedMetric === 'volatilityIndex' ? 'Volatility' :
                       'Momentum';
+
+                    if (chartType === 'radar') {
+                      return (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <RadarChart cx="50%" cy="50%" outerRadius="75%" data={chartData}>
+                            <PolarGrid stroke="#334155" />
+                            <PolarAngleAxis dataKey="name" stroke="#94a3b8" tick={{ fill: '#cbd5e1', fontSize: 10, fontWeight: 700 }} />
+                            <PolarRadiusAxis stroke="#475569" domain={yDomain} tick={{ fill: '#64748b', fontSize: 9 }} />
+                            <Tooltip
+                              contentStyle={{
+                                backgroundColor: '#0c1017',
+                                border: '1px solid #334155',
+                                borderRadius: '8px',
+                                fontSize: '12px',
+                                color: '#f8fafc',
+                              }}
+                              formatter={(val: any) => [`${val}${tooltipSuffix}`, tooltipLabel]}
+                            />
+                            <Radar name={tooltipLabel} dataKey="value" stroke="#00e676" fill="#00e676" fillOpacity={0.4} />
+                          </RadarChart>
+                        </ResponsiveContainer>
+                      );
+                    }
+
+                    if (chartType === 'area') {
+                      return (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={chartData} margin={{ top: 24, right: 10, left: -20, bottom: 20 }}>
+                            <defs>
+                              <linearGradient id="areaFlowGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#00e676" stopOpacity={0.45} />
+                                <stop offset="95%" stopColor="#00e676" stopOpacity={0.0} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                            <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" strokeWidth={1} />
+                            <XAxis
+                              dataKey="name"
+                              axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                              tickLine={false}
+                              tick={{ fill: '#cbd5e1', fontSize: 11, fontWeight: 800 }}
+                              dy={6}
+                            />
+                            <YAxis
+                              axisLine={false}
+                              tickLine={false}
+                              tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }}
+                              domain={yDomain}
+                              ticks={yTicks}
+                            />
+                            <Tooltip
+                              cursor={{ stroke: 'rgba(255,255,255,0.2)' }}
+                              contentStyle={{
+                                backgroundColor: '#0c1017',
+                                border: '1px solid #334155',
+                                borderRadius: '8px',
+                                fontSize: '12px',
+                                color: '#f8fafc',
+                              }}
+                              formatter={(value: any) => [
+                                <span style={{ color: '#f8fafc', fontWeight: 'bold' }}>{`${!isAllPositive && value > 0 ? '+' : ''}${value}${tooltipSuffix}`}</span>,
+                                <span style={{ color: '#94a3b8' }}>{tooltipLabel}</span>,
+                              ]}
+                            />
+                            <Area
+                              type="monotone"
+                              dataKey="value"
+                              stroke="#00e676"
+                              strokeWidth={2.5}
+                              fillOpacity={1}
+                              fill="url(#areaFlowGrad)"
+                            />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      );
+                    }
 
                     return (
                       <ResponsiveContainer width="100%" height="100%">
