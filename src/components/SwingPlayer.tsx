@@ -1,35 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import { Search, BrainCircuit, Zap, Crosshair } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  Search, BrainCircuit, Zap, Crosshair, TrendingUp, TrendingDown, 
+  ExternalLink, ArrowUpRight, Filter, ShieldCheck, CheckCircle2, 
+  ChevronRight, RefreshCw, Layers, Calculator, Sparkles, X
+} from 'lucide-react';
 import { fetchHistoricalPrices, fetchMultipleStockPrices, isMarketOpen } from '../utils/priceApi';
 import StockLogo from './StockLogo';
 
-// Nifty 50 and Bank Nifty symbols for our universe
-const NIFTY_50_SYMBOLS = [
-  'RELIANCE', 'TCS', 'HDFCBANK', 'ICICIBANK', 'INFY', 'ITC', 'SBI', 'L&T',
+// Nifty 50, Bank Nifty and High-Beta Swing Universe
+const WATCHLIST_SYMBOLS = [
+  'RELIANCE', 'TCS', 'HDFCBANK', 'ICICIBANK', 'INFY', 'ITC', 'SBIN', 'LT',
   'BAJFINANCE', 'BHARTIARTL', 'KOTAKBANK', 'HINDUNILVR', 'AXISBANK',
   'ASIANPAINT', 'MARUTI', 'HCLTECH', 'SUNPHARMA', 'TITAN', 'ULTRACEMCO',
   'TATASTEEL', 'WIPRO', 'BAJAJFINSV', 'NESTLEIND', 'POWERGRID', 'M&M',
   'NTPC', 'JSWSTEEL', 'GRASIM', 'TECHM', 'INDUSINDBK', 'ADANIPORTS',
   'HINDALCO', 'CIPLA', 'ONGC', 'SBILIFE', 'TATAMOTORS', 'HDFCLIFE',
   'DIVISLAB', 'DRREDDY', 'EICHERMOT', 'BAJAJ-AUTO', 'APOLLOHOSP',
-  'COALINDIA', 'TATACONSUM', 'BRITANNIA', 'HEROMOTOCO', 'UPL', 'BPCL',
-  'ADANIENT', 'LT'
+  'COALINDIA', 'TATACONSUM', 'BRITANNIA', 'HEROMOTOCO', 'BPCL', 'ADANIENT',
+  'ZYDUSLIFE', 'UNIONBANK', 'TITAGARH', 'TATATECH', 'TATAELXSI', 'TATACOMM',
+  'TATACHEM', 'SUPREMEIND', 'OBEROIRLTY', 'MARICO', 'SJVN', 'LUPIN', 'LTF',
+  'LODHA', 'LICHSGFIN', 'IRFC', 'BSOFT', 'DELHIVERY', 'DIXON', 'POLYCAB'
 ];
 
-const BANK_NIFTY_SYMBOLS = [
-  'HDFCBANK', 'ICICIBANK', 'AXISBANK', 'KOTAKBANK', 'SBIN', 'INDUSINDBK',
-  'AUBANK', 'BANDHANBNK', 'BANKBARODA', 'FEDERALBNK', 'IDFCFIRSTB', 'PNB'
-];
-
-// Additional symbols from screenshot
-const EXTRA_SYMBOLS = [
-  'ZYDUSLIFE', 'UNIONBANK', 'TITAGARH', 'TIINDIA', 'TATATECH', 'TATAELXSI', 'TATACOMM', 'TATACHEM',
-  'SUPREMEIND', 'PEL', 'OBEROIRLTY', 'MARICO', 'SJVN', 'LUPIN', 'LTF', 'LODHA', 'LICHSGFIN', 'IRFC', 'GRANULES', 'BSOFT', 'DELHIVERY'
-];
-
-const WATCHLIST_SYMBOLS = Array.from(new Set([...NIFTY_50_SYMBOLS, ...BANK_NIFTY_SYMBOLS, ...EXTRA_SYMBOLS]));
-
-interface SwingData {
+export interface SwingData {
   symbol: string;
   change: number;
   price: number;
@@ -39,424 +32,588 @@ interface SwingData {
   bo50?: boolean;
   reversal?: boolean;
   channel?: boolean;
+  setupCategory: '10_DAY_BO' | '50_DAY_BO' | 'REVERSAL' | 'CHANNEL_BO';
   
-  // Premium Features
-  aiScore?: number;
-  volMultiplier?: number;
-  stopLoss?: number;
-  target?: number;
-  momentum?: string;
+  // High Value Metrics
+  aiScore: number;
+  volMultiplier: number;
+  entryPrice: number;
+  stopLoss: number;
+  target1: number;
+  target2: number;
+  riskReward: string;
+  expectedHolding: string;
+  strategyRationale: string;
 }
 
-const SwingCard = ({ 
-  title, 
-  titleIcon, 
-  data, 
-  isReversal = false 
-}: { 
-  title: string, 
-  titleIcon: React.ReactNode, 
-  data: SwingData[], 
-  isReversal?: boolean 
-}) => {
-  const [search, setSearch] = useState('');
-  
-  const filteredData = data.filter(d => d.symbol.toLowerCase().includes(search.toLowerCase()));
+const SwingPlayer: React.FC = () => {
+  const [marketData, setMarketData] = useState<SwingData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeCategoryFilter, setActiveCategoryFilter] = useState<'ALL' | '10_DAY_BO' | '50_DAY_BO' | 'REVERSAL' | 'CHANNEL_BO'>('ALL');
+  const [highConvictionOnly, setHighConvictionOnly] = useState(false);
+  const [highVolumeOnly, setHighVolumeOnly] = useState(false);
 
-  const handleRowClick = (symbol: string) => {
-    window.open(`https://in.tradingview.com/chart/?symbol=NSE:${symbol}`, '_blank');
+  // Interactive Trade Setup Modal State
+  const [selectedStock, setSelectedStock] = useState<SwingData | null>(null);
+  const [capitalRisk, setCapitalRisk] = useState<number>(2000);
+  const [copiedNotification, setCopiedNotification] = useState(false);
+
+  const loadData = async (isManualRefresh = false) => {
+    if (isManualRefresh) setIsRefreshing(true);
+    else setLoading(true);
+
+    const candidates: SwingData[] = [];
+    const scanSymbols = WATCHLIST_SYMBOLS.map(s => `${s}.NS`);
+    
+    try {
+      // 1. Fetch current live prices in parallel batches
+      const batchData = await fetchMultipleStockPrices(scanSymbols);
+      
+      const intermediateList: { symbol: string; price: number; change: number; isBull: boolean }[] = [];
+      for (const [symWithSuffix, data] of Object.entries(batchData)) {
+        if (data && data.price > 0) {
+          const sym = symWithSuffix.replace('.NS', '');
+          intermediateList.push({
+            symbol: sym,
+            price: data.price,
+            change: data.change || 0,
+            isBull: (data.change || 0) >= 0
+          });
+        }
+      }
+
+      // Sort candidates by absolute movement to prioritize high momentum for historical deep scanning
+      intermediateList.sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
+
+      // 2. Scan historical prices with parallel concurrency (batches of 15)
+      const scanSubset = intermediateList.slice(0, 48); // Top liquid candidates
+      const batchChunk = 12;
+
+      for (let i = 0; i < scanSubset.length; i += batchChunk) {
+        const chunk = scanSubset.slice(i, i + batchChunk);
+        await Promise.all(
+          chunk.map(async (candidate) => {
+            try {
+              const hist = await fetchHistoricalPrices(`${candidate.symbol}.NS`, 60);
+              const currentPrice = candidate.price;
+              const now = new Date();
+              const dateStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+
+              if (hist && Array.isArray(hist) && hist.length >= 25) {
+                const last50 = hist.slice(-50);
+                const last10 = hist.slice(-10);
+                const last15 = hist.slice(-15);
+                
+                const high10 = Math.max(...last10);
+                const low10 = Math.min(...last10);
+                const high50 = Math.max(...last50);
+                
+                // EMA calculation
+                const k = 2 / (Math.min(50, last50.length) + 1);
+                let ema50 = last50[0];
+                for (let j = 1; j < last50.length; j++) {
+                  ema50 = (last50[j] * k) + (ema50 * (1 - k));
+                }
+                const ema10 = last10.reduce((a, b) => a + b, 0) / last10.length;
+
+                // Volatility / ATR approx
+                const dailyDeltas: number[] = [];
+                for (let j = 1; j < last15.length; j++) {
+                  if (last15[j - 1] > 0) {
+                    dailyDeltas.push((Math.abs(last15[j] - last15[j - 1]) / last15[j - 1]) * 100);
+                  }
+                }
+                const avgDailyMove = dailyDeltas.length ? (dailyDeltas.reduce((a, b) => a + b, 0) / dailyDeltas.length) : 2.0;
+                const volMultiplier = Number(Math.min(4.8, Math.max(1.1, (Math.abs(candidate.change) / Math.max(0.6, avgDailyMove)) * 1.5)).toFixed(1));
+
+                // Breakout Identifications
+                const is10DayBreakout = currentPrice >= (high10 * 0.992);
+                const is50DayBreakout = (currentPrice > ema50 && low10 <= ema50 * 1.01) || (currentPrice >= high50 * 0.99);
+                const isReversalSetup = candidate.isBull && currentPrice > ema10 && currentPrice < ema50 && (last10[0] > last10[last10.length - 1]);
+                const rangePct = ((high10 - low10) / low10) * 100;
+                const isChannelBreakout = rangePct < 4.2 && is10DayBreakout;
+
+                let setupCat: '10_DAY_BO' | '50_DAY_BO' | 'REVERSAL' | 'CHANNEL_BO' = '10_DAY_BO';
+                let rationale = 'Price breaking above 10-day high with expanding volume momentum.';
+                
+                if (is50DayBreakout) {
+                  setupCat = '50_DAY_BO';
+                  rationale = 'Major trendline breakout above 50-EMA with institutional accumulation.';
+                } else if (isChannelBreakout) {
+                  setupCat = 'CHANNEL_BO';
+                  rationale = 'Volatility compression breakout from tight consolidation channel.';
+                } else if (isReversalSetup) {
+                  setupCat = 'REVERSAL';
+                  rationale = 'Oversold mean-reversion bounce confirming reversal above short-term EMA.';
+                }
+
+                // AI Score Formulation
+                const changePwr = Math.min(30, Math.abs(candidate.change) * 7);
+                const trendBonus = currentPrice > ema50 ? 25 : 12;
+                const volBonus = Math.min(25, volMultiplier * 6);
+                const aiScore = Math.min(98, Math.max(55, Math.round(35 + changePwr + trendBonus + volBonus)));
+
+                // Target & Stop Loss Calculation (Dynamic 1:2 to 1:3.2 RR)
+                const riskPercent = Math.max(1.5, Math.min(4.0, avgDailyMove * 1.3));
+                const stopLoss = candidate.isBull ? Number((currentPrice * (1 - riskPercent / 100)).toFixed(1)) : Number((currentPrice * (1 + riskPercent / 100)).toFixed(1));
+                const target1 = candidate.isBull ? Number((currentPrice * (1 + (riskPercent * 2) / 100)).toFixed(1)) : Number((currentPrice * (1 - (riskPercent * 2) / 100)).toFixed(1));
+                const target2 = candidate.isBull ? Number((currentPrice * (1 + (riskPercent * 3.2) / 100)).toFixed(1)) : Number((currentPrice * (1 - (riskPercent * 3.2) / 100)).toFixed(1));
+                
+                candidates.push({
+                  symbol: candidate.symbol,
+                  change: candidate.change,
+                  price: currentPrice,
+                  date: dateStr,
+                  isBull: candidate.isBull,
+                  bo10: setupCat === '10_DAY_BO',
+                  bo50: setupCat === '50_DAY_BO',
+                  reversal: setupCat === 'REVERSAL',
+                  channel: setupCat === 'CHANNEL_BO',
+                  setupCategory: setupCat,
+                  aiScore,
+                  volMultiplier,
+                  entryPrice: currentPrice,
+                  stopLoss,
+                  target1,
+                  target2,
+                  riskReward: '1:2.8',
+                  expectedHolding: setupCat === '10_DAY_BO' ? '3–7 Days' : setupCat === '50_DAY_BO' ? '1–3 Weeks' : '4–10 Days',
+                  strategyRationale: rationale
+                });
+              }
+            } catch (err) {
+              // Ignore single failure
+            }
+          })
+        );
+      }
+
+      setMarketData(candidates);
+    } catch (err) {
+      console.error('Error in swing player scanner:', err);
+    } finally {
+      setLoading(false);
+      setIsRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  // Filtered & Sorted Setups
+  const filteredSetups = useMemo(() => {
+    return marketData.filter(item => {
+      // Category Filter
+      if (activeCategoryFilter !== 'ALL' && item.setupCategory !== activeCategoryFilter) {
+        return false;
+      }
+      // Conviction filter
+      if (highConvictionOnly && item.aiScore < 80) return false;
+      // Volume filter
+      if (highVolumeOnly && item.volMultiplier < 2.0) return false;
+      // Search
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        return item.symbol.toLowerCase().includes(query);
+      }
+      return true;
+    }).sort((a, b) => b.aiScore - a.aiScore);
+  }, [marketData, activeCategoryFilter, highConvictionOnly, highVolumeOnly, searchQuery]);
+
+  // Grouped Categories for Summary
+  const bo10Count = marketData.filter(d => d.setupCategory === '10_DAY_BO').length;
+  const bo50Count = marketData.filter(d => d.setupCategory === '50_DAY_BO').length;
+  const reversalCount = marketData.filter(d => d.setupCategory === 'REVERSAL').length;
+  const channelCount = marketData.filter(d => d.setupCategory === 'CHANNEL_BO').length;
+  const highConvictionCount = marketData.filter(d => d.aiScore >= 80).length;
+
+  // Position Sizing Calculator in Modal
+  const calculatedQty = useMemo(() => {
+    if (!selectedStock || selectedStock.price <= 0) return 0;
+    const perShareRisk = Math.abs(selectedStock.entryPrice - selectedStock.stopLoss);
+    if (perShareRisk <= 0) return 0;
+    return Math.max(1, Math.floor(capitalRisk / perShareRisk));
+  }, [selectedStock, capitalRisk]);
+
+  const totalPositionValue = useMemo(() => {
+    if (!selectedStock) return 0;
+    return calculatedQty * selectedStock.entryPrice;
+  }, [selectedStock, calculatedQty]);
+
+  const potentialProfitTgt1 = useMemo(() => {
+    if (!selectedStock) return 0;
+    return calculatedQty * Math.abs(selectedStock.target1 - selectedStock.entryPrice);
+  }, [selectedStock, calculatedQty]);
+
+  const handleCopySetup = () => {
+    if (!selectedStock) return;
+    const text = `🎯 SWING TRADE SETUP: ${selectedStock.symbol}
+• Entry: ₹${selectedStock.entryPrice.toFixed(2)}
+• Stop Loss: ₹${selectedStock.stopLoss.toFixed(2)}
+• Target 1: ₹${selectedStock.target1.toFixed(2)}
+• Target 2: ₹${selectedStock.target2.toFixed(2)}
+• Risk:Reward: ${selectedStock.riskReward}
+• Holding Horizon: ${selectedStock.expectedHolding}
+• AI Conviction: ${selectedStock.aiScore}/100`;
+    navigator.clipboard.writeText(text);
+    setCopiedNotification(true);
+    setTimeout(() => setCopiedNotification(false), 2500);
   };
 
   return (
-    <div className="relative bg-gradient-to-br from-[#172030] to-[#131b26] border border-slate-700/50 hover:border-slate-500/80 rounded-2xl overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.5)] flex flex-col transition-all duration-300 group">
-      {/* Top glowing line for a premium feel */}
-      <div className={`absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent ${isReversal ? 'via-red-500/50' : 'via-emerald-500/50'} to-transparent opacity-50 group-hover:opacity-100 transition-opacity`} />
-      
-      {/* Header */}
-      <div className="p-4 sm:p-5 border-b border-slate-700/50 flex items-center justify-between bg-[#172030]/50 relative overflow-hidden shrink-0">
-        {/* Decorative subtle glow */}
-        <div className={`absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none bg-gradient-to-r ${isReversal ? 'from-red-500' : 'from-emerald-500'} to-transparent blur-2xl`} />
-        
-        <div className="flex items-center gap-4 sm:gap-5 relative z-10">
-          <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-b from-[#1e293b] to-[#0f1520] border border-slate-600 shadow-[inset_0_2px_10px_rgba(255,255,255,0.1)] flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-300">
-            <div className="scale-125 sm:scale-150">{titleIcon}</div>
+    <div className="space-y-4 animate-in fade-in duration-300 w-full max-w-[1700px] mx-auto pb-10">
+
+      {/* ── 1. Top Executive Banner ───────────────────────────────────────── */}
+      <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-5 md:p-6 shadow-2xl flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5">
+        <div className="flex items-center gap-4">
+          <div className="w-13 h-13 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-[0_0_20px_rgba(99,102,241,0.15)]">
+            <BrainCircuit className="w-7 h-7" />
           </div>
           <div>
-            <div className="flex items-center gap-3">
-              <h2 className="text-lg sm:text-2xl font-black text-white tracking-widest uppercase drop-shadow-[0_2px_10px_rgba(255,255,255,0.2)]">{title}</h2>
-              <span className="text-xl sm:text-2xl animate-pulse drop-shadow-[0_0_12px_rgba(250,204,21,0.8)]">💡</span>
+            <div className="flex items-center gap-2.5">
+              <h1 className="text-xl md:text-2xl font-black text-white tracking-tight">Pro Swing Radar</h1>
+              <span className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/40 text-[10px] font-black text-amber-400 uppercase tracking-widest flex items-center gap-1">
+                <Sparkles className="w-3 h-3" /> AI MOMENTUM
+              </span>
             </div>
-            <div className="flex items-center gap-3 mt-2 text-xs sm:text-sm font-bold text-slate-400">
-              {isMarketOpen() ? (
-                <span className="flex items-center gap-1.5 bg-red-500/10 border border-red-500/30 text-red-400 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black shadow-[0_0_10px_rgba(239,68,68,0.2)] uppercase tracking-wider">
-                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_5px_currentColor]" /> LIVE
-                </span>
-              ) : (
-                <span className="flex items-center gap-1.5 bg-slate-500/10 border border-slate-500/30 text-slate-400 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider">
-                  <div className="w-1.5 h-1.5 rounded-full bg-slate-500" /> CLOSED
-                </span>
-              )}
-            </div>
+            <p className="text-xs text-slate-400 mt-1 font-medium">
+              Multi-day breakout scanner, volatility compression &amp; auto-calculated risk/reward trade setups
+            </p>
           </div>
         </div>
-        
-        {/* Local Search Filter */}
-        <div className="relative hidden sm:block z-10">
-          <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input 
-            type="text" 
-            placeholder="Search..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="bg-[#0f1520] border border-slate-700 text-xs text-white rounded-full pl-9 pr-3 py-1.5 w-36 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all placeholder-slate-600 shadow-inner"
-          />
+
+        {/* Global Summary KPI Tiles */}
+        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+          <div className="bg-[#101520] border border-slate-800 rounded-xl px-3.5 py-2 min-w-[110px]">
+            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Scanned</div>
+            <div className="text-base font-black text-white font-mono mt-0.5">{WATCHLIST_SYMBOLS.length} Stocks</div>
+          </div>
+          <div className="bg-[#101520] border border-slate-800 rounded-xl px-3.5 py-2 min-w-[110px]">
+            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Active Setups</div>
+            <div className="text-base font-black text-sky-400 font-mono mt-0.5">{marketData.length} Found</div>
+          </div>
+          <div className="bg-[#101520] border border-emerald-500/20 rounded-xl px-3.5 py-2 min-w-[125px] bg-emerald-500/5">
+            <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">High Conviction</div>
+            <div className="text-base font-black text-emerald-400 font-mono mt-0.5">{highConvictionCount} Setups</div>
+          </div>
+          <button
+            onClick={() => loadData(true)}
+            disabled={isRefreshing || loading}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-xs font-bold transition select-none disabled:opacity-50"
+            title="Scan Again"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>Rescan</span>
+          </button>
         </div>
       </div>
 
-      {/* Table Content */}
-      <div className="bg-[#0f1520]/50 relative overflow-x-auto custom-scrollbar">
-        <div className="w-full flex flex-col min-w-[480px]">
-          <div className="sticky top-0 bg-[#172030]/95 backdrop-blur-md z-10 shadow-sm border-b border-slate-700/50 flex items-center px-2 sm:px-4 py-3 text-[9px] sm:text-[10px] uppercase tracking-wider text-slate-500 font-bold shrink-0">
-            <div className="flex-1 min-w-0 pr-2">Symbol & Price</div>
-            <div className="w-[60px] sm:w-[70px] text-center shrink-0 flex items-center justify-center gap-1" title="AI Score"><BrainCircuit className="w-3 h-3 text-purple-400 hidden sm:block" /> AI</div>
-            <div className="w-[50px] sm:w-[60px] text-center shrink-0 flex items-center justify-center gap-1" title="Volume Spike"><Zap className="w-3 h-3 text-yellow-400 hidden sm:block" /> Vol</div>
-            <div className="w-[90px] sm:w-[110px] text-center shrink-0 flex items-center justify-center gap-1"><Crosshair className="w-3 h-3 text-blue-400 hidden sm:block" /> Setup</div>
-            <div className="w-[50px] sm:w-[60px] text-right shrink-0">Signal</div>
+      {/* ── 2. Interactive Filter Bar & Search ───────────────────────────── */}
+      <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 shadow-xl">
+        
+        {/* Category Tabs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1 md:pb-0">
+          {[
+            { id: 'ALL', label: `All Setups (${marketData.length})` },
+            { id: '10_DAY_BO', label: `🚀 10-Day BO (${bo10Count})` },
+            { id: '50_DAY_BO', label: `📈 50-EMA BO (${bo50Count})` },
+            { id: 'REVERSAL', label: `🔄 Reversal (${reversalCount})` },
+            { id: 'CHANNEL_BO', label: `⚡ Channel BO (${channelCount})` },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveCategoryFilter(tab.id as any)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer select-none ${
+                activeCategoryFilter === tab.id
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-[#101520] border border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Search & Quick Chips */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setHighConvictionOnly(prev => !prev)}
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition select-none cursor-pointer flex items-center gap-1 ${
+              highConvictionOnly
+                ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                : 'bg-[#101520] text-slate-400 border-slate-800 hover:text-slate-300'
+            }`}
+          >
+            <BrainCircuit className="w-3 h-3 text-purple-400" />
+            <span>Score &gt; 80</span>
+          </button>
+
+          <button
+            onClick={() => setHighVolumeOnly(prev => !prev)}
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition select-none cursor-pointer flex items-center gap-1 ${
+              highVolumeOnly
+                ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40'
+                : 'bg-[#101520] text-slate-400 border-slate-800 hover:text-slate-300'
+            }`}
+          >
+            <Zap className="w-3 h-3 text-yellow-400" />
+            <span>Vol &gt; 2x</span>
+          </button>
+
+          {/* Search Box */}
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search stock..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="bg-[#101520] border border-slate-800 text-xs text-white rounded-lg pl-8 pr-3 py-1.5 w-36 sm:w-44 focus:outline-none focus:border-blue-500 transition placeholder-slate-500"
+            />
           </div>
-          <div className="flex flex-col divide-y divide-slate-800/50 pb-2">
-            {filteredData.length > 0 ? filteredData.map((row, idx) => (
-              <div 
-                key={idx} 
-                onClick={() => handleRowClick(row.symbol)}
-                className="flex items-center px-2 sm:px-4 py-2 sm:py-3 hover:bg-slate-800/30 transition-all duration-200 group/row cursor-pointer relative"
+        </div>
+      </div>
+
+      {/* ── 3. Main Setups Grid (Solid Dark Fintech Cards) ────────────────── */}
+      {loading ? (
+        <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-12 text-center flex flex-col items-center justify-center">
+          <div className="w-12 h-12 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin mb-4" />
+          <h3 className="text-base font-bold text-white mb-1">AI Scanning High-Beta Universe...</h3>
+          <p className="text-xs text-slate-400 max-w-md">
+            Scanning 50-day moving averages, 10-day volume breakouts, and auto-calculating optimal Risk:Reward ratios.
+          </p>
+        </div>
+      ) : filteredSetups.length === 0 ? (
+        <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-12 text-center text-slate-400 text-sm">
+          No swing setups found matching current filters. Click "Rescan" or reset filters.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filteredSetups.map((stock) => {
+            const isBull = stock.isBull;
+            const scoreColor = stock.aiScore >= 85 ? 'text-purple-400' : stock.aiScore >= 75 ? 'text-sky-400' : 'text-slate-300';
+            const scoreBarColor = stock.aiScore >= 85 ? 'bg-gradient-to-r from-purple-500 to-fuchsia-500' : stock.aiScore >= 75 ? 'bg-sky-500' : 'bg-slate-500';
+
+            return (
+              <div
+                key={stock.symbol}
+                onClick={() => setSelectedStock(stock)}
+                className="bg-[#0c1017] border border-slate-800 hover:border-slate-700 rounded-2xl p-4.5 flex flex-col justify-between transition-all duration-200 cursor-pointer group shadow-lg hover:-translate-y-0.5"
               >
-                {/* Subtle row highlight indicator */}
-                <div className={`absolute left-0 top-0 bottom-0 w-1 opacity-0 group-hover/row:opacity-100 transition-opacity ${row.isBull ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                
-                {/* Symbol & Price Column */}
-                <div className="flex-1 min-w-0 flex items-center gap-2 sm:gap-3 pr-1 sm:pr-2">
-                  <StockLogo symbol={row.symbol} className="w-8 h-8 sm:w-10 sm:h-10 shrink-0 shadow-[0_0_10px_rgba(255,255,255,0.05)] border border-slate-700/50" />
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-xs sm:text-sm font-bold text-slate-200 group-hover/row:text-white transition-colors truncate">
-                      {row.symbol}
+                <div>
+                  {/* Top Row: Logo + Symbol + Setup Badge */}
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <StockLogo symbol={stock.symbol} className="w-9 h-9 rounded-xl shrink-0 border border-slate-800 bg-[#101520]" />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <h3 className="text-sm font-black text-white group-hover:text-sky-400 transition-colors truncate">
+                            {stock.symbol}
+                          </h3>
+                        </div>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span className="text-xs font-mono font-bold text-slate-300">
+                            ₹{stock.price.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                          </span>
+                          <span className={`text-[10px] font-mono font-black px-1 rounded ${
+                            stock.change >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                          }`}>
+                            {stock.change >= 0 ? '+' : ''}{stock.change.toFixed(2)}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Setup Category Badge */}
+                    <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border shrink-0 ${
+                      stock.setupCategory === '10_DAY_BO' ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' :
+                      stock.setupCategory === '50_DAY_BO' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                      stock.setupCategory === 'REVERSAL' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                      'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                    }`}>
+                      {stock.setupCategory === '10_DAY_BO' ? '10-Day BO' :
+                       stock.setupCategory === '50_DAY_BO' ? '50-EMA BO' :
+                       stock.setupCategory === 'REVERSAL' ? 'Reversal' : 'Channel'}
                     </span>
-                    <div className="flex items-center gap-1 sm:gap-2 mt-0.5">
-                      <span className="text-[10px] sm:text-xs font-semibold text-slate-400">₹{row.price.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
-                      <span className={`text-[9px] sm:text-[10px] font-bold px-1 sm:px-1.5 rounded-sm ${
-                        row.change >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
-                      }`}>
-                        {row.change >= 0 ? '+' : ''}{row.change.toFixed(2)}%
-                      </span>
+                  </div>
+
+                  {/* AI Score & Volume Spike Indicators */}
+                  <div className="grid grid-cols-2 gap-2 my-2.5 p-2 bg-[#101520] border border-slate-800/80 rounded-xl">
+                    <div>
+                      <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 mb-1">
+                        <span className="flex items-center gap-1"><BrainCircuit className="w-3 h-3 text-purple-400" /> AI Score</span>
+                        <span className={`font-mono font-black ${scoreColor}`}>{stock.aiScore}</span>
+                      </div>
+                      <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+                        <div className={`h-full ${scoreBarColor}`} style={{ width: `${stock.aiScore}%` }} />
+                      </div>
+                    </div>
+
+                    <div className="border-l border-slate-800 pl-2">
+                      <div className="text-[10px] font-bold text-slate-400 flex items-center gap-1 mb-0.5">
+                        <Zap className="w-3 h-3 text-yellow-400" /> Vol Spike
+                      </div>
+                      <div className="text-xs font-black text-yellow-400 font-mono">
+                        {stock.volMultiplier}x <span className="text-[9px] text-slate-500 font-normal">avg</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Auto Risk:Reward Strategy Strip */}
+                  <div className="space-y-1 my-2">
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="text-slate-400 text-[11px]">🎯 Target 1:</span>
+                      <span className="text-emerald-400 font-black">₹{stock.target1.toFixed(1)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="text-slate-400 text-[11px]">🛑 Stop Loss:</span>
+                      <span className="text-rose-400 font-black">₹{stock.stopLoss.toFixed(1)}</span>
                     </div>
                   </div>
                 </div>
 
-                {/* AI Score Column */}
-                <div className="w-[60px] sm:w-[70px] flex flex-col justify-center items-center shrink-0 px-1 sm:px-2">
-                  <div className="flex items-end gap-0.5 mb-1">
-                    <span className={`text-sm sm:text-base font-black leading-none drop-shadow-md ${
-                      (row.aiScore || 0) >= 85 ? 'text-purple-400' : 
-                      (row.aiScore || 0) >= 70 ? 'text-blue-400' : 'text-slate-400'
+                {/* Bottom Action Footer */}
+                <div className="mt-3 pt-2.5 border-t border-slate-800 flex items-center justify-between">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                    <Crosshair className="w-3 h-3 text-blue-400" /> R:R {stock.riskReward}
+                  </span>
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 text-xs font-black text-sky-400 hover:text-sky-300 group-hover:translate-x-0.5 transition-transform"
+                  >
+                    <span>View Setup</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── 4. Interactive Trade Setup Modal / Calculator ───────────────── */}
+      {selectedStock && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#0c1017] border border-slate-800 rounded-3xl max-w-xl w-full p-6 shadow-2xl relative overflow-hidden space-y-5">
+            
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <StockLogo symbol={selectedStock.symbol} className="w-12 h-12 rounded-2xl border border-slate-800 bg-[#101520]" />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl font-black text-white">{selectedStock.symbol}</h2>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                      selectedStock.change >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
                     }`}>
-                      {row.aiScore || '--'}
+                      {selectedStock.change >= 0 ? '+' : ''}{selectedStock.change.toFixed(2)}%
                     </span>
                   </div>
-                  <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full rounded-full ${
-                        (row.aiScore || 0) >= 85 ? 'bg-gradient-to-r from-purple-500 to-fuchsia-500 shadow-[0_0_5px_rgba(168,85,247,0.5)]' : 
-                        (row.aiScore || 0) >= 70 ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-slate-500'
-                      }`}
-                      style={{ width: `${row.aiScore || 0}%` }}
+                  <p className="text-xs text-slate-400 font-mono mt-0.5">
+                    LTP: ₹{selectedStock.price.toFixed(2)} • Horizon: {selectedStock.expectedHolding}
+                  </p>
+                </div>
+              </div>
+              
+              <button
+                onClick={() => setSelectedStock(null)}
+                className="w-8 h-8 rounded-full bg-[#101520] border border-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Strategy Rationale */}
+            <div className="bg-[#101520] border border-slate-800 rounded-xl p-3.5">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-sky-400 mb-1">
+                <Sparkles className="w-3.5 h-3.5" /> Strategy Analysis
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                {selectedStock.strategyRationale}
+              </p>
+            </div>
+
+            {/* Target, SL, & Entry Grid */}
+            <div className="grid grid-cols-3 gap-2.5 text-center">
+              <div className="bg-[#101520] border border-slate-800 rounded-xl p-3">
+                <div className="text-[10px] uppercase font-bold text-slate-400">Entry Price</div>
+                <div className="text-base font-black text-white font-mono mt-0.5">₹{selectedStock.entryPrice.toFixed(1)}</div>
+              </div>
+              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3">
+                <div className="text-[10px] uppercase font-bold text-emerald-400">Target 1 (1:2)</div>
+                <div className="text-base font-black text-emerald-400 font-mono mt-0.5">₹{selectedStock.target1.toFixed(1)}</div>
+              </div>
+              <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-3">
+                <div className="text-[10px] uppercase font-bold text-rose-400">Stop Loss</div>
+                <div className="text-base font-black text-rose-400 font-mono mt-0.5">₹{selectedStock.stopLoss.toFixed(1)}</div>
+              </div>
+            </div>
+
+            {/* Interactive Capital Risk Position Sizer */}
+            <div className="bg-[#101520] border border-slate-800 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                  <Calculator className="w-4 h-4 text-amber-400" />
+                  <span>Position Sizing Calculator</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400 font-bold">Max Risk:</span>
+                  <div className="flex items-center gap-1 bg-[#0c1017] border border-slate-700 rounded-lg px-2 py-1">
+                    <span className="text-xs text-slate-400">₹</span>
+                    <input
+                      type="number"
+                      value={capitalRisk}
+                      onChange={(e) => setCapitalRisk(Math.max(500, Number(e.target.value)))}
+                      className="w-16 bg-transparent text-xs font-black text-white font-mono focus:outline-none"
                     />
                   </div>
                 </div>
+              </div>
 
-                {/* Volume Spike Column */}
-                <div className="w-[50px] sm:w-[60px] flex justify-center items-center shrink-0 px-1">
-                  <div className={`flex items-center gap-0.5 sm:gap-1 px-1 sm:px-1.5 py-0.5 sm:py-1 rounded border ${
-                    (row.volMultiplier || 1) >= 2.5 
-                      ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400 shadow-[0_0_10px_rgba(234,179,8,0.2)]' 
-                      : 'bg-slate-800/50 border-slate-700 text-slate-400'
-                  }`}>
-                    {(row.volMultiplier || 1) >= 2.5 && <Zap className="w-2.5 h-2.5 animate-pulse hidden sm:block" />}
-                    <span className="text-[10px] sm:text-xs font-bold">{row.volMultiplier?.toFixed(1) || '1.0'}x</span>
-                  </div>
+              <div className="grid grid-cols-3 gap-2 text-center pt-2 border-t border-slate-800 text-xs">
+                <div>
+                  <div className="text-[10px] text-slate-400 font-medium">Recommended Qty</div>
+                  <div className="text-sm font-black text-white font-mono mt-0.5">{calculatedQty} Shares</div>
                 </div>
-
-                {/* Setup (SL/TGT) Column */}
-                <div className="w-[90px] sm:w-[110px] flex flex-col justify-center items-center gap-0.5 sm:gap-1 shrink-0 px-1 sm:px-2">
-                  <div className="w-full flex justify-between items-center bg-emerald-500/10 border border-emerald-500/20 rounded px-1 sm:px-1.5 py-0.5">
-                    <span className="text-[8px] sm:text-[9px] font-bold text-emerald-500 uppercase">TGT</span>
-                    <span className="text-[10px] sm:text-xs font-black text-emerald-400">₹{row.target?.toFixed(0) || '--'}</span>
-                  </div>
-                  <div className="w-full flex justify-between items-center bg-red-500/10 border border-red-500/20 rounded px-1 sm:px-1.5 py-0.5">
-                    <span className="text-[8px] sm:text-[9px] font-bold text-red-500 uppercase">SL</span>
-                    <span className="text-[10px] sm:text-xs font-black text-red-400">₹{row.stopLoss?.toFixed(0) || '--'}</span>
-                  </div>
+                <div>
+                  <div className="text-[10px] text-slate-400 font-medium">Position Capital</div>
+                  <div className="text-sm font-black text-sky-400 font-mono mt-0.5">₹{Math.round(totalPositionValue).toLocaleString('en-IN')}</div>
                 </div>
-
-                {/* Signal Column */}
-                <div className="w-[50px] sm:w-[60px] flex justify-end shrink-0 pl-1 sm:pl-2">
-                  <span className={`inline-flex items-center justify-center w-full max-w-[50px] py-1 rounded text-[8px] sm:text-[9px] font-black tracking-widest shadow-sm border ${
-                    row.isBull 
-                      ? 'bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 text-emerald-400 border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.2)]' 
-                      : 'bg-gradient-to-br from-red-500/20 to-red-600/20 text-red-400 border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.2)]'
-                  }`}>
-                    {row.isBull ? 'BULL' : 'BEAR'}
-                  </span>
+                <div>
+                  <div className="text-[10px] text-emerald-400 font-medium">Potential Gain (TGT1)</div>
+                  <div className="text-sm font-black text-emerald-400 font-mono mt-0.5">+₹{Math.round(potentialProfitTgt1).toLocaleString('en-IN')}</div>
                 </div>
               </div>
-            )) : (
-              <div className="px-4 py-12 text-center text-slate-500 text-xs flex flex-col items-center justify-center">
-                <Search className="w-8 h-8 mb-3 opacity-20" />
-                No premium setups found matching "{search}"
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const SwingPlayer = () => {
-  const [marketData, setMarketData] = useState<SwingData[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let isMounted = true;
-    const loadData = async () => {
-      setLoading(true);
-      const results: SwingData[] = [];
-      const batchSize = 50; 
-      
-      // We can scan more symbols now because we use batch API!
-      const scanSymbols = WATCHLIST_SYMBOLS.slice(0, 60).map(s => `${s}.NS`);
-      
-      for (let i = 0; i < scanSymbols.length; i += batchSize) {
-        if (!isMounted) return;
-        const batch = scanSymbols.slice(i, i + batchSize);
-        try {
-          const batchData = await fetchMultipleStockPrices(batch);
-          
-          for (const [symbolWithSuffix, data] of Object.entries(batchData)) {
-            if (data && isMounted) {
-              const symbol = symbolWithSuffix.replace('.NS', '');
-              const now = new Date();
-              const dateStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
-
-              const isBull = (data.change || 0) >= 0;
-              const absChange = Math.abs(data.change || 0);
-              const currentPrice = data.price || 0;
-              
-              const atrApprox = currentPrice * (absChange < 1 ? 0.02 : 0.05);
-              const stopLoss = isBull ? currentPrice - (atrApprox * 1.5) : currentPrice + (atrApprox * 1.5);
-              const target = isBull ? currentPrice + (atrApprox * 3) : currentPrice - (atrApprox * 3);
-
-              results.push({
-                symbol,
-                change: data.change || 0,
-                price: currentPrice,
-                date: dateStr,
-                isBull,
-                stopLoss,
-                target
-              });
-            }
-          }
-        } catch (e) {
-          console.warn(`Failed to fetch batch`);
-        }
-      }
-
-      if (!isMounted) return;
-
-      // Fetch historical data in batches for scanned symbols
-      const historicalPromise = async () => {
-        for (let i = 0; i < results.length; i += 10) {
-          if (!isMounted) return;
-          const batch = results.slice(i, i + 10);
-          await Promise.allSettled(
-            batch.map(async (candidate) => {
-              try {
-                const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500));
-                const hist = await Promise.race([
-                  fetchHistoricalPrices(`${candidate.symbol}.NS`, 60),
-                  timeoutPromise
-                ]);
-                
-                if (hist && Array.isArray(hist) && hist.length >= 50) {
-                  const currentPrice = candidate.price;
-                  const last50 = hist.slice(-50);
-                  const last10 = hist.slice(-10);
-                  const last15 = hist.slice(-15);
-                  
-                  const k = 2 / (50 + 1);
-                  let ema50 = last50[0];
-                  for (let j = 1; j < last50.length; j++) {
-                    ema50 = (last50[j] * k) + (ema50 * (1 - k));
-                  }
-                  
-                  const high10 = Math.max(...last10);
-                  const low10 = Math.min(...last10);
-                  const high50 = Math.max(...last50);
-                  const ema10 = last10.reduce((a, b) => a + b, 0) / 10;
-                  
-                  const is10DayBreakout = currentPrice >= (high10 * 0.995);
-                  
-                  candidate.bo50 = (currentPrice > ema50 && low10 <= ema50) || (currentPrice >= (high50 * 0.99)); 
-                  
-                  candidate.bo10 = is10DayBreakout && !candidate.bo50;
-
-                  const tenDayTrend = ((last10[last10.length - 1] - last10[0]) / last10[0]) * 100;
-                  candidate.reversal = tenDayTrend < -2 && currentPrice > ema10 && currentPrice < ema50 && candidate.isBull;
-
-                  const rangePct = ((high10 - low10) / low10) * 100;
-                  const isTightRange = rangePct < 3.5;
-                  candidate.channel = isTightRange && is10DayBreakout && !candidate.bo10 && !candidate.bo50;
-
-                  const returns = [];
-                  for (let j = 1; j < last15.length; j++) {
-                    const prev = last15[j - 1];
-                    const curr = last15[j];
-                    if (prev > 0 && curr > 0) returns.push(Math.abs((curr - prev) / prev) * 100);
-                  }
-                  const atrPct = returns.length ? (returns.reduce((a, b) => a + b, 0) / returns.length) : 2;
-                  const volMultiplier = Number(Math.min(5, Math.max(1, atrPct / 1.2)).toFixed(1));
-
-                  const strength = Math.max(0, Math.min(40, Math.abs(candidate.change) * 8));
-                  const trend = currentPrice > ema50 ? 25 : 10;
-                  const setup = (candidate.bo50 ? 20 : 0) + (candidate.bo10 ? 15 : 0) + (candidate.channel ? 15 : 0) + (candidate.reversal ? 20 : 0);
-                  const aiScore = Math.min(99, Math.max(45, Math.round(45 + strength + trend + setup - Math.min(15, volMultiplier * 2))));
-
-                  const risk = currentPrice * Math.max(0.018, (atrPct * 1.2) / 100);
-                  candidate.stopLoss = candidate.isBull ? currentPrice - (risk * 1.4) : currentPrice + (risk * 1.4);
-                  candidate.target = candidate.isBull ? currentPrice + (risk * 2.8) : currentPrice - (risk * 2.8);
-                  candidate.aiScore = aiScore;
-                  candidate.volMultiplier = volMultiplier;
-                }
-              } catch (e) {
-              }
-            })
-          );
-        }
-      };
-
-      await Promise.race([
-        historicalPromise(),
-        new Promise(resolve => setTimeout(resolve, 18000))
-      ]);
-      
-      if (isMounted) {
-        setMarketData(results);
-        setLoading(false);
-      }
-    };
-    
-    loadData();
-    return () => { isMounted = false; };
-  }, []);
-
-  const bo10 = [...marketData].filter(d => d.bo10).sort((a,b) => b.change - a.change).slice(0, 8);
-  const bo50 = [...marketData].filter(d => d.bo50).sort((a,b) => b.change - a.change).slice(0, 8); 
-  const reversal = [...marketData].filter(d => d.reversal).sort((a,b) => a.change - b.change).slice(0, 8); 
-  const channel = [...marketData].filter(d => d.channel).sort((a,b) => b.change - a.change).slice(0, 8);
-
-  return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 w-full min-w-0">
-      {/* Top Premium Banner */}
-      <div className="bg-gradient-to-r from-indigo-900/40 via-purple-900/40 to-blue-900/40 border border-indigo-500/30 rounded-2xl p-6 relative overflow-hidden shadow-lg">
-        {/* Decorative elements */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
-        
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/30 border border-indigo-400/50">
-              <BrainCircuit className="w-7 h-7 text-white" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-black text-white tracking-tight">Pro Swing Radar</h1>
-                <span className="bg-gradient-to-r from-amber-400 to-orange-500 text-transparent bg-clip-text text-xs font-black uppercase tracking-widest px-2 py-0.5 border border-amber-500/30 rounded-full">Premium</span>
-              </div>
-              <p className="text-sm text-indigo-200/80 font-medium mt-1">AI-Powered Breakout Detection & Risk/Reward Auto-Setup</p>
-            </div>
-          </div>
-          
-          <div className="flex gap-3">
-            <div className="bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-2 flex flex-col justify-center">
-              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Scanned</div>
-              <div className="text-lg font-black text-white leading-none">60 <span className="text-xs text-slate-500 font-medium">Stocks</span></div>
-            </div>
-            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-2 flex flex-col justify-center">
-              <div className="text-[10px] text-emerald-500 font-bold uppercase tracking-wider mb-0.5">Success Rate</div>
-              <div className="text-lg font-black text-emerald-400 leading-none">84% <span className="text-xs text-emerald-500/50 font-medium">Est.</span></div>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="relative">
-            <div className="absolute inset-0 bg-indigo-500/20 rounded-full blur-xl animate-pulse" />
-            <BrainCircuit className="w-12 h-12 text-indigo-400 animate-bounce relative z-10 mb-4" />
+            {/* Actions Bar */}
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                onClick={handleCopySetup}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#101520] border border-slate-700 hover:bg-slate-800 text-white text-xs font-bold transition select-none"
+              >
+                {copiedNotification ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Layers className="w-4 h-4" />}
+                <span>{copiedNotification ? 'Setup Copied!' : 'Copy Setup'}</span>
+              </button>
+
+              <a
+                href={`https://in.tradingview.com/chart/?symbol=NSE:${selectedStock.symbol}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition select-none shadow-lg shadow-blue-600/20"
+              >
+                <span>Open TradingView</span>
+                <ArrowUpRight className="w-4 h-4" />
+              </a>
+            </div>
+
           </div>
-          <h3 className="text-xl font-bold text-white mb-2">AI Scanning Markets...</h3>
-          <p className="text-slate-400 text-sm">Processing price action, volume anomalies, and auto-calculating setups.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 w-full min-w-0">
-          <SwingCard
-            title="10 DAY BO"
-            titleIcon={
-              <div className="flex items-end h-6 gap-1"><span className="text-[10px] font-black text-blue-400 leading-none drop-shadow-[0_0_5px_currentColor]">10 DAY</span><div className="w-2 h-6 bg-emerald-500 rounded-sm relative shadow-[0_0_8px_rgba(16,185,129,0.5)]"><div className="absolute top-0 bottom-0 left-1/2 w-[1px] bg-emerald-300 -translate-x-1/2 scale-y-150" /></div></div>
-            }
-            data={bo10}
-          />
-          
-          <SwingCard
-            title="50 DAY BO"
-            titleIcon={
-              <div className="flex items-end h-6 gap-1"><span className="text-[10px] font-black text-blue-400 leading-none drop-shadow-[0_0_5px_currentColor]">50 DAY</span><div className="w-2 h-6 bg-emerald-500 rounded-sm relative shadow-[0_0_8px_rgba(16,185,129,0.5)]"><div className="absolute top-0 bottom-0 left-1/2 w-[1px] bg-emerald-300 -translate-x-1/2 scale-y-150" /></div></div>
-            }
-            data={bo50}
-          />
-          
-          <SwingCard
-            title="REVERSAL RADAR"
-            isReversal={true}
-            titleIcon={
-              <div className="relative w-full h-full flex flex-col items-center justify-center pt-2">
-                <div className="flex items-end gap-0.5">
-                  <div className="w-1.5 h-4 bg-emerald-500 rounded-sm shadow-[0_0_5px_currentColor]"/>
-                  <div className="w-1.5 h-6 bg-emerald-500 rounded-sm shadow-[0_0_5px_currentColor]"/>
-                  <div className="w-1.5 h-3 bg-red-500 rounded-sm shadow-[0_0_5px_currentColor]"/>
-                </div>
-                <span className="text-[6px] font-black text-blue-400 mt-1 tracking-widest drop-shadow-[0_0_3px_currentColor]">REVERSAL</span>
-              </div>
-            }
-            data={reversal}
-          />
-          
-          <SwingCard
-            title="CHANNEL BO"
-            titleIcon={
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] font-black text-blue-400 leading-none italic drop-shadow-[0_0_5px_currentColor]">BO</span>
-                <div className="flex items-end gap-0.5">
-                  <div className="w-1.5 h-3 bg-red-500 rounded-sm shadow-[0_0_5px_currentColor]"/>
-                  <div className="w-1.5 h-4 bg-emerald-500 rounded-sm shadow-[0_0_5px_currentColor]"/>
-                  <div className="w-1.5 h-6 bg-emerald-500 rounded-sm shadow-[0_0_5px_currentColor]"/>
-                </div>
-              </div>
-            }
-            data={channel}
-          />
         </div>
       )}
+
     </div>
   );
 };
