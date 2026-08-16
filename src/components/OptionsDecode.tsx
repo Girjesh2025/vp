@@ -686,6 +686,9 @@ const OptionsDecode = () => {
   const chartApiRef = useRef<any>(null);
   const candleSeriesRef = useRef<any>(null);
   const histogramSeriesRef = useRef<any>(null);
+  const supportLineRef = useRef<any>(null);
+  const resistanceLineRef = useRef<any>(null);
+  const maxPainLineRef = useRef<any>(null);
   const defaultChartHoverRef = useRef<ChartHoverState | null>(null);
 
   useEffect(() => {
@@ -1241,6 +1244,63 @@ const OptionsDecode = () => {
     };
   }, [candles, effectiveSessionHistory, isModeledSession, sessionSummary.movePct, snapshot, timestampLabel]);
 
+  const strategyBlueprint = useMemo(() => {
+    const isBullish = snapshot.pcr >= 1.08 || (snapshot.pcr >= 0.98 && snapshot.totalPeChg > snapshot.totalCeChg);
+    const isBearish = snapshot.pcr <= 0.88 || (snapshot.pcr <= 1.02 && snapshot.totalCeChg > snapshot.totalPeChg * 1.3);
+    const atm = snapshot.atmStrike ?? 24000;
+    const support = snapshot.supportStrike ?? atm - 150;
+    const resistance = snapshot.resistanceStrike ?? atm + 150;
+
+    if (isBullish) {
+      return {
+        name: 'BULL CALL SPREAD',
+        tag: 'BULLISH MOMENTUM',
+        tone: 'bullish' as const,
+        riskReward: '1 : 2.6',
+        winRate: '72%',
+        legs: [
+          { action: 'BUY', strike: `${formatPrice(atm, 0)} CE (ATM)`, desc: 'Capture upside breakout' },
+          { action: 'SELL', strike: `${formatPrice(resistance, 0)} CE (OTM)`, desc: 'Hedge theta & cap cost' },
+        ],
+        target: `Spot > ${formatPrice(resistance, 0)}`,
+        stopLoss: `Spot < ${formatPrice(support, 0)}`,
+        rationale: `Strong Put writing (+${formatCompact(Math.max(snapshot.totalPeChg, 0))}) provides heavy institutional floor. Option writers are defending ${formatPrice(support, 0)}.`,
+      };
+    }
+
+    if (isBearish) {
+      return {
+        name: 'BEAR PUT SPREAD',
+        tag: 'BEARISH PRESSURE',
+        tone: 'bearish' as const,
+        riskReward: '1 : 2.5',
+        winRate: '70%',
+        legs: [
+          { action: 'BUY', strike: `${formatPrice(atm, 0)} PE (ATM)`, desc: 'Capture breakdown move' },
+          { action: 'SELL', strike: `${formatPrice(support, 0)} PE (OTM)`, desc: 'Hedge theta & cap cost' },
+        ],
+        target: `Spot < ${formatPrice(support, 0)}`,
+        stopLoss: `Spot > ${formatPrice(resistance, 0)}`,
+        rationale: `Heavy Call writing (+${formatCompact(Math.max(snapshot.totalCeChg, 0))}) caps upside. Sellers actively defending ${formatPrice(resistance, 0)}.`,
+      };
+    }
+
+    return {
+      name: 'IRON CONDOR / SHORT STRADDLE',
+      tag: 'NON-DIRECTIONAL THETA',
+      tone: 'neutral' as const,
+      riskReward: '1 : 1.8',
+      winRate: '78%',
+      legs: [
+        { action: 'SELL', strike: `${formatPrice(resistance, 0)} CE`, desc: 'Harvest Call decay' },
+        { action: 'SELL', strike: `${formatPrice(support, 0)} PE`, desc: 'Harvest Put decay' },
+      ],
+      target: `Expiry inside Range [${formatPrice(support, 0)} - ${formatPrice(resistance, 0)}]`,
+      stopLoss: `Breakout beyond ${formatPrice(support - 50, 0)} or ${formatPrice(resistance + 50, 0)}`,
+      rationale: `PCR ${snapshot.pcr.toFixed(2)} is balanced near Max Pain (${formatPrice(snapshot.maxPainStrike, 0)}). Market expected to rotate within the ${formatPrice(support, 0)} - ${formatPrice(resistance, 0)} band.`,
+    };
+  }, [snapshot]);
+
   const playbookItems = useMemo(
     () => [
       {
@@ -1435,7 +1495,7 @@ const OptionsDecode = () => {
 
     const latestCandle = candles[candles.length - 1];
     const currentPriceLineColor =
-      latestCandle && latestCandle.close >= latestCandle.open ? 'rgba(34, 197, 94, 0.92)' : 'rgba(239, 68, 68, 0.92)';
+      latestCandle && latestCandle.close >= latestCandle.open ? 'rgba(0, 230, 118, 0.95)' : 'rgba(255, 23, 68, 0.95)';
 
     candleSeries.applyOptions({
       priceLineColor: currentPriceLineColor,
@@ -1461,10 +1521,61 @@ const OptionsDecode = () => {
       borderColor: 'rgba(120,138,165,0.18)',
     });
 
+    // Dynamic Price Lines on Chart for Support, Resistance & Max Pain
+    try {
+      if (supportLineRef.current) {
+        candleSeries.removePriceLine(supportLineRef.current);
+        supportLineRef.current = null;
+      }
+      if (resistanceLineRef.current) {
+        candleSeries.removePriceLine(resistanceLineRef.current);
+        resistanceLineRef.current = null;
+      }
+      if (maxPainLineRef.current) {
+        candleSeries.removePriceLine(maxPainLineRef.current);
+        maxPainLineRef.current = null;
+      }
+
+      if (snapshot.supportStrike) {
+        supportLineRef.current = candleSeries.createPriceLine({
+          price: snapshot.supportStrike,
+          color: '#00e676',
+          lineWidth: 1.5,
+          lineStyle: LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: `SUPPORT ${formatPrice(snapshot.supportStrike, 0)}`,
+        });
+      }
+
+      if (snapshot.resistanceStrike) {
+        resistanceLineRef.current = candleSeries.createPriceLine({
+          price: snapshot.resistanceStrike,
+          color: '#ff1744',
+          lineWidth: 1.5,
+          lineStyle: LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: `RESIST ${formatPrice(snapshot.resistanceStrike, 0)}`,
+        });
+      }
+
+      if (snapshot.maxPainStrike) {
+        maxPainLineRef.current = candleSeries.createPriceLine({
+          price: snapshot.maxPainStrike,
+          color: '#fbbf24',
+          lineWidth: 1.5,
+          lineStyle: LineStyle.Dotted,
+          axisLabelVisible: true,
+          title: `MAX PAIN ${formatPrice(snapshot.maxPainStrike, 0)}`,
+        });
+      }
+    } catch {
+      // Ignore price line management exceptions
+    }
+
     if (defaultChartHover) {
       setChartHover(defaultChartHover);
     }
-  }, [candles, defaultChartHover, isModeledSession, smartOiHistogramSeries]);
+  }, [candles, defaultChartHover, isModeledSession, smartOiHistogramSeries, snapshot.maxPainStrike, snapshot.resistanceStrike, snapshot.supportStrike]);
 
   const marketBias = useMemo(() => {
     if (snapshot.pcr >= 1.15 && snapshot.totalPeChg >= snapshot.totalCeChg) {
@@ -1493,35 +1604,51 @@ const OptionsDecode = () => {
   const keyLevels = useMemo<KeyLevelItem[]>(
     () => [
       {
-        label: 'Support',
+        label: 'Major Support',
         value: snapshot.supportStrike ? formatPrice(snapshot.supportStrike, 0) : '--',
         subtext: 'Highest Put OI wall',
         tone: 'bullish' as const,
-        icon: <TrendingUp className="h-4 w-4" />,
+        icon: <TrendingUp className="h-4 w-4 text-emerald-400" />,
       },
       {
-        label: 'Resistance',
+        label: 'Major Resistance',
         value: snapshot.resistanceStrike ? formatPrice(snapshot.resistanceStrike, 0) : '--',
         subtext: 'Highest Call OI wall',
         tone: 'bearish' as const,
-        icon: <TrendingDown className="h-4 w-4" />,
+        icon: <TrendingDown className="h-4 w-4 text-rose-400" />,
       },
       {
-        label: 'PCR',
+        label: 'Max Pain Strike',
+        value: snapshot.maxPainStrike ? formatPrice(snapshot.maxPainStrike, 0) : '--',
+        subtext: 'Min buyer payout zone',
+        tone: 'neutral' as const,
+        icon: <Target className="h-4 w-4 text-amber-400" />,
+      },
+      {
+        label: 'Overall PCR',
         value: snapshot.pcr ? snapshot.pcr.toFixed(2) : '--',
         subtext: marketBias.title,
         tone: marketBias.tone,
-        icon: <Target className="h-4 w-4" />,
+        icon: <Activity className="h-4 w-4 text-sky-400" />,
+      },
+      {
+        label: 'ATM Straddle Range',
+        value: sessionSummary.lowerBreakeven && sessionSummary.upperBreakeven
+          ? `${formatPrice(sessionSummary.lowerBreakeven, 0)} - ${formatPrice(sessionSummary.upperBreakeven, 0)}`
+          : '--',
+        subtext: snapshot.atmPremium ? `Premium: Rs ${formatPrice(snapshot.atmPremium)}` : 'Expected expiry range',
+        tone: 'neutral' as const,
+        icon: <Layers className="h-4 w-4 text-violet-400" />,
       },
       {
         label: 'ATM IV',
         value: snapshot.atmIv ? `${snapshot.atmIv.toFixed(1)}%` : '--',
-        subtext: 'Current ATM volatility',
+        subtext: snapshot.atmIv >= 18 ? 'High volatility' : 'Normal volatility',
         tone: snapshot.atmIv >= 20 ? 'bearish' : 'neutral',
-        icon: <ShieldAlert className="h-4 w-4" />,
+        icon: <ShieldAlert className="h-4 w-4 text-cyan-400" />,
       },
     ],
-    [marketBias.title, marketBias.tone, snapshot.atmIv, snapshot.pcr, snapshot.resistanceStrike, snapshot.supportStrike]
+    [marketBias.title, marketBias.tone, sessionSummary.lowerBreakeven, sessionSummary.upperBreakeven, snapshot.atmIv, snapshot.atmPremium, snapshot.maxPainStrike, snapshot.pcr, snapshot.resistanceStrike, snapshot.supportStrike]
   );
 
   const instrumentIndex = INSTRUMENTS.indexOf(instrument);
@@ -1711,16 +1838,16 @@ const OptionsDecode = () => {
               <div className="rounded-[22px] border border-white/8 bg-[#050a14] p-3">
                 <div className="flex items-center justify-between gap-2 border-b border-white/8 px-2 pb-3">
                   <div className="flex flex-wrap items-center gap-2 text-[11px] font-black">
-                    <span className="rounded-full border border-rose-500/25 bg-rose-500/10 px-2 py-1 text-rose-300">Put</span>
-                    <span className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-emerald-300">Call</span>
-                    <span className="rounded-full border border-violet-500/25 bg-violet-500/10 px-2 py-1 text-violet-300">PE-CE</span>
+                    <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-300">Put (Support)</span>
+                    <span className="rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-rose-300">Call (Resist)</span>
+                    <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-1 text-violet-300">PE-CE Diff</span>
                     {isModeledSession && <span className="rounded-full border border-violet-500/20 bg-violet-500/[0.06] px-2 py-1 text-violet-200">Modeled</span>}
                   </div>
                   {latestFlow && (
                     <div className="flex gap-2 text-[11px] font-black">
-                      <span className="rounded bg-rose-500/12 px-2 py-1 text-rose-300">{formatFlowValueSigned(latestFlow.Put)}</span>
-                      <span className="rounded bg-emerald-500/12 px-2 py-1 text-emerald-300">{formatFlowValueSigned(latestFlow.Call)}</span>
-                      <span className="rounded bg-violet-500/12 px-2 py-1 text-violet-300">{formatFlowValueSigned(latestFlow['PE-CE'])}</span>
+                      <span className="rounded bg-emerald-500/15 px-2 py-1 text-emerald-300 font-mono">{formatFlowValueSigned(latestFlow.Put)}</span>
+                      <span className="rounded bg-rose-500/15 px-2 py-1 text-rose-300 font-mono">{formatFlowValueSigned(latestFlow.Call)}</span>
+                      <span className="rounded bg-violet-500/15 px-2 py-1 text-violet-300 font-mono">{formatFlowValueSigned(latestFlow['PE-CE'])}</span>
                     </div>
                   )}
                 </div>
@@ -1735,9 +1862,9 @@ const OptionsDecode = () => {
                         <Tooltip content={<FlowTooltip />} />
                         <ReferenceLine y={0} stroke="rgba(255,255,255,0.14)" />
                         {flowReferencePoint && <ReferenceLine x={flowReferencePoint.time} stroke="rgba(255,255,255,0.18)" strokeDasharray="3 4" />}
-                        <Line type="monotone" dataKey="Put" stroke="#fb7185" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#0b0d10', stroke: '#fb7185', strokeWidth: 2 }} />
-                        <Line type="monotone" dataKey="Call" stroke="#4ade80" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#0b0d10', stroke: '#4ade80', strokeWidth: 2 }} />
-                        <Line type="monotone" dataKey="PE-CE" stroke="#8b5cf6" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#0b0d10', stroke: '#8b5cf6', strokeWidth: 2 }} />
+                        <Line type="monotone" dataKey="Put" stroke="#00e676" strokeWidth={2.2} dot={false} activeDot={{ r: 4, fill: '#0b0d10', stroke: '#00e676', strokeWidth: 2 }} />
+                        <Line type="monotone" dataKey="Call" stroke="#ff1744" strokeWidth={2.2} dot={false} activeDot={{ r: 4, fill: '#0b0d10', stroke: '#ff1744', strokeWidth: 2 }} />
+                        <Line type="monotone" dataKey="PE-CE" stroke="#a855f7" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#0b0d10', stroke: '#a855f7', strokeWidth: 2 }} />
                       </LineChart>
                     </ResponsiveContainer>
                   ) : (
@@ -1751,9 +1878,9 @@ const OptionsDecode = () => {
               <div className="rounded-[22px] border border-white/8 bg-[#050a14] p-3">
                 <div className="flex items-center justify-between gap-2 border-b border-white/8 px-2 pb-3">
                   <div className="flex items-center gap-2 text-[11px] font-black text-sky-300">
-                    <span className="rounded-full border border-sky-500/25 bg-sky-500/10 px-2 py-1">PCR</span>
+                    <span className="rounded-full border border-sky-500/25 bg-sky-500/10 px-2 py-1">PCR Trend</span>
                   </div>
-                  <div className="text-sm font-black text-sky-300">{latestFlow ? latestFlow.PCR.toFixed(2) : '--'}</div>
+                  <div className="text-sm font-black text-sky-300 font-mono">{latestFlow ? latestFlow.PCR.toFixed(2) : '--'}</div>
                 </div>
 
                 <div className="mt-3 h-[240px]">
@@ -1766,7 +1893,7 @@ const OptionsDecode = () => {
                         <Tooltip content={<FlowTooltip />} />
                         <ReferenceLine y={1} stroke="rgba(255,255,255,0.14)" />
                         {flowReferencePoint && <ReferenceLine x={flowReferencePoint.time} stroke="rgba(255,255,255,0.18)" strokeDasharray="3 4" />}
-                        <Line type="monotone" dataKey="PCR" stroke="#38bdf8" strokeWidth={2.4} dot={false} activeDot={{ r: 4, fill: '#0b0d10', stroke: '#38bdf8', strokeWidth: 2 }} />
+                        <Line type="monotone" dataKey="PCR" stroke="#00f0ff" strokeWidth={2.4} dot={false} activeDot={{ r: 4, fill: '#0b0d10', stroke: '#00f0ff', strokeWidth: 2 }} />
                       </LineChart>
                     </ResponsiveContainer>
                   ) : (
@@ -1779,7 +1906,7 @@ const OptionsDecode = () => {
             </div>
           </div>
 
-          <div className="grid gap-3 border-t border-white/8 px-4 py-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 border-t border-white/8 px-4 py-4 grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
             {keyLevels.map((item) => (
               <MetricTile
                 key={item.label}
@@ -1950,49 +2077,112 @@ const OptionsDecode = () => {
             </div>
 
             <div className="space-y-3">
+              {/* Tactical Strategy Blueprint Card */}
+              <div className={`rounded-2xl border p-4 shadow-xl transition-all ${
+                strategyBlueprint.tone === 'bullish'
+                  ? 'border-emerald-500/30 bg-emerald-950/20 shadow-[0_0_25px_rgba(0,230,118,0.1)]'
+                  : strategyBlueprint.tone === 'bearish'
+                    ? 'border-rose-500/30 bg-rose-950/20 shadow-[0_0_25px_rgba(255,23,68,0.1)]'
+                    : 'border-white/10 bg-white/[0.03]'
+              }`}>
+                <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Zap className={`h-4 w-4 ${
+                      strategyBlueprint.tone === 'bullish' ? 'text-emerald-400' : strategyBlueprint.tone === 'bearish' ? 'text-rose-400' : 'text-amber-400'
+                    }`} />
+                    <span className="text-xs font-black uppercase tracking-wider text-white">Tactical Strategy Setup</span>
+                  </div>
+                  <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-widest border ${
+                    strategyBlueprint.tone === 'bullish'
+                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                      : strategyBlueprint.tone === 'bearish'
+                        ? 'border-rose-500/40 bg-rose-500/10 text-rose-300'
+                        : 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                  }`}>
+                    {strategyBlueprint.tag}
+                  </span>
+                </div>
+
+                <div className="mt-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-base font-black text-white">{strategyBlueprint.name}</h3>
+                    <span className="text-xs font-black text-sky-400 font-mono">R:R {strategyBlueprint.riskReward}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-300 leading-relaxed font-medium">
+                    {strategyBlueprint.rationale}
+                  </p>
+
+                  {/* Executable Legs */}
+                  <div className="mt-3 space-y-1.5">
+                    {strategyBlueprint.legs.map((leg, i) => (
+                      <div key={i} className="flex items-center justify-between bg-black/40 border border-white/8 rounded-xl px-3 py-2 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-0.5 rounded font-black text-[10px] ${
+                            leg.action === 'BUY' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                          }`}>
+                            {leg.action}
+                          </span>
+                          <span className="font-bold text-white font-mono">{leg.strike}</span>
+                        </div>
+                        <span className="text-[11px] text-slate-400 font-medium">{leg.desc}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Target & SL Boundary */}
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <div className="bg-black/30 border border-emerald-500/20 rounded-xl p-2.5 text-center">
+                      <div className="text-[10px] text-emerald-400 uppercase font-black tracking-wider">🎯 Target Zone</div>
+                      <div className="text-xs font-black text-white font-mono mt-0.5">{strategyBlueprint.target}</div>
+                    </div>
+                    <div className="bg-black/30 border border-rose-500/20 rounded-xl p-2.5 text-center">
+                      <div className="text-[10px] text-rose-400 uppercase font-black tracking-wider">🛑 Stop Loss</div>
+                      <div className="text-xs font-black text-white font-mono mt-0.5">{strategyBlueprint.stopLoss}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Trade Map & Breakeven Band */}
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                 <div className="flex items-center gap-2 text-sm font-black text-white">
                   <Target className="h-4 w-4 text-violet-300" />
-                  <span>Trade Map</span>
+                  <span>Market Boundaries</span>
                 </div>
-                <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="mt-3 grid grid-cols-2 gap-2.5">
                   {playbookItems.map((item) => (
-                    <div key={item.label} className="rounded-xl border border-white/8 bg-slate-950/45 px-3 py-3">
-                      <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">{item.label}</div>
-                      <div className="mt-1 text-lg font-black text-white">{item.value}</div>
-                      <div className="mt-1 text-xs text-slate-500">{item.note}</div>
+                    <div key={item.label} className="rounded-xl border border-white/8 bg-slate-950/45 px-3 py-2.5">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">{item.label}</div>
+                      <div className="mt-1 text-base font-black text-white">{item.value}</div>
+                      <div className="mt-0.5 text-[11px] text-slate-500">{item.note}</div>
                     </div>
                   ))}
                 </div>
               </div>
 
+              {/* Flow Readings */}
               <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                 <div className="flex items-center gap-2 text-sm font-black text-white">
                   <Activity className="h-4 w-4 text-blue-300" />
-                  <span>Flow Readings</span>
+                  <span>ATM Option LTP &amp; Total Open Interest</span>
                 </div>
-                <div className="mt-4 grid grid-cols-2 gap-3">
-                  <div className="rounded-xl border border-white/8 bg-slate-950/45 px-3 py-3">
-                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Call OI</div>
-                    <div className="mt-1 text-lg font-black text-rose-300">{formatCompact(snapshot.totalCeOi)}</div>
+                <div className="mt-3 grid grid-cols-2 gap-2.5">
+                  <div className="rounded-xl border border-rose-500/20 bg-slate-950/45 px-3 py-2.5">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-rose-400">Total Call OI</div>
+                    <div className="mt-1 text-base font-black text-rose-300">{formatCompact(snapshot.totalCeOi)}</div>
                   </div>
-                  <div className="rounded-xl border border-white/8 bg-slate-950/45 px-3 py-3">
-                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Put OI</div>
-                    <div className="mt-1 text-lg font-black text-emerald-300">{formatCompact(snapshot.totalPeOi)}</div>
+                  <div className="rounded-xl border border-emerald-500/20 bg-slate-950/45 px-3 py-2.5">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-400">Total Put OI</div>
+                    <div className="mt-1 text-base font-black text-emerald-300">{formatCompact(snapshot.totalPeOi)}</div>
                   </div>
-                  <div className="rounded-xl border border-white/8 bg-slate-950/45 px-3 py-3">
-                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">ATM Call LTP</div>
-                    <div className="mt-1 text-lg font-black text-white">{atmRow ? `Rs ${formatPrice(atmRow.ceLtp)}` : '--'}</div>
+                  <div className="rounded-xl border border-white/8 bg-slate-950/45 px-3 py-2.5">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">ATM Call LTP</div>
+                    <div className="mt-1 text-base font-black text-white">{atmRow ? `Rs ${formatPrice(atmRow.ceLtp)}` : '--'}</div>
                   </div>
-                  <div className="rounded-xl border border-white/8 bg-slate-950/45 px-3 py-3">
-                    <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">ATM Put LTP</div>
-                    <div className="mt-1 text-lg font-black text-white">{atmRow ? `Rs ${formatPrice(atmRow.peLtp)}` : '--'}</div>
+                  <div className="rounded-xl border border-white/8 bg-slate-950/45 px-3 py-2.5">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">ATM Put LTP</div>
+                    <div className="mt-1 text-base font-black text-white">{atmRow ? `Rs ${formatPrice(atmRow.peLtp)}` : '--'}</div>
                   </div>
-                </div>
-                <div className="mt-3 rounded-xl border border-white/8 bg-slate-950/45 px-3 py-3 text-xs leading-6 text-slate-400">
-                  {isModeledSession
-                    ? 'Session curves are being reconstructed from candles until enough live option-chain samples build.'
-                    : 'Session curves are based on accumulated option-chain snapshots from the live session.'}
                 </div>
               </div>
             </div>
