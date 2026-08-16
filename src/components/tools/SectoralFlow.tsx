@@ -749,82 +749,110 @@ const SectoralFlow: React.FC = () => {
                     </div>
                   </div>
                 ) : (
-                  /* ════════════ HEATMAP VIEW (CSS GRID) ════════════ */
-                  <div className="bg-[#131b26] border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col">
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800/60 bg-[#172030] shrink-0">
-                      <div className="flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                        <h3 className="text-xs font-black text-slate-300 uppercase tracking-[0.15em]">Market Heatmap</h3>
+                  /* ════════════ INSTITUTIONAL HEATMAP VIEW (12 SECTORS MATRIX) ════════════ */
+                  <div className="bg-[#0c1017] border border-slate-800 rounded-2xl overflow-hidden">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-6 py-4 border-b border-slate-800 bg-[#101520] gap-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-2 h-2 rounded-full bg-amber-400" />
+                        <h3 className="text-xs font-black text-slate-200 uppercase tracking-[0.15em]">Institutional Sector Heatmap (12 Sectors)</h3>
                       </div>
-                      {/* Color scale legend */}
-                      <div className="flex items-center gap-2">
-                        <span className="text-[9px] text-slate-500 font-bold">-3%</span>
-                        <div className="flex gap-0.5">
-                          {['#b91c1c', '#dc2626', '#ef4444', '#475569', '#4ade80', '#22c55e', '#16a34a'].map((c, i) => (
-                            <div key={i} className="w-5 h-2.5 rounded-sm" style={{ background: c }} />
-                          ))}
+                      {/* Color Scale Legend */}
+                      <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                        <span>-2%</span>
+                        <div className="flex gap-1 items-center">
+                          <div className="w-4 h-2.5 rounded-sm bg-[#991b1b]" title="Deep Bearish" />
+                          <div className="w-4 h-2.5 rounded-sm bg-[#e11d48]" title="Bearish" />
+                          <div className="w-4 h-2.5 rounded-sm bg-[#334155]" title="Neutral" />
+                          <div className="w-4 h-2.5 rounded-sm bg-[#059669]" title="Bullish" />
+                          <div className="w-4 h-2.5 rounded-sm bg-[#00e676]" title="Strong Bullish" />
                         </div>
-                        <span className="text-[9px] text-slate-500 font-bold">+3%</span>
+                        <span>+2%</span>
                       </div>
                     </div>
 
-                    <div className="p-4 bg-[#0a0f18]">
-                      {/* Top row - large tiles for top sectors by weight/stock count */}
-                      <div className="grid grid-cols-3 gap-2 mb-2">
-                        {sectoralFlowData.slice(-3).reverse().map((s) => (
-                          <button
-                            key={s.name}
-                            onClick={() => scrollToSector(s.name)}
-                            onMouseEnter={() => setHoveredHeatmapTile(s.name)}
-                            onMouseLeave={() => setHoveredHeatmapTile(null)}
-                            className={`relative rounded-xl p-5 flex flex-col items-center justify-center text-center transition-all duration-300 group min-h-[130px] overflow-hidden ${
-                              hoveredHeatmapTile === s.name ? 'ring-2 ring-white/50 z-10 scale-[1.02] shadow-2xl' : 'hover:ring-1 hover:ring-white/20'
-                            }`}
-                            style={{ 
-                              background: `linear-gradient(135deg, ${s.loadedCount > 0 ? getHeatmapColor(s.displayChange) : '#334155'}dd, ${s.loadedCount > 0 ? getHeatmapColor(s.displayChange) : '#334155'}99)`,
-                              boxShadow: hoveredHeatmapTile === s.name ? `0 0 30px ${getHeatmapGlow(s.displayChange)}` : 'none'
-                            }}
-                          >
-                            <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors" />
-                            <span className="relative text-white font-black text-xl tracking-wider drop-shadow-md z-10">{s.name}</span>
-                            <div className="relative mt-2 flex items-center gap-1 z-10">
-                              <span className="text-white/90 text-sm font-bold bg-black/20 px-2 py-0.5 rounded-md backdrop-blur-sm">
-                                {s.loadedCount > 0 ? formatSignedPct(s.displayChange) : '--'}
-                              </span>
-                              <span className="relative z-10 mt-1 text-[10px] text-white/70">
-                                Br {s.breadth >= 0 ? '+' : ''}{s.breadth.toFixed(0)}%
-                              </span>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
+                    <div className="p-5 bg-[#080c14]">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
+                        {[...sectoralFlowData].reverse().map((s) => {
+                          const isPos = s.displayChange >= 0;
+                          const total = s.stockCount || 1;
+                          const advPct = (s.advanceCount / total) * 100;
+                          const decPct = (s.declineCount / total) * 100;
+                          
+                          // Tone down background to clean dark fintech tones with colored accent borders
+                          let cardBg = 'bg-[#0e1420] border-slate-800';
+                          let changeColor = 'text-slate-300';
+                          let changeBadge = 'bg-slate-800/60 text-slate-300 border-slate-700';
 
-                      {/* Bottom rows - smaller tiles */}
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {sectoralFlowData.slice(0, -3).reverse().map((s) => (
-                          <button
-                            key={s.name}
-                            onClick={() => scrollToSector(s.name)}
-                            onMouseEnter={() => setHoveredHeatmapTile(s.name)}
-                            onMouseLeave={() => setHoveredHeatmapTile(null)}
-                            className={`relative rounded-lg p-3 flex flex-col items-center justify-center text-center transition-all duration-300 group min-h-[90px] overflow-hidden ${
-                              hoveredHeatmapTile === s.name ? 'ring-2 ring-white/50 z-10 scale-105 shadow-xl' : 'hover:ring-1 hover:ring-white/20'
-                            }`}
-                            style={{ 
-                              background: `linear-gradient(135deg, ${s.loadedCount > 0 ? getHeatmapColor(s.displayChange) : '#334155'}dd, ${s.loadedCount > 0 ? getHeatmapColor(s.displayChange) : '#334155'}99)`,
-                              boxShadow: hoveredHeatmapTile === s.name ? `0 0 20px ${getHeatmapGlow(s.displayChange)}` : 'none'
-                            }}
-                          >
-                            <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors" />
-                            <span className="relative text-white/90 font-bold text-xs tracking-wider drop-shadow-md z-10">{s.name}</span>
-                            <span className="relative mt-1 text-white/80 text-[10px] font-bold bg-black/20 px-1.5 py-0.5 rounded backdrop-blur-sm z-10">
-                              {s.loadedCount > 0 ? formatSignedPct(s.displayChange) : '--'}
-                            </span>
-                            <span className="relative z-10 mt-1 text-white/70 text-[9px]">
-                              Br {s.breadth >= 0 ? '+' : ''}{s.breadth.toFixed(0)}%
-                            </span>
-                          </button>
-                        ))}
+                          if (s.displayChange >= 1.0) {
+                            cardBg = 'bg-gradient-to-br from-[#062419] to-[#0a151b] border-emerald-500/40 hover:border-emerald-400';
+                            changeColor = 'text-[#00e676]';
+                            changeBadge = 'bg-emerald-500/15 text-[#00e676] border-emerald-500/30';
+                          } else if (s.displayChange > 0) {
+                            cardBg = 'bg-gradient-to-br from-[#081a14] to-[#0a151b] border-emerald-600/30 hover:border-emerald-400';
+                            changeColor = 'text-emerald-400';
+                            changeBadge = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+                          } else if (s.displayChange <= -1.0) {
+                            cardBg = 'bg-gradient-to-br from-[#29080e] to-[#120a10] border-rose-500/40 hover:border-rose-400';
+                            changeColor = 'text-[#ff1744]';
+                            changeBadge = 'bg-rose-500/15 text-[#ff1744] border-rose-500/30';
+                          } else {
+                            cardBg = 'bg-gradient-to-br from-[#1a0a0f] to-[#120a10] border-rose-600/30 hover:border-rose-400';
+                            changeColor = 'text-rose-400';
+                            changeBadge = 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+                          }
+
+                          return (
+                            <button
+                              key={s.name}
+                              type="button"
+                              onClick={() => scrollToSector(s.name)}
+                              className={`relative rounded-xl p-4 flex flex-col text-left transition-all duration-200 border group ${cardBg} hover:-translate-y-0.5 hover:shadow-lg`}
+                            >
+                              {/* Header Row */}
+                              <div className="flex items-center justify-between w-full mb-2">
+                                <span className="text-white font-extrabold text-sm tracking-wider uppercase group-hover:text-sky-300 transition-colors">
+                                  {s.name}
+                                </span>
+                                <span className="text-[9px] font-bold text-slate-400 bg-black/40 border border-white/5 px-2 py-0.5 rounded">
+                                  {s.loadedCount}/{s.stockCount} Stocks
+                                </span>
+                              </div>
+
+                              {/* Main Change & Setup */}
+                              <div className="flex items-baseline justify-between w-full my-1.5">
+                                <div className={`text-2xl font-black font-mono tracking-tight ${changeColor}`}>
+                                  {formatSignedPct(s.displayChange)}
+                                </div>
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border ${changeBadge}`}>
+                                  {s.tradeSetup}
+                                </span>
+                              </div>
+
+                              {/* Advance / Decline Progress Bar */}
+                              <div className="w-full mt-2.5 mb-1.5 space-y-1">
+                                <div className="w-full h-1.5 rounded-full flex overflow-hidden bg-slate-900">
+                                  <div className="h-full bg-[#00e676] transition-all duration-300" style={{ width: `${advPct}%` }} />
+                                  <div className="h-full bg-[#ff1744] transition-all duration-300" style={{ width: `${decPct}%` }} />
+                                </div>
+                                <div className="flex justify-between items-center text-[9px] font-bold text-slate-400">
+                                  <span className="text-emerald-400">{s.advanceCount} Up</span>
+                                  <span>Br {s.breadth >= 0 ? '+' : ''}{s.breadth.toFixed(0)}%</span>
+                                  <span className="text-rose-400">{s.declineCount} Down</span>
+                                </div>
+                              </div>
+
+                              {/* Leader Stock pill */}
+                              {s.leader && (
+                                <div className="mt-2 pt-2 border-t border-white/5 flex items-center justify-between text-[10px] w-full text-slate-400">
+                                  <span className="truncate">Leader: <strong className="text-slate-200">{s.leader.symbol}</strong></span>
+                                  <span className={s.leader.change >= 0 ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
+                                    {formatSignedPct(s.leader.change)}
+                                  </span>
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
