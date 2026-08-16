@@ -97,47 +97,64 @@ const mixColor = (from: [number, number, number], to: [number, number, number], 
   `rgba(${mixChannel(from[0], to[0], weight)}, ${mixChannel(from[1], to[1], weight)}, ${mixChannel(from[2], to[2], weight)}, ${alpha})`;
 
 const getFluxPalette = (change: number, strength?: number) => {
-  const intensity = typeof strength === 'number' ? clamp(strength, 0, 1) : clamp(Math.abs(change) / 3.5, 0, 1);
+  const intensity = typeof strength === 'number' ? clamp(strength, 0, 1) : clamp(Math.abs(change) / 2.5, 0, 1);
 
   if (change > 0) {
+    if (change >= 2) {
+      return {
+        outer: '#00e676', // Vivid Electric Neon Green
+        inner: '#00ff88',
+        edge: '#b9f6ca',
+        glow: 'rgba(0, 230, 118, 0.45)',
+        text: '#ffffff',
+      };
+    }
     return {
-      outer: mixColor([134, 239, 172], [34, 197, 94], intensity, 0.95),
-      inner: mixColor([220, 252, 231], [110, 231, 183], intensity, 0.9),
-      edge: mixColor([187, 247, 208], [74, 222, 128], intensity, 0.45),
-      glow: mixColor([74, 222, 128], [22, 163, 74], intensity, 0.22),
-      text: '#f0fdf4',
-      accent: '#14532d',
+      outer: mixColor([16, 185, 129], [0, 230, 118], intensity, 0.98), // Rich Emerald to Electric Neon Green
+      inner: '#10b981',
+      edge: '#6ee7b7',
+      glow: 'rgba(16, 185, 129, 0.35)',
+      text: '#ffffff',
     };
   }
 
   if (change < 0) {
+    if (change <= -2) {
+      return {
+        outer: '#ff1744', // Vivid Electric Neon Red
+        inner: '#ff5252',
+        edge: '#ff8a80',
+        glow: 'rgba(255, 23, 68, 0.45)',
+        text: '#ffffff',
+      };
+    }
     return {
-      outer: mixColor([253, 164, 175], [244, 63, 94], intensity, 0.95),
-      inner: mixColor([255, 228, 230], [251, 113, 133], intensity, 0.9),
-      edge: mixColor([254, 205, 211], [251, 113, 133], intensity, 0.42),
-      glow: mixColor([251, 113, 133], [225, 29, 72], intensity, 0.2),
-      text: '#fff1f2',
-      accent: '#881337',
+      outer: mixColor([225, 29, 72], [255, 23, 68], intensity, 0.98), // Rich Rose to Electric Neon Red
+      inner: '#e11d48',
+      edge: '#fda4af',
+      glow: 'rgba(225, 29, 72, 0.35)',
+      text: '#ffffff',
     };
   }
 
   return {
-    outer: 'rgba(71,85,105,0.92)',
-    inner: 'rgba(100,116,139,0.88)',
-    edge: 'rgba(148,163,184,0.32)',
-    glow: 'rgba(51,65,85,0.18)',
+    outer: '#1e293b',
+    inner: '#334155',
+    edge: '#475569',
+    glow: 'rgba(30, 41, 59, 0.2)',
     text: '#f8fafc',
-    accent: '#cbd5e1',
   };
 };
 
 const SimpleFluxTile = (props: any) => {
   const { depth, x, y, width, height, name, change = 0, strength } = props;
-  if (depth < 1) return null;
+  if (depth < 1 || width <= 2 || height <= 2) return null;
 
   const palette = getFluxPalette(change, strength);
-  const showLabel = width > 48 && height > 24;
-  const displayName = name.length > 10 && width < 88 ? `${name.slice(0, 8)}..` : name;
+  const showLabel = width > 40 && height > 22;
+  const showPercent = width > 52 && height > 36;
+  const displayName = name.length > 9 && width < 80 ? `${name.slice(0, 7)}..` : name;
+  const changeFormatted = `${change >= 0 ? '+' : ''}${typeof change === 'number' ? change.toFixed(1) : 0}%`;
 
   return (
     <g>
@@ -146,25 +163,43 @@ const SimpleFluxTile = (props: any) => {
         y={y + 1}
         width={Math.max(width - 2, 0)}
         height={Math.max(height - 2, 0)}
-        rx={4}
-        ry={4}
+        rx={5}
+        ry={5}
         fill={palette.outer}
         stroke={palette.edge}
-        strokeWidth={1}
+        strokeWidth={1.2}
+        style={{
+          filter: 'drop-shadow(0 2px 5px rgba(0,0,0,0.4))',
+        }}
       />
       {showLabel && (
         <text
           x={x + width / 2}
-          y={y + height / 2}
-          fill="rgba(255,255,255,0.92)"
+          y={showPercent ? y + height / 2 - 6 : y + height / 2}
+          fill="#ffffff"
           stroke="none"
-          fontSize={width > 95 && height > 42 ? 11 : 9}
+          fontSize={width > 90 && height > 45 ? 11 : 9.5}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fontWeight="800"
+          style={{ textShadow: '0 1px 3px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.6)' }}
+        >
+          {displayName}
+        </text>
+      )}
+      {showPercent && (
+        <text
+          x={x + width / 2}
+          y={y + height / 2 + 8}
+          fill="#ffffff"
+          stroke="none"
+          fontSize={width > 90 && height > 45 ? 10 : 8.5}
           textAnchor="middle"
           dominantBaseline="middle"
           fontWeight="700"
-          paintOrder="stroke"
+          style={{ textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}
         >
-          {displayName}
+          {changeFormatted}
         </text>
       )}
     </g>
