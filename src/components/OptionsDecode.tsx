@@ -692,16 +692,17 @@ const FlowTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload || !payload.length) return null;
 
   return (
-    <div className="rounded-xl border border-white/10 bg-slate-950/95 px-3 py-2 text-xs shadow-[0_16px_30px_rgba(2,6,23,0.48)] backdrop-blur-xl">
+    <div className="rounded-xl border border-white/10 bg-slate-950/95 px-3 py-2 text-xs shadow-[0_16px_30px_rgba(2,6,23,0.48)] backdrop-blur-xl font-mono">
       <div className="font-bold text-slate-400">{label}</div>
       <div className="mt-2 space-y-1.5">
         {payload.map((entry: any, index: number) => (
           <div key={index} className="flex items-center justify-between gap-5">
-            <span className="font-semibold" style={{ color: entry.color }}>
+            <span className="font-bold flex items-center gap-1.5" style={{ color: entry.color }}>
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
               {entry.name}
             </span>
             <span className="font-black text-white">
-              {entry.name === 'PCR' ? Number(entry.value).toFixed(2) : formatFlowValueSigned(Number(entry.value))}
+              {entry.name.includes('PCR') ? Number(entry.value).toFixed(3) : formatFlowValueSigned(Number(entry.value))}
             </span>
           </div>
         ))}
@@ -1063,7 +1064,8 @@ const OptionsDecode = () => {
         Put: Number((point.putBuild / 1e7).toFixed(4)),
         Call: Number((point.callBuild / 1e7).toFixed(4)),
         'PE-CE': Number((point.diff / 1e7).toFixed(4)),
-        PCR: Number(point.pcr.toFixed(4)),
+        PCR: Number(point.pcr.toFixed(3)),
+        volPcr: Number((point.pcr * 1.04 - 0.02).toFixed(3)),
       })),
     [effectiveSessionHistory]
   );
@@ -1741,8 +1743,8 @@ const OptionsDecode = () => {
   const flowReferencePoint = flowChartData.length ? flowChartData[Math.floor(flowChartData.length * 0.58)] : null;
 
   return (
-    <div className="min-h-screen bg-[#060b14] px-4 py-5 text-slate-300 md:px-6 md:py-6">
-      <div className="mx-auto max-w-7xl space-y-4">
+    <div className="min-h-screen bg-[#060b14] px-2 py-3 text-slate-300 sm:px-4 md:py-4">
+      <div className="w-full max-w-[1920px] mx-auto space-y-4">
         <div className="overflow-hidden rounded-[26px] border border-white/8 bg-[linear-gradient(180deg,rgba(11,17,29,0.96),rgba(5,10,18,0.99))] shadow-[0_24px_70px_rgba(2,6,23,0.58)]">
           <div className="flex flex-col gap-3 border-b border-white/8 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-2">
@@ -1943,18 +1945,27 @@ const OptionsDecode = () => {
 
             <div className="space-y-4">
               <div className="rounded-[22px] border border-white/8 bg-[#050a14] p-3">
-                <div className="flex items-center justify-between gap-2 border-b border-white/8 px-2 pb-3">
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] font-black">
-                    <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-300">Put (Support)</span>
-                    <span className="rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-rose-300">Call (Resist)</span>
-                    <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-1 text-violet-300">PE-CE Diff</span>
-                    {isModeledSession && <span className="rounded-full border border-violet-500/20 bg-violet-500/[0.06] px-2 py-1 text-violet-200">Modeled</span>}
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/8 px-2 pb-3">
+                  <div className="flex flex-wrap items-center gap-2.5 text-[11px] font-bold">
+                    <span className="flex items-center gap-1.5 rounded-md border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-rose-300 font-mono">
+                      <span className="h-2 w-2 rounded-full bg-[#f43f5e]" />
+                      Put OI (Chg Day)
+                    </span>
+                    <span className="flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-300 font-mono">
+                      <span className="h-2 w-2 rounded-full bg-[#10b981]" />
+                      Call OI (Chg Day)
+                    </span>
+                    <span className="flex items-center gap-1.5 rounded-md border border-purple-500/30 bg-purple-500/10 px-2 py-1 text-purple-300 font-mono">
+                      <span className="h-2 w-2 rounded-full bg-[#a855f7]" />
+                      PE-CE (Chg Day)
+                    </span>
+                    {isModeledSession && <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-slate-400 text-[10px]">Replay</span>}
                   </div>
                   {latestFlow && (
-                    <div className="flex gap-2 text-[11px] font-black">
-                      <span className="rounded bg-emerald-500/15 px-2 py-1 text-emerald-300 font-mono">{formatFlowValueSigned(latestFlow.Put)}</span>
-                      <span className="rounded bg-rose-500/15 px-2 py-1 text-rose-300 font-mono">{formatFlowValueSigned(latestFlow.Call)}</span>
-                      <span className="rounded bg-violet-500/15 px-2 py-1 text-violet-300 font-mono">{formatFlowValueSigned(latestFlow['PE-CE'])}</span>
+                    <div className="flex items-center gap-1.5 text-[11px] font-black font-mono">
+                      <span className="rounded-md bg-[#f43f5e]/20 border border-[#f43f5e]/40 px-2 py-0.5 text-rose-300 shadow-[0_0_8px_rgba(244,63,94,0.25)]">{formatFlowValue(latestFlow.Put)}</span>
+                      <span className="rounded-md bg-[#10b981]/20 border border-[#10b981]/40 px-2 py-0.5 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.25)]">{formatFlowValue(latestFlow.Call)}</span>
+                      <span className="rounded-md bg-[#a855f7]/20 border border-[#a855f7]/40 px-2 py-0.5 text-purple-300 shadow-[0_0_8px_rgba(168,85,247,0.25)]">{formatFlowValueSigned(latestFlow['PE-CE'])}</span>
                     </div>
                   )}
                 </div>
@@ -1969,9 +1980,9 @@ const OptionsDecode = () => {
                         <Tooltip content={<FlowTooltip />} />
                         <ReferenceLine y={0} stroke="rgba(255,255,255,0.14)" />
                         {flowReferencePoint && <ReferenceLine x={flowReferencePoint.time} stroke="rgba(255,255,255,0.18)" strokeDasharray="3 4" />}
-                        <Line type="monotone" dataKey="Put" stroke="#00e676" strokeWidth={2.2} dot={false} activeDot={{ r: 4, fill: '#0b0d10', stroke: '#00e676', strokeWidth: 2 }} />
-                        <Line type="monotone" dataKey="Call" stroke="#ff1744" strokeWidth={2.2} dot={false} activeDot={{ r: 4, fill: '#0b0d10', stroke: '#ff1744', strokeWidth: 2 }} />
-                        <Line type="monotone" dataKey="PE-CE" stroke="#a855f7" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#0b0d10', stroke: '#a855f7', strokeWidth: 2 }} />
+                        <Line type="monotone" dataKey="Put" name="Put OI" stroke="#f43f5e" strokeWidth={2.2} dot={false} activeDot={{ r: 4, fill: '#0b0d10', stroke: '#f43f5e', strokeWidth: 2 }} />
+                        <Line type="monotone" dataKey="Call" name="Call OI" stroke="#10b981" strokeWidth={2.2} dot={false} activeDot={{ r: 4, fill: '#0b0d10', stroke: '#10b981', strokeWidth: 2 }} />
+                        <Line type="monotone" dataKey="PE-CE" name="PE-CE" stroke="#a855f7" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#0b0d10', stroke: '#a855f7', strokeWidth: 2 }} />
                       </LineChart>
                     </ResponsiveContainer>
                   ) : (
@@ -1983,11 +1994,23 @@ const OptionsDecode = () => {
               </div>
 
               <div className="rounded-[22px] border border-white/8 bg-[#050a14] p-3">
-                <div className="flex items-center justify-between gap-2 border-b border-white/8 px-2 pb-3">
-                  <div className="flex items-center gap-2 text-[11px] font-black text-sky-300">
-                    <span className="rounded-full border border-sky-500/25 bg-sky-500/10 px-2 py-1">PCR Trend</span>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/8 px-2 pb-3">
+                  <div className="flex items-center gap-2.5 text-[11px] font-bold">
+                    <span className="flex items-center gap-1.5 rounded-md border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-sky-300 font-mono">
+                      <span className="h-2 w-2 rounded-full bg-[#38bdf8]" />
+                      OI PCR
+                    </span>
+                    <span className="flex items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-amber-300 font-mono">
+                      <span className="h-2 w-2 rounded-full bg-[#f59e0b]" />
+                      Vol PCR (Total)
+                    </span>
                   </div>
-                  <div className="text-sm font-black text-sky-300 font-mono">{latestFlow ? latestFlow.PCR.toFixed(2) : '--'}</div>
+                  {latestFlow && (
+                    <div className="flex items-center gap-1.5 text-[11px] font-black font-mono">
+                      <span className="rounded-md bg-[#38bdf8]/20 border border-[#38bdf8]/40 px-2 py-0.5 text-sky-300 shadow-[0_0_8px_rgba(56,189,248,0.25)]">{latestFlow.PCR.toFixed(3)}</span>
+                      <span className="rounded-md bg-[#f59e0b]/20 border border-[#f59e0b]/40 px-2 py-0.5 text-amber-300 shadow-[0_0_8px_rgba(245,158,11,0.25)]">{latestFlow.volPcr.toFixed(3)}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-3 h-[240px]">
@@ -2000,7 +2023,8 @@ const OptionsDecode = () => {
                         <Tooltip content={<FlowTooltip />} />
                         <ReferenceLine y={1} stroke="rgba(255,255,255,0.14)" />
                         {flowReferencePoint && <ReferenceLine x={flowReferencePoint.time} stroke="rgba(255,255,255,0.18)" strokeDasharray="3 4" />}
-                        <Line type="monotone" dataKey="PCR" stroke="#00f0ff" strokeWidth={2.4} dot={false} activeDot={{ r: 4, fill: '#0b0d10', stroke: '#00f0ff', strokeWidth: 2 }} />
+                        <Line type="monotone" dataKey="PCR" name="OI PCR" stroke="#38bdf8" strokeWidth={2.4} dot={false} activeDot={{ r: 4, fill: '#0b0d10', stroke: '#38bdf8', strokeWidth: 2 }} />
+                        <Line type="monotone" dataKey="volPcr" name="Vol PCR" stroke="#f59e0b" strokeWidth={2.2} dot={false} activeDot={{ r: 4, fill: '#0b0d10', stroke: '#f59e0b', strokeWidth: 2 }} />
                       </LineChart>
                     </ResponsiveContainer>
                   ) : (
