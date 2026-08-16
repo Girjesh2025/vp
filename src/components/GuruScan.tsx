@@ -55,7 +55,7 @@ const GURUS: GuruProfile[] = [
     quote: 'Anticipate trend and benefit from it. Traders should go against human nature.',
     accentColor: '#f59e0b',
     icon: <Zap className="w-5 h-5 text-amber-400" />,
-    imageUrl: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=400&q=80'
+    imageUrl: 'https://wsrv.nl/?url=upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Rakesh_Jhunjhunwala.jpg/440px-Rakesh_Jhunjhunwala.jpg&w=400&h=400&fit=cover'
   },
   {
     id: 'graham',
@@ -75,7 +75,7 @@ const GURUS: GuruProfile[] = [
     quote: 'Know what you own, and know why you own it.',
     accentColor: '#ec4899',
     icon: <Star className="w-5 h-5 text-pink-400" />,
-    imageUrl: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=400&q=80'
+    imageUrl: 'https://wsrv.nl/?url=upload.wikimedia.org/wikipedia/commons/thumb/d/d4/Peter_Lynch.jpg/440px-Peter_Lynch.jpg&w=400&h=400&fit=cover'
   },
   {
     id: 'oneil',
@@ -109,7 +109,7 @@ export default function GuruScan() {
   const [marketData, setMarketData] = useState<StockFundamentals[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [minScoreFilter, setMinScoreFilter] = useState<number>(75);
+  const [minScoreFilter, setMinScoreFilter] = useState<number>(65);
 
   // Interactive Stock Detail Modal
   const [selectedStock, setSelectedStock] = useState<GuruStock | null>(null);
@@ -478,10 +478,11 @@ export default function GuruScan() {
               onChange={(e) => setMinScoreFilter(Number(e.target.value))}
               className="bg-transparent text-white font-bold font-mono focus:outline-none cursor-pointer"
             >
-              <option value={70} className="bg-[#0c1017]">70+</option>
-              <option value={75} className="bg-[#0c1017]">75+</option>
+              <option value={60} className="bg-[#0c1017]">All Matches (60+)</option>
+              <option value={70} className="bg-[#0c1017]">70+ (Solid)</option>
+              <option value={75} className="bg-[#0c1017]">75+ (Strong)</option>
               <option value={80} className="bg-[#0c1017]">80+ (High Conviction)</option>
-              <option value={85} className="bg-[#0c1017]">85+ (Elite)</option>
+              <option value={85} className="bg-[#0c1017]">85+ (Elite Quality)</option>
             </select>
           </div>
 
