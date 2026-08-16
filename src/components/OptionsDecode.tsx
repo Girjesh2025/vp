@@ -157,10 +157,10 @@ const INDEX_TICKER_MAP: Record<Instrument, string> = {
 };
 
 const TRADINGVIEW_SYMBOL_MAP: Record<Instrument, string> = {
-  NIFTY: 'NSE:NIFTY',
-  BANKNIFTY: 'NSE:BANKNIFTY',
-  FINNIFTY: 'NSE:FINNIFTY',
-  MIDCPNIFTY: 'NSE:NIFTY_MID_SELECT',
+  NIFTY: 'INDEX:NIFTY50',
+  BANKNIFTY: 'INDEX:BANKNIFTY',
+  FINNIFTY: 'INDEX:FINNIFTY',
+  MIDCPNIFTY: 'INDEX:MIDCPNIFTY',
 };
 
 const TradingViewEmbed: React.FC<{ instrument: Instrument; interval: IntervalOption }> = ({ instrument, interval }) => {
