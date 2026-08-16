@@ -156,6 +156,66 @@ const INDEX_TICKER_MAP: Record<Instrument, string> = {
   MIDCPNIFTY: 'NIFTY_MID_SELECT.NS',
 };
 
+const TRADINGVIEW_SYMBOL_MAP: Record<Instrument, string> = {
+  NIFTY: 'NSE:NIFTY',
+  BANKNIFTY: 'NSE:BANKNIFTY',
+  FINNIFTY: 'NSE:FINNIFTY',
+  MIDCPNIFTY: 'NSE:NIFTY_MID_SELECT',
+};
+
+const TradingViewEmbed: React.FC<{ instrument: Instrument; interval: IntervalOption }> = ({ instrument, interval }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    container.innerHTML = '';
+
+    const tvSymbol = TRADINGVIEW_SYMBOL_MAP[instrument] || `NSE:${instrument}`;
+    const tvInterval = interval === '1m' ? '1' : interval === '3m' ? '3' : interval === '15m' ? '15' : '5';
+
+    const script = document.createElement('script');
+    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+    script.type = 'text/javascript';
+    script.async = true;
+    script.innerHTML = JSON.stringify({
+      autosize: true,
+      symbol: tvSymbol,
+      interval: tvInterval,
+      timezone: 'Asia/Kolkata',
+      theme: 'dark',
+      style: '1',
+      locale: 'in',
+      backgroundColor: '#0b0d10',
+      gridColor: 'rgba(255, 255, 255, 0.04)',
+      enable_publishing: false,
+      hide_side_toolbar: false,
+      allow_symbol_change: true,
+      save_image: true,
+      calendar: false,
+      support_host: 'https://www.tradingview.com',
+    });
+
+    const widgetDiv = document.createElement('div');
+    widgetDiv.className = 'tradingview-widget-container__widget';
+    widgetDiv.style.height = '100%';
+    widgetDiv.style.width = '100%';
+
+    container.appendChild(widgetDiv);
+    container.appendChild(script);
+
+    return () => {
+      if (container) {
+        container.innerHTML = '';
+      }
+    };
+  }, [instrument, interval]);
+
+  return (
+    <div className="tradingview-widget-container h-full w-full" ref={containerRef} style={{ height: '640px' }} />
+  );
+};
+
 const formatCompact = (value: number) => {
   const absValue = Math.abs(value);
   if (absValue >= 1e7) return `${(value / 1e7).toFixed(2)}Cr`;
@@ -174,16 +234,14 @@ const formatFlowValueSigned = (value: number | null | undefined) => {
   return `${value >= 0 ? '+' : ''}${formatCompact(value * 1e7)}`;
 };
 
-const formatSmartOiDisplayValue = (value: number | null | undefined, isModeled: boolean) => {
+const formatSmartOiDisplayValue = (value: number | null | undefined) => {
   if (typeof value !== 'number' || !Number.isFinite(value)) return '--';
-  if (isModeled) return `${value >= 0 ? '+' : ''}${value.toFixed(3)}x`;
-  return formatFlowValueSigned(value);
+  return `${value >= 0 ? '+' : ''}${formatCompact(value)}`;
 };
 
-const formatSmartOiAxisValue = (value: number, isModeled: boolean) => {
+const formatSmartOiAxisValue = (value: number) => {
   if (!Number.isFinite(value)) return '--';
-  if (isModeled) return `${value.toFixed(2)}x`;
-  return formatFlowValue(value);
+  return formatCompact(value);
 };
 
 const formatChartTimeLabel = (timestampSeconds: number) =>
@@ -578,40 +636,25 @@ const buildSmartOiHistogram = (
   if (candles.length === 0 || sessionPoints.length === 0) return [];
 
   const sortedPoints = [...sessionPoints].sort((a, b) => a.ts - b.ts);
-  const interpolatedDiffCr = candles.map((candle) => {
+  return candles.map((candle) => {
     const candleTs = Number(candle.time) * 1000;
 
-    if (candleTs <= sortedPoints[0].ts) {
-      return sortedPoints[0].diff / 1e7;
+    let point = sortedPoints[0];
+    if (candleTs >= sortedPoints[sortedPoints.length - 1].ts) {
+      point = sortedPoints[sortedPoints.length - 1];
+    } else {
+      let leftIndex = 0;
+      while (leftIndex < sortedPoints.length - 1 && sortedPoints[leftIndex + 1].ts <= candleTs) {
+        leftIndex += 1;
+      }
+      point = sortedPoints[leftIndex];
     }
 
-    const lastPoint = sortedPoints[sortedPoints.length - 1];
-    if (candleTs >= lastPoint.ts) {
-      return lastPoint.diff / 1e7;
-    }
-
-    let leftIndex = 0;
-    while (leftIndex < sortedPoints.length - 1 && sortedPoints[leftIndex + 1].ts < candleTs) {
-      leftIndex += 1;
-    }
-
-    const left = sortedPoints[leftIndex];
-    const right = sortedPoints[leftIndex + 1];
-    if (!right || right.ts === left.ts) return left.diff / 1e7;
-
-    const progress = clamp((candleTs - left.ts) / (right.ts - left.ts), 0, 1);
-    const interpolated = left.diff + (right.diff - left.diff) * progress;
-    return interpolated / 1e7;
-  });
-
-  return candles.map((candle, index) => {
-    const previousValue = index > 0 ? interpolatedDiffCr[index - 1] : interpolatedDiffCr[index];
-    const value = Number((interpolatedDiffCr[index] - previousValue).toFixed(3));
-
+    const value = point.diff;
     return {
       time: candle.time,
       value,
-      color: value >= 0 ? 'rgba(20, 184, 166, 0.84)' : 'rgba(239, 68, 68, 0.84)',
+      color: value >= 0 ? 'rgba(0, 230, 118, 0.85)' : 'rgba(255, 23, 68, 0.85)',
     };
   });
 };
@@ -682,6 +725,7 @@ const OptionsDecode = () => {
   const [selectedExpiry, setSelectedExpiry] = useState<string | null>(null);
   const [chainTimestamp, setChainTimestamp] = useState<string | null>(null);
   const [clockLabel, setClockLabel] = useState(getToolbarTimeLabel());
+  const [chartEngine, setChartEngine] = useState<'smartOi' | 'tradingview'>('smartOi');
   const [chartBars, setChartBars] = useState<YahooOHLCVBar[]>([]);
   const [candles, setCandles] = useState<CandlestickData<UTCTimestamp>[]>([]);
   const [chartLoading, setChartLoading] = useState(true);
@@ -1234,10 +1278,10 @@ const OptionsDecode = () => {
         : '--';
     const summary =
       state === 'uptrend'
-        ? `Data bol raha hai buyers control me hain. Jab tak spot ${snapshot.supportStrike ? ` ${formatPrice(snapshot.supportStrike, 0)} ke upar` : 'support ke upar'} hai, trend positive hai.`
+        ? `Market order flow indicates buyers are in firm control. As long as spot sustains above ${snapshot.supportStrike ? formatPrice(snapshot.supportStrike, 0) : 'support'}, bullish momentum remains intact.`
         : state === 'downtrend'
-          ? `Data bol raha hai sellers active hain. Jab tak spot ${snapshot.resistanceStrike ? `${formatPrice(snapshot.resistanceStrike, 0)} ke neeche` : 'resistance ke neeche'} hai, pressure bana rahega.`
-          : `Data mixed hai. ${expectedZone !== '--' ? `Market ${expectedZone} zone me rotate kar sakta hai.` : 'Clear direction abhi build nahi hui.'}`;
+          ? `Market order flow indicates call writers are aggressively defending higher strikes. As long as spot trades below ${snapshot.resistanceStrike ? formatPrice(snapshot.resistanceStrike, 0) : 'resistance'}, selling pressure will persist.`
+          : `Market positioning is balanced. ${expectedZone !== '--' ? `Price is expected to consolidate within the ${expectedZone} band until a directional breakout occurs.` : 'Waiting for a clear directional expansion.'}`;
 
     return {
       label: getTraderLabel(state),
@@ -1480,12 +1524,15 @@ const OptionsDecode = () => {
 
     const handleCrosshairMove = (param: any) => {
       if (!param?.time || !param?.seriesData) {
-        setChartHover(defaultChartHoverRef.current);
+        setChartHover(null);
         return;
       }
 
       const candleData = param.seriesData.get(candleSeries);
-      if (!candleData) return;
+      if (!candleData) {
+        setChartHover(null);
+        return;
+      }
       const oiData = param.seriesData.get(histogramSeries);
 
       setChartHover({
@@ -1535,7 +1582,7 @@ const OptionsDecode = () => {
       priceFormat: {
         type: 'custom',
         minMove: 0.01,
-        formatter: (price: number) => formatSmartOiAxisValue(price, isModeledSession),
+        formatter: (price: number) => formatSmartOiAxisValue(price),
       },
     });
     chart.priceScale('right').applyOptions({
@@ -1598,11 +1645,7 @@ const OptionsDecode = () => {
     } catch {
       // Ignore price line management exceptions
     }
-
-    if (defaultChartHover) {
-      setChartHover(defaultChartHover);
-    }
-  }, [candles, defaultChartHover, isModeledSession, smartOiHistogramSeries, snapshot.maxPainStrike, snapshot.resistanceStrike, snapshot.supportStrike]);
+  }, [candles, isModeledSession, smartOiHistogramSeries, snapshot.maxPainStrike, snapshot.resistanceStrike, snapshot.supportStrike]);
 
   const marketBias = useMemo(() => {
     if (snapshot.pcr >= 1.15 && snapshot.totalPeChg >= snapshot.totalCeChg) {
@@ -1792,6 +1835,32 @@ const OptionsDecode = () => {
                   Historical
                 </button>
               </div>
+
+              {/* Chart Engine Switcher */}
+              <div className="flex rounded-xl border border-white/10 bg-white/[0.02] p-1">
+                <button
+                  type="button"
+                  onClick={() => setChartEngine('smartOi')}
+                  className={`rounded-lg px-2.5 py-1.5 text-xs font-black transition-all ${
+                    chartEngine === 'smartOi'
+                      ? 'bg-blue-500/25 text-sky-300 border border-sky-400/40 shadow-[0_0_12px_rgba(56,189,248,0.25)]'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  ⚡ Smart OI
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChartEngine('tradingview')}
+                  className={`rounded-lg px-2.5 py-1.5 text-xs font-black transition-all ${
+                    chartEngine === 'tradingview'
+                      ? 'bg-blue-500/25 text-sky-300 border border-sky-400/40 shadow-[0_0_12px_rgba(56,189,248,0.25)]'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  📈 TradingView Pro
+                </button>
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -1800,12 +1869,12 @@ const OptionsDecode = () => {
                   Refreshing chain...
                 </div>
               )}
-              {chartLoading && (
+              {chartLoading && chartEngine === 'smartOi' && (
                 <div className="rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-3 py-2 text-xs font-bold text-cyan-300">
                   Refreshing chart...
                 </div>
               )}
-              {isModeledSession && (
+              {isModeledSession && chartEngine === 'smartOi' && (
                 <div className="rounded-xl border border-violet-500/25 bg-violet-500/10 px-3 py-2 text-xs font-bold text-violet-300">
                   Session replay
                 </div>
@@ -1828,37 +1897,48 @@ const OptionsDecode = () => {
 
           <div className="grid gap-4 p-4 xl:grid-cols-[1.38fr_0.92fr]">
             <div className="overflow-hidden rounded-[22px] border border-white/6 bg-[#0b0d10] shadow-[0_18px_50px_rgba(0,0,0,0.34)]">
-              <div className="relative h-[640px] bg-[#0b0d10]">
-                <div className="pointer-events-none absolute left-3 top-2 z-10 flex items-center gap-2 text-[11px] font-black">
-                  <span className="text-slate-300">{instrument}</span>
-                  <span className="h-1 w-1 rounded-full bg-slate-500" />
-                  <span className="rounded border border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-sky-300">Smart OI</span>
+              {chartEngine === 'tradingview' ? (
+                <div className="relative h-[640px] bg-[#0b0d10]">
+                  <TradingViewEmbed instrument={instrument} interval={interval} />
                 </div>
-                {chartInfo && (
-                  <div className="pointer-events-none absolute right-3 top-8 z-10 w-[170px] rounded-md border border-slate-700/80 bg-[#0d1219]/96 px-3 py-2 text-[11px] shadow-[0_12px_26px_rgba(0,0,0,0.45)]">
-                    <div className="font-bold text-slate-200">{chartInfo.label}</div>
-                    <div className="mt-1 space-y-0.5 text-slate-300">
-                      <div>open: {chartInfo.open.toFixed(1)}</div>
-                      <div>high: {chartInfo.high.toFixed(1)}</div>
-                      <div>low: {chartInfo.low.toFixed(1)}</div>
-                      <div>close: {chartInfo.close.toFixed(1)}</div>
-                    </div>
-                    <div className="mt-2 flex items-center gap-1.5 text-sky-300">
-                      <span className="h-2 w-2 rounded-full bg-sky-400" />
-                      <span>{isModeledSession ? 'Smart OI Proxy:' : 'Smart OI:'}</span>
-                      <span className="font-black">{formatSmartOiDisplayValue(chartInfo.smartOi, isModeledSession)}</span>
-                    </div>
+              ) : (
+                <div className="relative h-[640px] bg-[#0b0d10]">
+                  <div className="pointer-events-none absolute left-3 top-2 z-10 flex items-center gap-2 text-[11px] font-black">
+                    <span className="text-slate-300">{instrument}</span>
+                    <span className="h-1 w-1 rounded-full bg-slate-500" />
+                    <span className="rounded border border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-sky-300">Smart OI</span>
                   </div>
-                )}
 
-                {chartError ? (
-                  <div className="flex h-full items-center justify-center text-sm text-slate-500">
-                    {chartError}
-                  </div>
-                ) : (
-                  <div ref={chartHostRef} className="h-full w-full" />
-                )}
-              </div>
+                  {/* ONLY show tooltip when cursor is actively hovering over candles! */}
+                  {chartHover && (
+                    <div className="pointer-events-none absolute right-3 top-3 z-20 w-[175px] rounded-xl border border-white/10 bg-slate-950/90 px-3.5 py-2.5 text-[11px] shadow-2xl backdrop-blur-md">
+                      <div className="font-bold text-sky-300 font-mono">{chartHover.label}</div>
+                      <div className="mt-1.5 space-y-0.5 text-slate-300 font-mono">
+                        <div className="flex justify-between"><span className="text-slate-500">Open:</span> <span className="text-white font-bold">{chartHover.open.toFixed(1)}</span></div>
+                        <div className="flex justify-between"><span className="text-slate-500">High:</span> <span className="text-emerald-400 font-bold">{chartHover.high.toFixed(1)}</span></div>
+                        <div className="flex justify-between"><span className="text-slate-500">Low:</span> <span className="text-rose-400 font-bold">{chartHover.low.toFixed(1)}</span></div>
+                        <div className="flex justify-between"><span className="text-slate-500">Close:</span> <span className="text-white font-bold">{chartHover.close.toFixed(1)}</span></div>
+                      </div>
+                      {chartHover.smartOi !== null && (
+                        <div className="mt-2 flex items-center justify-between border-t border-white/8 pt-1.5 font-mono">
+                          <span className="text-slate-400">Net OI:</span>
+                          <span className={`font-black ${chartHover.smartOi >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {formatSmartOiDisplayValue(chartHover.smartOi)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {chartError ? (
+                    <div className="flex h-full items-center justify-center text-sm text-slate-500">
+                      {chartError}
+                    </div>
+                  ) : (
+                    <div ref={chartHostRef} className="h-full w-full" />
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="space-y-4">
@@ -2030,7 +2110,7 @@ const OptionsDecode = () => {
                       </div>
                     ))
                   ) : (
-                    <div className="px-3 py-4 text-sm text-slate-500">Enough live samples aane par time-wise view fill hoga.</div>
+                    <div className="px-3 py-4 text-sm text-slate-500">Intraday checkpoints will populate as live session snapshots accumulate.</div>
                   )}
                 </div>
               </div>
