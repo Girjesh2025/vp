@@ -617,25 +617,30 @@ const buildSmartOiHistogram = (
 };
 
 const MetricTile = ({ label, value, subtext, tone, icon }: MetricTileProps) => {
-  const toneClass =
+  const toneBorder =
     tone === 'bullish'
-      ? 'border-emerald-500/18 bg-emerald-500/[0.08]'
+      ? 'border-emerald-500/30 bg-emerald-950/15 shadow-[0_0_20px_rgba(0,230,118,0.08)]'
       : tone === 'bearish'
-      ? 'border-rose-500/18 bg-rose-500/[0.08]'
-      : 'border-white/10 bg-white/[0.03]';
+      ? 'border-rose-500/30 bg-rose-950/15 shadow-[0_0_20px_rgba(255,23,68,0.08)]'
+      : 'border-white/10 bg-white/[0.03] shadow-lg';
+
+  const toneValue =
+    tone === 'bullish'
+      ? 'text-emerald-300'
+      : tone === 'bearish'
+      ? 'text-rose-300'
+      : 'text-white';
 
   return (
-    <div className={`rounded-2xl border px-4 py-3 shadow-[0_10px_28px_rgba(2,6,23,0.24)] ${toneClass}`}>
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">{label}</div>
-          <div className="mt-1.5 text-xl font-black text-white">{value}</div>
-        </div>
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-slate-950/60 text-slate-100">
+    <div className={`relative overflow-hidden rounded-2xl border p-3.5 transition-all hover:scale-[1.02] duration-300 ${toneBorder}`}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{label}</div>
+        <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-black/40 shadow-inner">
           {icon}
         </div>
       </div>
-      <div className="mt-2 text-xs font-medium text-slate-400">{subtext}</div>
+      <div className={`mt-2 font-mono text-xl font-black tracking-tight ${toneValue}`}>{value}</div>
+      <div className="mt-1 text-[11px] font-medium text-slate-400 truncate">{subtext}</div>
     </div>
   );
 };
@@ -964,6 +969,28 @@ const OptionsDecode = () => {
     const end = Math.min(rows.length, centerIndex + 4);
     return rows.slice(start, end);
   }, [atmIndex, rows]);
+
+  const maxWallOi = useMemo(() => {
+    const topWalls = sortedByOi.slice(0, 5);
+    if (!topWalls.length) return 1;
+    return Math.max(...topWalls.map((r) => (r.dominantSide === 'put' ? r.peOi : r.ceOi)), 1);
+  }, [sortedByOi]);
+
+  const maxLadderCeOi = useMemo(() => {
+    if (!strikeFocusRows.length) return 1;
+    return Math.max(...strikeFocusRows.map((r) => r.ceOi), 1);
+  }, [strikeFocusRows]);
+
+  const maxLadderPeOi = useMemo(() => {
+    if (!strikeFocusRows.length) return 1;
+    return Math.max(...strikeFocusRows.map((r) => r.peOi), 1);
+  }, [strikeFocusRows]);
+
+  const bullPowerPct = useMemo(() => {
+    const total = snapshot.totalPeOi + snapshot.totalCeOi;
+    if (!total) return 50;
+    return Math.round((snapshot.totalPeOi / total) * 100);
+  }, [snapshot.totalCeOi, snapshot.totalPeOi]);
 
   const effectiveSessionHistory = useMemo(() => {
     const sorted = [...sessionHistory].sort((a, b) => a.ts - b.ts);
@@ -1920,7 +1947,7 @@ const OptionsDecode = () => {
           </div>
 
           <div className="grid gap-3 border-t border-white/8 px-4 py-4 lg:grid-cols-[1.2fr_0.9fr]">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 shadow-xl">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 text-sm font-black text-white">
                   <Activity className="h-4 w-4 text-blue-300" />
@@ -1929,23 +1956,42 @@ const OptionsDecode = () => {
                 <div
                   className={`rounded-full border px-3 py-1 text-[11px] font-black ${
                     traderView.tone === 'bullish'
-                      ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300'
+                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300 shadow-[0_0_12px_rgba(0,230,118,0.2)]'
                       : traderView.tone === 'bearish'
-                        ? 'border-rose-500/25 bg-rose-500/10 text-rose-300'
+                        ? 'border-rose-500/30 bg-rose-500/10 text-rose-300 shadow-[0_0_12px_rgba(255,23,68,0.2)]'
                         : 'border-slate-500/25 bg-slate-500/10 text-slate-300'
                   }`}
                 >
                   {traderView.label}
                 </div>
               </div>
+
+              {/* Bull vs Bear Power Gauge */}
+              <div className="mt-3 rounded-xl border border-white/8 bg-black/40 p-3 shadow-inner">
+                <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider mb-1.5 font-mono">
+                  <span className="text-emerald-400">Put Writers (Support): {bullPowerPct}%</span>
+                  <span className="text-rose-400">Call Writers (Resist): {100 - bullPowerPct}%</span>
+                </div>
+                <div className="relative h-2.5 w-full rounded-full bg-slate-900 overflow-hidden flex shadow-inner">
+                  <div 
+                    className="h-full bg-gradient-to-r from-emerald-600 to-[#00e676] shadow-[0_0_12px_rgba(0,230,118,0.6)] transition-all duration-500" 
+                    style={{ width: `${bullPowerPct}%` }}
+                  />
+                  <div 
+                    className="h-full bg-gradient-to-r from-[#ff1744] to-rose-700 shadow-[0_0_12px_rgba(255,23,68,0.6)] transition-all duration-500" 
+                    style={{ width: `${100 - bullPowerPct}%` }}
+                  />
+                </div>
+              </div>
+
               <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
                 <div>
                   <div className="text-2xl font-black text-white">{traderView.label}</div>
                   <div className="mt-1 text-sm text-slate-400">Since {traderView.since}</div>
                 </div>
-                <div className="rounded-xl border border-white/8 bg-slate-950/45 px-3 py-2 text-right">
+                <div className="rounded-xl border border-white/8 bg-slate-950/60 px-3 py-2 text-right shadow-inner">
                   <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Confidence</div>
-                  <div className="mt-1 text-xl font-black text-white">{traderView.confidence}%</div>
+                  <div className="mt-1 text-xl font-black text-sky-400 font-mono">{traderView.confidence}%</div>
                 </div>
               </div>
               <div className="mt-3 text-sm leading-6 text-slate-300">{traderView.summary}</div>
@@ -1953,7 +1999,7 @@ const OptionsDecode = () => {
                 {traderView.stats.map((item) => (
                   <div key={item.label} className="rounded-xl border border-white/8 bg-slate-950/45 px-3 py-3">
                     <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">{item.label}</div>
-                    <div className="mt-2 text-lg font-black text-white">{item.value}</div>
+                    <div className="mt-2 text-lg font-black text-white font-mono">{item.value}</div>
                     <div className="mt-1 text-xs text-slate-500">{item.subtext}</div>
                   </div>
                 ))}
@@ -1967,15 +2013,15 @@ const OptionsDecode = () => {
                     traderView.checkpoints.map((item) => (
                       <div key={`${item.time}-${item.state}`} className="flex items-center justify-between gap-3 px-3 py-3">
                         <div>
-                          <div className="text-sm font-black text-white">{item.time}</div>
-                          <div className="text-xs text-slate-500">{item.note}</div>
+                          <div className="text-sm font-black text-white font-mono">{item.time}</div>
+                          <div className="text-xs text-slate-400">{item.note}</div>
                         </div>
                         <div
                           className={`rounded-full border px-3 py-1 text-[11px] font-black ${
                             item.tone === 'bullish'
-                              ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300'
+                              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
                               : item.tone === 'bearish'
-                                ? 'border-rose-500/25 bg-rose-500/10 text-rose-300'
+                                ? 'border-rose-500/30 bg-rose-500/10 text-rose-300'
                                 : 'border-slate-500/25 bg-slate-500/10 text-slate-300'
                           }`}
                         >
@@ -1990,88 +2036,133 @@ const OptionsDecode = () => {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 shadow-xl">
               <div className="flex items-center gap-2 text-sm font-black text-white">
                 <Zap className="h-4 w-4 text-amber-300" />
-                <span>Active Walls</span>
+                <span>Active Institutional Walls</span>
               </div>
               <div className="mt-3 space-y-2">
-                {sortedByOi.slice(0, 5).map((row) => (
-                  <div key={row.strike} className="rounded-xl border border-white/8 bg-slate-950/45 px-3 py-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2 text-sm font-black text-white">
-                          <span>{formatPrice(row.strike, 0)}</span>
-                          {row.isATM && (
-                            <span className="rounded-full border border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-sky-300">
-                              ATM
-                            </span>
-                          )}
+                {sortedByOi.slice(0, 5).map((row) => {
+                  const wallOi = row.dominantSide === 'put' ? row.peOi : row.ceOi;
+                  const wallDepthPct = Math.max(8, (wallOi / maxWallOi) * 100);
+
+                  return (
+                    <div key={row.strike} className="relative overflow-hidden rounded-xl border border-white/8 bg-slate-950/60 px-3 py-3 shadow-inner">
+                      {/* Graphical Depth Bar behind text */}
+                      <div 
+                        className={`absolute inset-y-0 left-0 opacity-20 pointer-events-none transition-all ${
+                          row.dominantSide === 'put' ? 'bg-gradient-to-r from-[#00e676] to-transparent' : 'bg-gradient-to-r from-[#ff1744] to-transparent'
+                        }`}
+                        style={{ width: `${wallDepthPct}%` }}
+                      />
+
+                      <div className="relative z-10 flex items-center justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2 text-sm font-black text-white font-mono">
+                            <span>{formatPrice(row.strike, 0)}</span>
+                            {row.isATM && (
+                              <span className="rounded-full border border-sky-500/40 bg-sky-500/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-sky-300 font-sans shadow-[0_0_8px_rgba(56,189,248,0.6)]">
+                                ATM
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-1 text-[11px] font-semibold text-slate-400">
+                            {row.dominantSide === 'put' ? '🟢 Major Put Support Wall' : '🔴 Major Call Resistance Wall'}
+                          </div>
                         </div>
-                        <div className="mt-1 text-[11px] font-semibold text-slate-500">
-                          {row.dominantSide === 'put' ? 'Put wall active' : 'Call wall active'}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className={`text-sm font-black ${row.dominantSide === 'put' ? 'text-emerald-300' : 'text-rose-300'}`}>
-                          {row.dominantSide === 'put' ? formatCompact(row.peOi) : formatCompact(row.ceOi)}
-                        </div>
-                        <div className="text-[11px] text-slate-500">
-                          Chg {row.dominantSide === 'put' ? formatSignedCompact(row.peChg) : formatSignedCompact(row.ceChg)}
+                        <div className="relative z-10 text-right">
+                          <div className={`text-sm font-black font-mono ${row.dominantSide === 'put' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {row.dominantSide === 'put' ? formatCompact(row.peOi) : formatCompact(row.ceOi)}
+                          </div>
+                          <div className="text-[11px] text-slate-400 font-mono">
+                            Chg {row.dominantSide === 'put' ? formatSignedCompact(row.peChg) : formatSignedCompact(row.ceChg)}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
 
           <div className="grid gap-3 border-t border-white/8 px-4 py-4 lg:grid-cols-[1.2fr_0.8fr]">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 shadow-xl">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-sm font-black text-white">
                   <BarChart3 className="h-4 w-4 text-sky-300" />
-                  <span>Strike Ladder</span>
+                  <span>Strike Ladder &amp; OI Heatmap</span>
                 </div>
-                <div className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[11px] font-bold text-slate-400">
+                <div className="rounded-full border border-sky-500/30 bg-sky-500/10 px-2.5 py-1 text-[11px] font-bold text-sky-300">
                   Focus around ATM
                 </div>
               </div>
               <div className="mt-4 overflow-hidden rounded-2xl border border-white/8">
-                <div className="grid grid-cols-[1fr_0.8fr_0.95fr_0.8fr_1fr] bg-slate-950/75 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                <div className="grid grid-cols-[1fr_0.8fr_0.95fr_0.8fr_1fr] bg-slate-950/90 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-slate-400 border-b border-white/8">
                   <span>Call OI</span>
                   <span>Call Chg</span>
                   <span className="text-center">Strike</span>
                   <span className="text-right">Put Chg</span>
                   <span className="text-right">Put OI</span>
                 </div>
-                <div className="divide-y divide-white/6">
-                  {strikeFocusRows.map((row) => (
-                    <div
-                      key={row.strike}
-                      className={`grid grid-cols-[1fr_0.8fr_0.95fr_0.8fr_1fr] items-center px-3 py-3 text-sm ${
-                        row.isATM ? 'bg-sky-500/[0.07]' : 'bg-transparent'
-                      }`}
-                    >
-                      <div className="font-black text-rose-300">{formatCompact(row.ceOi)}</div>
-                      <div className={`text-xs font-bold ${row.ceChg >= 0 ? 'text-rose-300' : 'text-emerald-300'}`}>
-                        {formatSignedCompact(row.ceChg)}
-                      </div>
-                      <div className="text-center">
-                        <div className={`font-black ${row.isATM ? 'text-sky-300' : 'text-white'}`}>
-                          {formatPrice(row.strike, 0)}
+                <div className="divide-y divide-white/6 bg-slate-950/40">
+                  {strikeFocusRows.map((row) => {
+                    const ceDepth = Math.max(0, (row.ceOi / maxLadderCeOi) * 100);
+                    const peDepth = Math.max(0, (row.peOi / maxLadderPeOi) * 100);
+
+                    return (
+                      <div
+                        key={row.strike}
+                        className={`relative grid grid-cols-[1fr_0.8fr_0.95fr_0.8fr_1fr] items-center px-3 py-2.5 text-sm transition-all ${
+                          row.isATM ? 'bg-sky-500/15 border-y border-sky-400/40 shadow-[0_0_15px_rgba(56,189,248,0.15)]' : 'hover:bg-white/[0.02]'
+                        }`}
+                      >
+                        {/* Call OI with Background Heat Bar */}
+                        <div className="relative flex items-center pr-2">
+                          <div 
+                            className="absolute inset-y-0 right-0 bg-gradient-to-l from-[#ff1744]/25 to-transparent pointer-events-none rounded"
+                            style={{ width: `${ceDepth}%` }}
+                          />
+                          <span className="relative z-10 font-black font-mono text-rose-300">{formatCompact(row.ceOi)}</span>
                         </div>
-                        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                          {row.isATM ? 'ATM' : row.dominantSide === 'put' ? 'Put heavy' : 'Call heavy'}
+
+                        {/* Call Chg */}
+                        <div className={`text-xs font-bold font-mono ${row.ceChg >= 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                          {formatSignedCompact(row.ceChg)}
+                        </div>
+
+                        {/* Strike */}
+                        <div className="text-center">
+                          <div className={`font-black font-mono ${row.isATM ? 'text-sky-300 text-base' : 'text-white'}`}>
+                            {formatPrice(row.strike, 0)}
+                          </div>
+                          <div className="text-[9px] font-black uppercase tracking-[0.14em]">
+                            {row.isATM ? (
+                              <span className="text-sky-300 bg-sky-500/20 px-1.5 py-0.5 rounded">ATM SPOT</span>
+                            ) : row.dominantSide === 'put' ? (
+                              <span className="text-emerald-400">PUT WALL</span>
+                            ) : (
+                              <span className="text-rose-400">CALL WALL</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Put Chg */}
+                        <div className={`text-right text-xs font-bold font-mono ${row.peChg >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {formatSignedCompact(row.peChg)}
+                        </div>
+
+                        {/* Put OI with Background Heat Bar */}
+                        <div className="relative flex items-center justify-end pl-2">
+                          <div 
+                            className="absolute inset-y-0 left-0 bg-gradient-to-r from-[#00e676]/25 to-transparent pointer-events-none rounded"
+                            style={{ width: `${peDepth}%` }}
+                          />
+                          <span className="relative z-10 font-black font-mono text-emerald-300">{formatCompact(row.peOi)}</span>
                         </div>
                       </div>
-                      <div className={`text-right text-xs font-bold ${row.peChg >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
-                        {formatSignedCompact(row.peChg)}
-                      </div>
-                      <div className="text-right font-black text-emerald-300">{formatCompact(row.peOi)}</div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>
