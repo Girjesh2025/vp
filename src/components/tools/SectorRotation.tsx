@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, LabelList,
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis 
 } from 'recharts';
 
@@ -357,37 +357,37 @@ const SectorRotation: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         <ProfessionalHeader />
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar">
-          <div className="max-w-[1400px] mx-auto space-y-4">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar bg-[#080c14]">
+          <div className="w-full max-w-[1700px] mx-auto space-y-4">
 
             {/* Back nav */}
             <button
               onClick={() => navigate('/app')}
-              className="flex items-center gap-2 text-slate-400 hover:text-white text-sm mb-4 font-medium transition-colors"
+              className="flex items-center gap-2 text-slate-400 hover:text-white text-sm mb-2 font-medium transition-colors"
             >
               <ArrowLeft className="w-4 h-4" /> Back to Tools
             </button>
 
-            {/* ── 1. KPI Row ─────────────────────────────────────────────────── */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            {/* ── 1. KPI Row (Clean Solid Fintech) ─────────────────────────── */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
               {isLoading
                 ? Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className="bg-[#172030] border border-slate-800/60 rounded-xl p-4 h-[100px] animate-pulse" />
+                    <div key={i} className="bg-[#0c1017] border border-slate-800 rounded-xl p-4 h-[95px] animate-pulse" />
                   ))
                 : kpiData.map((kpi, i) => (
                     <div
                       key={i}
-                      className="bg-[#172030] border border-slate-800/60 rounded-xl p-4 flex flex-col justify-between h-[100px] hover:border-slate-700 transition-colors"
+                      className="bg-[#0c1017] border border-slate-800/90 rounded-xl p-4 flex flex-col justify-between h-[95px] hover:border-slate-700 transition-colors"
                     >
                       <div className="flex justify-between items-start">
-                        <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold leading-tight">
+                        <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold leading-tight">
                           {kpi.label}
                         </span>
                         {kpi.icon}
                       </div>
                       <div>
-                        <div className="text-xl font-bold text-white leading-tight">{kpi.value}</div>
-                        <div className={`text-xs mt-1 font-medium ${subValueClass(kpi.subColor)}`}>
+                        <div className="text-xl font-black text-white leading-tight">{kpi.value}</div>
+                        <div className={`text-xs mt-0.5 font-bold ${subValueClass(kpi.subColor)}`}>
                           {kpi.subValue}
                         </div>
                       </div>
@@ -400,13 +400,13 @@ const SectorRotation: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
               {/* Bar Chart – 2/3 width */}
-              <div className="lg:col-span-2 bg-[#172030] border border-slate-800/60 rounded-xl p-5">
-                <div className="flex justify-between items-start mb-6">
+              <div className="lg:col-span-2 bg-[#0c1017] border border-slate-800 rounded-2xl p-5">
+                <div className="flex justify-between items-start mb-5">
                   <div>
-                    <h2 className="text-sm font-bold text-white flex items-center gap-2 border-l-2 border-emerald-500 pl-2">
+                    <h2 className="text-sm font-black text-white flex items-center gap-2 border-l-2 border-emerald-500 pl-2">
                       Sector Performance Trends
                     </h2>
-                    <p className="text-[10px] text-slate-500 mt-1 ml-2.5">
+                    <p className="text-[10px] text-slate-400 mt-1 ml-2.5">
                       12-month capital flow, volatility &amp; momentum analysis
                     </p>
                   </div>
@@ -415,21 +415,21 @@ const SectorRotation: React.FC = () => {
                     <div className="relative" ref={metricRef}>
                       <button
                         onClick={() => setMetricMenuOpen(o => !o)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1e293b] border border-slate-700 rounded-md text-xs cursor-pointer hover:bg-slate-700 transition select-none"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[#101520] border border-slate-700 rounded-lg text-xs cursor-pointer hover:bg-slate-800 transition select-none"
                       >
-                        <span className="text-emerald-400 font-medium">{METRIC_LABELS[selectedMetric]}</span>
+                        <span className="text-emerald-400 font-bold">{METRIC_LABELS[selectedMetric]}</span>
                         <ChevronDown className={`w-3 h-3 transition-transform ${metricMenuOpen ? 'rotate-180' : ''}`} />
                       </button>
                       {metricMenuOpen && (
-                        <div className="absolute right-0 top-full mt-1 z-50 bg-[#1e293b] border border-slate-700 rounded-lg shadow-xl min-w-[160px] overflow-hidden">
+                        <div className="absolute right-0 top-full mt-1 z-50 bg-[#101520] border border-slate-700 rounded-lg shadow-xl min-w-[160px] overflow-hidden">
                           {(Object.keys(METRIC_LABELS) as MetricKey[]).map(key => (
                             <button
                               key={key}
                               onClick={() => { setSelectedMetric(key); setMetricMenuOpen(false); }}
                               className={`w-full text-left px-4 py-2.5 text-xs transition-colors flex items-center gap-2 ${
                                 selectedMetric === key
-                                  ? 'bg-emerald-900/40 text-emerald-400 font-semibold'
-                                  : 'text-slate-300 hover:bg-slate-700/60'
+                                  ? 'bg-emerald-900/40 text-emerald-400 font-bold'
+                                  : 'text-slate-300 hover:bg-slate-800'
                               }`}
                             >
                               {selectedMetric === key && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />}
@@ -440,8 +440,8 @@ const SectorRotation: React.FC = () => {
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1e293b] border border-slate-700 rounded-md text-xs cursor-pointer hover:bg-slate-700 transition">
-                      Bar Chart <ChevronDown className="w-3 h-3" />
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[#101520] border border-slate-700 rounded-lg text-xs font-bold text-slate-300">
+                      Bar Chart
                     </div>
                   </div>
                 </div>
@@ -450,23 +450,23 @@ const SectorRotation: React.FC = () => {
                 <div className="flex gap-4 mb-3 ml-0.5">
                   {selectedMetric === 'capitalFlow' && (
                     <>
-                      <span className="flex items-center gap-1.5 text-[10px] text-slate-400"><span className="w-2 h-2 rounded-sm bg-emerald-500" /> Positive Flow</span>
-                      <span className="flex items-center gap-1.5 text-[10px] text-slate-400"><span className="w-2 h-2 rounded-sm bg-red-500" /> Negative Flow</span>
+                      <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold"><span className="w-2 h-2 rounded-full bg-[#00e676]" /> Positive Flow</span>
+                      <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold"><span className="w-2 h-2 rounded-full bg-[#ff1744]" /> Negative Flow</span>
                     </>
                   )}
                   {selectedMetric === 'volatilityIndex' && (
-                    <span className="text-[10px] text-slate-400">Mean absolute deviation of monthly returns — higher = more volatile</span>
+                    <span className="text-[10px] text-slate-400 font-medium">Mean absolute deviation of monthly returns — higher = more volatile</span>
                   )}
                   {selectedMetric === 'momentumScore' && (
                     <>
-                      <span className="flex items-center gap-1.5 text-[10px] text-slate-400"><span className="w-2 h-2 rounded-sm bg-emerald-500" /> Bullish (&gt;60)</span>
-                      <span className="flex items-center gap-1.5 text-[10px] text-slate-400"><span className="w-2 h-2 rounded-sm bg-amber-500" /> Neutral (40–60)</span>
-                      <span className="flex items-center gap-1.5 text-[10px] text-slate-400"><span className="w-2 h-2 rounded-sm bg-red-500" /> Bearish (&lt;40)</span>
+                      <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold"><span className="w-2 h-2 rounded-full bg-[#00e676]" /> Bullish (&gt;60)</span>
+                      <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold"><span className="w-2 h-2 rounded-full bg-amber-400" /> Neutral (40–60)</span>
+                      <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold"><span className="w-2 h-2 rounded-full bg-[#ff1744]" /> Bearish (&lt;40)</span>
                     </>
                   )}
                 </div>
 
-                <div className="h-[250px] w-full relative">
+                <div className="h-[270px] w-full relative">
                   {isLoading && (
                     <div className="absolute inset-0 flex items-center justify-center z-10">
                       <div className="flex items-center gap-3">
@@ -485,7 +485,7 @@ const SectorRotation: React.FC = () => {
 
                     // Y-axis config per metric
                     const yDomain: [number,number] =
-                      selectedMetric === 'capitalFlow'     ? [-30, 30] as [number,number] :
+                      selectedMetric === 'capitalFlow'     ? [-35, 35] as [number,number] :
                       selectedMetric === 'volatilityIndex' ? [0, 20]  as [number,number] :
                       [0, 100] as [number,number];
 
@@ -504,39 +504,41 @@ const SectorRotation: React.FC = () => {
                       selectedMetric === 'volatilityIndex' ? 'Volatility' :
                       'Momentum';
 
-                    const getCellColor = (entry: any) => {
-                      if (selectedMetric === 'capitalFlow')
-                        return entry.value >= 0 ? '#22c55e' : '#ef4444';
-                      if (selectedMetric === 'volatilityIndex')
-                        return entry.color;  // unique sector color
-                      // Momentum: green > 60, amber 40–60, red < 40
-                      if (entry.value >= 60) return '#22c55e';
-                      if (entry.value >= 40) return '#f59e0b';
-                      return '#ef4444';
-                    };
-
                     return (
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={chartData} margin={{ top: 0, right: 0, left: -25, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
+                        <BarChart data={chartData} margin={{ top: 24, right: 10, left: -20, bottom: 20 }}>
+                          <defs>
+                            <linearGradient id="neonGreenRot" x1="0" y1="1" x2="0" y2="0">
+                              <stop offset="0%" stopColor="#004d40" stopOpacity={1} />
+                              <stop offset="50%" stopColor="#00c853" stopOpacity={1} />
+                              <stop offset="100%" stopColor="#00e676" stopOpacity={1} />
+                            </linearGradient>
+                            <linearGradient id="neonRedRot" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#ff1744" stopOpacity={1} />
+                              <stop offset="50%" stopColor="#d50000" stopOpacity={1} />
+                              <stop offset="100%" stopColor="#3e0007" stopOpacity={1} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                          <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" strokeWidth={1} />
                           <XAxis
                             dataKey="name"
-                            axisLine={false}
+                            axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
                             tickLine={false}
-                            tick={{ fill: '#64748b', fontSize: 10 }}
-                            dy={10}
+                            tick={{ fill: '#cbd5e1', fontSize: 11, fontWeight: 800 }}
+                            dy={6}
                           />
                           <YAxis
                             axisLine={false}
                             tickLine={false}
-                            tick={{ fill: '#64748b', fontSize: 10 }}
+                            tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }}
                             domain={yDomain}
                             ticks={yTicks}
                           />
                           <Tooltip
-                            cursor={{ fill: '#1e293b', opacity: 0.4 }}
+                            cursor={{ fill: 'rgba(255,255,255,0.03)' }}
                             contentStyle={{
-                              backgroundColor: '#1e293b',
+                              backgroundColor: '#0c1017',
                               border: '1px solid #334155',
                               borderRadius: '8px',
                               fontSize: '12px',
@@ -551,14 +553,31 @@ const SectorRotation: React.FC = () => {
                               marginBottom: '4px'
                             }}
                             formatter={(value: any) => [
-                              <span style={{ color: '#f8fafc', fontWeight: '500' }}>{`${!isAllPositive && value > 0 ? '+' : ''}${value}${tooltipSuffix}`}</span>,
+                              <span style={{ color: '#f8fafc', fontWeight: 'bold' }}>{`${!isAllPositive && value > 0 ? '+' : ''}${value}${tooltipSuffix}`}</span>,
                               <span style={{ color: '#94a3b8' }}>{tooltipLabel}</span>,
                             ]}
                           />
-                          <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                            {chartData.map((entry: any, index: number) => (
-                              <Cell key={`cell-${index}`} fill={getCellColor(entry)} />
-                            ))}
+                          <Bar dataKey="value" radius={[6, 6, 6, 6]} barSize={28}>
+                            <LabelList
+                              dataKey="value"
+                              position="top"
+                              formatter={(val: number) => `${!isAllPositive && val > 0 ? '+' : ''}${val}${tooltipSuffix}`}
+                              fill="#f1f5f9"
+                              fontSize={10}
+                              fontWeight={800}
+                              offset={6}
+                            />
+                            {chartData.map((entry: any, index: number) => {
+                              let fill = 'url(#neonGreenRot)';
+                              if (selectedMetric === 'capitalFlow') {
+                                fill = entry.value >= 0 ? 'url(#neonGreenRot)' : 'url(#neonRedRot)';
+                              } else if (selectedMetric === 'volatilityIndex') {
+                                fill = entry.color;
+                              } else {
+                                fill = entry.value >= 60 ? '#00e676' : entry.value >= 40 ? '#f59e0b' : '#ff1744';
+                              }
+                              return <Cell key={`cell-${index}`} fill={fill} style={{ cursor: 'pointer' }} />;
+                            })}
                           </Bar>
                         </BarChart>
                       </ResponsiveContainer>
@@ -568,35 +587,35 @@ const SectorRotation: React.FC = () => {
               </div>
 
               {/* Sector Rankings – 1/3 width */}
-              <div className="bg-[#172030] border border-slate-800/60 rounded-xl p-5">
+              <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-5">
                 <div className="flex justify-between items-start mb-5">
                   <div>
-                    <h2 className="text-sm font-bold text-white flex items-center gap-2 border-l-2 border-emerald-500 pl-2">
+                    <h2 className="text-sm font-black text-white flex items-center gap-2 border-l-2 border-emerald-500 pl-2">
                       Sector Rankings
                     </h2>
-                    <p className="text-[10px] text-slate-500 mt-1 ml-2.5">Performance ranking by period</p>
+                    <p className="text-[10px] text-slate-400 mt-1 ml-2.5">Performance ranking by period</p>
                   </div>
                   <div className="relative" ref={periodRef}>
                     <div 
                       onClick={() => setPeriodMenuOpen(o => !o)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-md text-xs cursor-pointer transition select-none ${
+                      className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-xs font-bold cursor-pointer transition select-none ${
                         periodMenuOpen || selectedPeriod !== 12
                           ? 'bg-blue-600 border-blue-500 text-white' 
-                          : 'bg-[#1e293b] border-slate-700 text-slate-300 hover:bg-slate-700'
+                          : 'bg-[#101520] border-slate-700 text-slate-300 hover:bg-slate-800'
                       }`}
                     >
                       {selectedPeriod === 1 ? '1 Month' : `${selectedPeriod} Months`} <ChevronDown className={`w-3 h-3 transition-transform ${periodMenuOpen ? 'rotate-180' : ''}`} />
                     </div>
                     {periodMenuOpen && (
-                      <div className="absolute right-0 top-full mt-1 z-50 bg-[#1e293b] border border-slate-700 rounded-lg shadow-xl min-w-[120px] overflow-hidden py-1">
+                      <div className="absolute right-0 top-full mt-1 z-50 bg-[#101520] border border-slate-700 rounded-lg shadow-xl min-w-[120px] overflow-hidden py-1">
                         {[1, 3, 6, 12].map(p => (
                           <button
                             key={p}
                             onClick={() => { setSelectedPeriod(p); setPeriodMenuOpen(false); }}
                             className={`w-full text-left px-3 py-2 text-xs transition-colors flex items-center gap-2 ${
                               selectedPeriod === p
-                                ? 'bg-blue-600 text-white font-semibold'
-                                : 'text-slate-300 hover:bg-slate-700/60'
+                                ? 'bg-blue-600 text-white font-bold'
+                                : 'text-slate-300 hover:bg-slate-800'
                             }`}
                           >
                             {selectedPeriod === p && <span className="text-white">&#10003;</span>}
@@ -631,30 +650,30 @@ const SectorRotation: React.FC = () => {
                       {sectorRankings.map((row) => (
                         <div
                           key={row.rank}
-                          className="flex items-center text-xs py-2.5 px-2 hover:bg-[#1e293b] rounded-lg transition-colors group"
+                          className="flex items-center text-xs py-2.5 px-2 hover:bg-slate-800/40 rounded-lg transition-colors group"
                         >
                           {/* Rank badge */}
                           <div className="w-8 flex justify-center">
-                            <div className={`w-6 h-6 rounded flex items-center justify-center font-bold text-[11px] ${
+                            <div className={`w-6 h-6 rounded flex items-center justify-center font-black text-[11px] ${
                               row.rank === 1 ? 'bg-[#facc15] text-[#0f172a]' :
                               row.rank === 2 ? 'bg-[#8b5cf6] text-white' :
                               row.rank === 3 ? 'bg-[#f97316] text-white' :
-                              'text-slate-400 bg-transparent'
+                              'text-slate-400 bg-slate-800/50'
                             }`}>
                               {row.rank}
                             </div>
                           </div>
 
                           {/* Sector name */}
-                          <div className="flex-1 font-bold text-slate-200 group-hover:text-white flex items-center gap-2">
+                          <div className="flex-1 font-black text-slate-200 group-hover:text-white flex items-center gap-2">
                             <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: row.color }} />
                             {row.name}
                           </div>
 
                           {/* Change */}
                           <div className="w-16 flex justify-end">
-                            <div className={`px-2 py-0.5 rounded text-xs font-bold ${
-                              row.change.startsWith('+') ? 'bg-emerald-900/30 text-emerald-400' : 'bg-red-900/30 text-red-400'
+                            <div className={`px-2 py-0.5 rounded text-xs font-mono font-bold ${
+                              row.change.startsWith('+') ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
                             }`}>
                               {row.change}
                             </div>
@@ -671,10 +690,10 @@ const SectorRotation: React.FC = () => {
 
                           {/* Status badge */}
                           <div className="w-14 flex justify-end">
-                            <span className={`text-[11px] font-bold uppercase tracking-wide ${
+                            <span className={`text-[11px] font-black uppercase tracking-wide ${
                                row.status === 'Prime' ? 'text-emerald-400' :
                                row.status === 'Active' ? 'text-orange-400' :
-                               'text-red-400'
+                               'text-rose-400'
                             }`}>
                               {row.status}
                             </span>
@@ -688,15 +707,15 @@ const SectorRotation: React.FC = () => {
             </div>
 
             {/* ── 3. Monthly Heatmap ──────────────────────────────────────────── */}
-            <div className="bg-[#172030] border border-slate-800/60 rounded-xl p-5 overflow-hidden">
+            <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-5 overflow-hidden">
 
               {/* Card header */}
               <div className="flex justify-between items-start mb-5">
                 <div>
-                  <h2 className="text-sm font-bold text-white flex items-center gap-2 border-l-2 border-emerald-500 pl-2">
+                  <h2 className="text-sm font-black text-white flex items-center gap-2 border-l-2 border-emerald-500 pl-2">
                     Monthly Performance Heatmap
                   </h2>
-                  <p className="text-[10px] text-slate-500 mt-1 ml-2.5">
+                  <p className="text-[10px] text-slate-400 mt-1 ml-2.5">
                     Sector strength across 12 months · Most recent month highlighted
                   </p>
                 </div>
@@ -705,21 +724,21 @@ const SectorRotation: React.FC = () => {
                 <div className="relative" ref={yearRef}>
                   <button
                     onClick={() => setYearMenuOpen(o => !o)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1e293b] border border-slate-700 rounded-md text-xs hover:bg-slate-700 transition select-none"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#101520] border border-slate-700 rounded-lg text-xs font-bold hover:bg-slate-800 transition select-none"
                   >
-                    <span className="text-emerald-400 font-semibold">{selectedYear}</span>
+                    <span className="text-emerald-400 font-bold">{selectedYear}</span>
                     <ChevronDown className={`w-3 h-3 transition-transform ${yearMenuOpen ? 'rotate-180' : ''}`} />
                   </button>
                   {yearMenuOpen && (
-                    <div className="absolute right-0 top-full mt-1 z-50 bg-[#1e293b] border border-slate-700 rounded-lg shadow-xl min-w-[100px] overflow-hidden">
+                    <div className="absolute right-0 top-full mt-1 z-50 bg-[#101520] border border-slate-700 rounded-lg shadow-xl min-w-[100px] overflow-hidden">
                       {AVAILABLE_YEARS.map(yr => (
                         <button
                           key={yr}
                           onClick={() => { setSelectedYear(yr); setYearMenuOpen(false); }}
                           className={`w-full text-left px-4 py-2.5 text-xs flex items-center gap-2 transition-colors ${
                             selectedYear === yr
-                              ? 'bg-emerald-900/40 text-emerald-400 font-semibold'
-                              : 'text-slate-300 hover:bg-slate-700/60'
+                              ? 'bg-emerald-900/40 text-emerald-400 font-bold'
+                              : 'text-slate-300 hover:bg-slate-800'
                           }`}
                         >
                           {selectedYear === yr ? <span className="text-emerald-400">&#10003;</span> : <span className="w-3" />}
@@ -734,7 +753,7 @@ const SectorRotation: React.FC = () => {
               <div className="w-full overflow-x-auto custom-scrollbar pb-2">
                 <div className="min-w-[780px]">
                   {/* Month column headers */}
-                  <div className="flex text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                  <div className="flex text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
                     <div className="w-[88px]" />
                     {FULL_MONTHS.map(m => (
                       <div key={m} className="flex-1 text-center">{m}</div>
@@ -742,28 +761,28 @@ const SectorRotation: React.FC = () => {
                   </div>
 
                   {/* Rows */}
-                  <div className="rounded-lg overflow-hidden border border-slate-800/60 relative">
+                  <div className="rounded-xl overflow-hidden border border-slate-800 relative">
                     {isLoading && (
-                      <div className="absolute inset-0 bg-[#0f1520]/80 flex items-center justify-center z-10 backdrop-blur-sm rounded-lg">
+                      <div className="absolute inset-0 bg-[#0c1017]/80 flex items-center justify-center z-10 backdrop-blur-sm rounded-xl">
                         <div className="flex items-center gap-3">
                           <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-                          <span className="text-emerald-400 font-medium text-sm">Loading heatmap…</span>
+                          <span className="text-emerald-400 font-bold text-sm">Loading heatmap…</span>
                         </div>
                       </div>
                     )}
                     {heatmapData.map((row, ri) => (
                       <div
                         key={row.sector}
-                        className={`flex items-stretch group ${ri % 2 === 0 ? 'bg-[#121824]' : 'bg-[#0f1520]'}`}
+                        className={`flex items-stretch group ${ri % 2 === 0 ? 'bg-[#0e1420]' : 'bg-[#090d14]'}`}
                       >
-                        <div className="w-[88px] text-[11px] font-semibold text-slate-400 flex items-center pl-3 py-2 group-hover:text-white transition-colors shrink-0">
+                        <div className="w-[88px] text-[11px] font-bold text-slate-300 flex items-center pl-3 py-2 group-hover:text-white transition-colors shrink-0">
                           {row.sector}
                         </div>
                         {(row.data as (number | null)[]).map((val, idx) => (
                           <div key={idx} className="flex-1 p-[2px]">
-                            <div className={`w-full h-full min-h-[32px] flex items-center justify-center text-[10px] font-semibold rounded border transition-all ${
+                            <div className={`w-full h-full min-h-[32px] flex items-center justify-center text-[10px] font-mono font-bold rounded border transition-all ${
                               getHeatmapColor(val)
-                            } ${selectedYear === CUR_YEAR && idx === new Date().getMonth() ? 'ring-1 ring-white/20' : ''}`}>
+                            } ${selectedYear === CUR_YEAR && idx === new Date().getMonth() ? 'ring-1 ring-white/30' : ''}`}>
                               {fmtCell(val)}
                             </div>
                           </div>
@@ -775,7 +794,7 @@ const SectorRotation: React.FC = () => {
               </div>
 
               {/* Legend */}
-              <div className="flex items-center justify-center gap-6 mt-4 text-[10px] text-slate-400">
+              <div className="flex items-center justify-center gap-6 mt-4 text-[10px] font-bold text-slate-400">
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-sm bg-[#193828] border border-emerald-900/40" />
                   Strong (+5% to +15%)
@@ -792,15 +811,15 @@ const SectorRotation: React.FC = () => {
             </div>
 
             {/* ── 4. Market Cycle + Radar ─────────────────────────────────────── */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pb-8">
 
               {/* Market Cycle + Seasonal */}
               <div className="space-y-4">
-                <div className="bg-[#172030] border border-slate-800/60 rounded-xl p-5">
-                  <h2 className="text-sm font-bold text-white flex items-center gap-2 border-l-2 border-emerald-500 pl-2 mb-1">
+                <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-5">
+                  <h2 className="text-sm font-black text-white flex items-center gap-2 border-l-2 border-emerald-500 pl-2 mb-1">
                     Market Cycle &amp; Sector Rotation
                   </h2>
-                  <p className="text-[10px] text-slate-500 ml-2.5 mb-5">Current economic phase and favored sectors</p>
+                  <p className="text-[10px] text-slate-400 ml-2.5 mb-5">Current economic phase and favored sectors</p>
 
                   <div className="grid grid-cols-4 gap-2">
                     {[
@@ -813,43 +832,43 @@ const SectorRotation: React.FC = () => {
                         key={label}
                         className={`p-3 rounded-xl border flex flex-col items-center justify-center text-center h-24 relative overflow-hidden transition-all ${
                           active
-                            ? 'border-emerald-500 bg-[#121824] shadow-[0_0_15px_rgba(34,197,94,0.15)]'
-                            : 'border-slate-800 bg-[#121824] opacity-50'
+                            ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
+                            : 'border-slate-800 bg-[#101520] opacity-50'
                         }`}
                       >
-                        <div className={`text-xs font-bold mb-1 ${active ? 'text-white' : 'text-slate-300'}`}>{label}</div>
-                        <div className={`text-[9px] leading-tight ${active ? 'text-emerald-100/70' : 'text-slate-500'}`}>{detail}</div>
+                        <div className={`text-xs font-black mb-1 ${active ? 'text-white' : 'text-slate-400'}`}>{label}</div>
+                        <div className={`text-[9px] leading-tight ${active ? 'text-emerald-200' : 'text-slate-500'}`}>{detail}</div>
                       </div>
                     ))}
                   </div>
                 </div>
 
                 {/* Seasonal Strength – derived from rankings */}
-                <div className="bg-[#172030] border border-slate-800/60 rounded-xl p-5">
-                  <h2 className="text-sm font-bold text-white flex items-center gap-2 border-l-2 border-emerald-500 pl-2 mb-1">
+                <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-5">
+                  <h2 className="text-sm font-black text-white flex items-center gap-2 border-l-2 border-emerald-500 pl-2 mb-1">
                     Seasonal Sector Strength
                   </h2>
-                  <p className="text-[10px] text-slate-500 ml-2.5 mb-5">Active sectors this month based on historical patterns</p>
+                  <p className="text-[10px] text-slate-400 ml-2.5 mb-5">Active sectors this month based on historical patterns</p>
 
                   <div className="space-y-2">
                     {sectorRankings.slice(0, 4).map((s) => (
                       <div
                         key={s.name}
-                        className="flex items-center justify-between p-3 rounded-lg border border-emerald-500/20 bg-[#16202e]"
+                        className="flex items-center justify-between p-3 rounded-xl border border-slate-800 bg-[#101520]"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="w-2 h-2 rounded-full" style={{ background: s.color }} />
-                          <span className="text-[13px] font-bold text-white">{s.name}</span>
+                          <div className="w-2.5 h-2.5 rounded-full" style={{ background: s.color }} />
+                          <span className="text-[13px] font-black text-white">{s.name}</span>
                         </div>
                         <div className="flex items-center gap-4">
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                            s.status === 'Prime' ? 'bg-emerald-900/50 text-emerald-400' :
-                            s.status === 'Active' ? 'bg-emerald-900/50 text-emerald-400' :
-                            'bg-orange-900/50 text-orange-400'
+                            s.status === 'Prime' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                            s.status === 'Active' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                            'bg-orange-500/10 text-orange-400 border border-orange-500/20'
                           }`}>
                             {s.status === 'Prime' ? 'PRIME' : 'ACTIVE'}
                           </span>
-                          <span className={`text-xs font-bold w-12 text-right ${s.change.startsWith('+') ? 'text-emerald-400' : 'text-red-400'}`}>
+                          <span className={`text-xs font-mono font-bold w-14 text-right ${s.change.startsWith('+') ? 'text-emerald-400' : 'text-rose-400'}`}>
                             {s.change}
                           </span>
                         </div>
@@ -859,17 +878,17 @@ const SectorRotation: React.FC = () => {
                     {sectorRankings.slice(4).map((s) => (
                       <div
                         key={s.name}
-                        className="flex items-center justify-between p-3 rounded-lg border border-[#1e293b] bg-[#16202e] opacity-80"
+                        className="flex items-center justify-between p-3 rounded-xl border border-slate-800/80 bg-[#0c1017] opacity-80"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="w-2 h-2 rounded-full" style={{ background: s.color }} />
+                          <div className="w-2.5 h-2.5 rounded-full" style={{ background: s.color }} />
                           <span className="text-[13px] font-bold text-slate-400">{s.name}</span>
                         </div>
                         <div className="flex items-center gap-4">
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-400">
                             OFF
                           </span>
-                          <span className={`text-xs font-bold w-12 text-right ${s.change.startsWith('+') ? 'text-emerald-400' : 'text-red-400'}`}>
+                          <span className={`text-xs font-mono font-bold w-14 text-right ${s.change.startsWith('+') ? 'text-emerald-400' : 'text-rose-400'}`}>
                             {s.change}
                           </span>
                         </div>
@@ -880,11 +899,11 @@ const SectorRotation: React.FC = () => {
               </div>
 
               {/* Radar Chart */}
-              <div className="bg-[#172030] border border-slate-800/60 rounded-xl p-5 flex flex-col">
-                <h2 className="text-sm font-bold text-white flex items-center gap-2 border-l-2 border-emerald-500 pl-2 mb-1">
+              <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-5 flex flex-col">
+                <h2 className="text-sm font-black text-white flex items-center gap-2 border-l-2 border-emerald-500 pl-2 mb-1">
                   Sector Analysis Radar
                 </h2>
-                <p className="text-[10px] text-slate-500 ml-2.5 mb-2">Momentum vs Volatility comparison</p>
+                <p className="text-[10px] text-slate-400 ml-2.5 mb-2">Momentum vs Volatility comparison</p>
 
                 <div className="flex-1 w-full min-h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
