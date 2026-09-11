@@ -12,7 +12,7 @@ import {
   X, 
   Copy, 
   Check, 
-  BrainCircuit, 
+  BarChart2, 
   ArrowUp, 
   Activity,
   Bookmark,
@@ -156,29 +156,34 @@ const SwingPlayer: React.FC = () => {
 
     if (currentPrice >= target2) {
       status = 'TARGET_2_HIT';
-      statusLabel = `🚀 Target 2 Hit (+${((target2 - entryPrice) / entryPrice * 100).toFixed(1)}%)`;
+      statusLabel = `Target 2 Hit (+${((target2 - entryPrice) / entryPrice * 100).toFixed(1)}%)`;
       statusColor = 'text-teal-400';
-      statusBg = 'bg-teal-500/20 border-teal-500/40';
+      statusBg = 'bg-teal-500/15 border-teal-500/30';
     } else if (currentPrice >= target1) {
       status = 'TARGET_1_HIT';
-      statusLabel = `🎯 Target 1 Hit (+${((target1 - entryPrice) / entryPrice * 100).toFixed(1)}%)`;
-      statusColor = 'text-emerald-400';
-      statusBg = 'bg-emerald-500/20 border-emerald-500/40';
-    } else if (currentPrice <= stopLoss) {
-      status = 'SL_HIT';
-      statusLabel = `🛑 Stop Loss Hit (${((stopLoss - entryPrice) / entryPrice * 100).toFixed(1)}%)`;
-      statusColor = 'text-rose-400';
-      statusBg = 'bg-rose-500/20 border-rose-500/40';
-    } else if (pnlPercent >= 0) {
-      status = 'IN_PROFIT';
-      statusLabel = `🟢 In Profit (+${pnlPercent.toFixed(1)}%)`;
+      statusLabel = `Target 1 Hit (+${((target1 - entryPrice) / entryPrice * 100).toFixed(1)}%)`;
       statusColor = 'text-emerald-400';
       statusBg = 'bg-emerald-500/15 border-emerald-500/30';
-    } else {
+    } else if (currentPrice <= stopLoss) {
+      status = 'SL_HIT';
+      statusLabel = `Stop Loss Hit (${((stopLoss - entryPrice) / entryPrice * 100).toFixed(1)}%)`;
+      statusColor = 'text-rose-400';
+      statusBg = 'bg-rose-500/15 border-rose-500/30';
+    } else if (pnlPercent > 0.1) {
+      status = 'IN_PROFIT';
+      statusLabel = `In Profit (+${pnlPercent.toFixed(1)}%)`;
+      statusColor = 'text-emerald-400';
+      statusBg = 'bg-emerald-500/15 border-emerald-500/30';
+    } else if (pnlPercent < -0.1) {
       status = 'IN_PULLBACK';
-      statusLabel = `⏳ In Pullback (${pnlPercent.toFixed(1)}%)`;
+      statusLabel = `Pullback (${pnlPercent.toFixed(1)}%)`;
       statusColor = 'text-amber-400';
       statusBg = 'bg-amber-500/15 border-amber-500/30';
+    } else {
+      status = 'IN_PROFIT';
+      statusLabel = 'Active Setup';
+      statusColor = 'text-slate-300';
+      statusBg = 'bg-slate-800 border-slate-700';
     }
 
     const t1Dist = Math.max(0.1, target1 - entryPrice);
@@ -277,10 +282,10 @@ const SwingPlayer: React.FC = () => {
           expectedHolding = '2–4 Days (Pullback Swing)';
         }
 
-        // AI Conviction formulation
-        const changePwr = Math.min(25, Math.max(0, change) * 6);
-        const volBonus = volMultiplier >= 2.0 ? 25 : 15;
-        const aiScore = Math.min(97, Math.max(72, Math.round(55 + changePwr + volBonus)));
+        // Technical Setup Strength formulation
+        const changePwr = Math.max(-15, Math.min(25, change * 5));
+        const volBonus = volMultiplier >= 2.0 ? 25 : volMultiplier >= 1.5 ? 18 : 10;
+        const aiScore = Math.min(98, Math.max(60, Math.round(55 + changePwr + volBonus)));
 
         // Swing Trade Levels (SL: 2.2% - 3.8%, T1: 5.5% - 8%, T2: 10% - 15%)
         const slPct = Math.min(4.0, Math.max(2.2, dailyRangePct * 1.1));
@@ -313,8 +318,8 @@ const SwingPlayer: React.FC = () => {
         });
       }
 
-      // Sort candidates by AI score & change
-      candidates.sort((a, b) => b.aiScore - a.aiScore);
+      // Sort candidates by technical score & positive price momentum
+      candidates.sort((a, b) => (b.aiScore + b.change * 2) - (a.aiScore + a.change * 2));
       setMarketData(candidates);
     } catch (err) {
       console.error('Error in swing player scanner:', err);
@@ -404,14 +409,14 @@ const SwingPlayer: React.FC = () => {
     const t1Pct = ((Math.abs(selectedStock.target1 - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1);
     const t2Pct = ((Math.abs(selectedStock.target2 - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1);
     
-    const text = `🎯 SWING BUY SETUP: ${selectedStock.symbol} (Delivery CNC)
+    const text = `SWING BUY SETUP: ${selectedStock.symbol} (Delivery CNC)
 • Expected Holding: ${selectedStock.expectedHolding}
 • Entry: ₹${selectedStock.entryPrice.toFixed(2)}
 • Stop Loss: ₹${selectedStock.stopLoss.toFixed(2)} (${riskPct}% Risk)
 • Target 1: ₹${selectedStock.target1.toFixed(2)} (+${t1Pct}% Book 50%)
 • Target 2: ₹${selectedStock.target2.toFixed(2)} (+${t2Pct}% Trail SL)
 • Risk:Reward: ${selectedStock.riskReward}
-• AI Conviction: ${selectedStock.aiScore}/100 | Vol: ${selectedStock.volMultiplier}x
+• Setup Rating: ${selectedStock.aiScore}/100 | Vol: ${selectedStock.volMultiplier}x
 • Suggested Qty: ${positionSizing.shares} Shares (Max Risk: ₹${positionSizing.maxLoss.toFixed(0)})`;
     navigator.clipboard.writeText(text);
     setCopiedNotification(true);
@@ -447,15 +452,15 @@ const SwingPlayer: React.FC = () => {
             <div className="text-base font-black text-white font-mono mt-0.5">{SWING_WATCHLIST_SYMBOLS.length} Stocks</div>
           </div>
           <div className="bg-[#101520] border border-emerald-500/30 rounded-xl px-3.5 py-2 min-w-[110px] bg-emerald-500/5">
-            <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">🟢 Swing Buys</div>
+            <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Swing Buys</div>
             <div className="text-base font-black text-emerald-400 font-mono mt-0.5">{marketData.length} Setups</div>
           </div>
           <div className="bg-[#101520] border border-teal-500/30 rounded-xl px-3.5 py-2 min-w-[110px] bg-teal-500/5">
-            <div className="text-[10px] text-teal-400 font-bold uppercase tracking-wider">🎯 Targets Hit</div>
+            <div className="text-[10px] text-teal-400 font-bold uppercase tracking-wider">Targets Hit</div>
             <div className="text-base font-black text-teal-400 font-mono mt-0.5">{targetHitCount} Setups</div>
           </div>
           <div className="bg-[#101520] border border-amber-500/30 rounded-xl px-3.5 py-2 min-w-[110px] bg-amber-500/5">
-            <div className="text-[10px] text-amber-400 font-bold uppercase tracking-wider">★ Watchlist</div>
+            <div className="text-[10px] text-amber-400 font-bold uppercase tracking-wider">Tracked Trades</div>
             <div className="text-base font-black text-amber-400 font-mono mt-0.5">{savedWatchlist.length} Saved</div>
           </div>
           <button
@@ -472,13 +477,13 @@ const SwingPlayer: React.FC = () => {
 
       {/* ── 2. Interactive Filter Bar & Search ───────────────────────────── */}
       <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 shadow-xl">
-        <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1 md:pb-0">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {[
             { id: 'ALL', label: `All Swing Buys (${marketData.length})` },
-            { id: 'WATCHLIST', label: `★ Saved Watchlist (${savedWatchlist.length})` },
-            { id: '10_DAY_BO', label: `🚀 10-Day BO (${bo10Count})` },
-            { id: '50_DAY_BO', label: `📈 50-EMA Bounce (${bo50Count})` },
-            { id: 'TARGET_HIT', label: `🎯 Targets Reached (${targetHitCount})` },
+            { id: 'WATCHLIST', label: `Tracked Positions (${savedWatchlist.length})` },
+            { id: '10_DAY_BO', label: `10-Day Breakout (${bo10Count})` },
+            { id: '50_DAY_BO', label: `50-EMA Bounce (${bo50Count})` },
+            { id: 'TARGET_HIT', label: `Targets Hit (${targetHitCount})` },
           ].map(tab => (
             <button
               key={tab.id}
@@ -505,7 +510,7 @@ const SwingPlayer: React.FC = () => {
                 : 'bg-[#101520] text-slate-400 border-slate-800 hover:text-slate-300'
             }`}
           >
-            <BrainCircuit className="w-3 h-3 text-purple-400" />
+            <BarChart2 className="w-3 h-3 text-purple-400" />
             <span>Score &gt; 80</span>
           </button>
 
@@ -612,122 +617,95 @@ const SwingPlayer: React.FC = () => {
               <div
                 key={stock.symbol}
                 onClick={() => setSelectedStock(stock)}
-                className="bg-[#0c1017] rounded-2xl p-4.5 flex flex-col justify-between transition-all duration-200 cursor-pointer group shadow-lg hover:-translate-y-0.5 border border-emerald-500/40 hover:border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.10)]"
+                className="bg-[#0c1017] rounded-xl p-4 flex flex-col justify-between transition-all duration-200 cursor-pointer group border border-slate-800 hover:border-slate-700 hover:bg-[#0e131d]"
               >
                 <div>
                   {/* Card Header */}
-                  <div className="flex items-start justify-between gap-2 mb-3">
+                  <div className="flex items-start justify-between gap-2 mb-2.5">
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <StockLogo symbol={stock.symbol} className="w-9 h-9 rounded-xl shrink-0 border border-slate-800 bg-[#101520]" />
+                      <StockLogo symbol={stock.symbol} className="w-8 h-8 rounded-lg shrink-0 border border-slate-800 bg-[#101520]" />
                       <div className="min-w-0">
-                        <h3 className="text-sm font-black text-white group-hover:text-emerald-400 transition-colors truncate">
-                          {stock.symbol}
-                        </h3>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <span className="text-xs font-mono font-bold text-slate-300">
+                        <div className="flex items-center gap-1.5">
+                          <h3 className="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors">
+                            {stock.symbol}
+                          </h3>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-0.5 font-mono">
+                          <span className="text-xs font-bold text-slate-200">
                             ₹{stock.price.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                           </span>
-                          <span className="text-[10px] font-mono font-black px-1 rounded bg-emerald-500/10 text-emerald-400">
+                          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                            stock.change >= 0 ? 'text-emerald-400 bg-emerald-500/10' : 'text-rose-400 bg-rose-500/10'
+                          }`}>
                             {stock.change >= 0 ? '+' : ''}{stock.change.toFixed(2)}%
                           </span>
                         </div>
                       </div>
                     </div>
 
-                    <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border shrink-0 flex items-center gap-1 bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
-                      <ArrowUp className="w-2.5 h-2.5 stroke-[3]" />
-                      <span>BUY · CNC SWING</span>
+                    <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider border shrink-0 flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border-emerald-500/25">
+                      <ArrowUp className="w-2.5 h-2.5 stroke-[2.5]" />
+                      <span>BUY · CNC</span>
                     </span>
                   </div>
 
-                  {/* Horizon Badge */}
-                  <div className="flex items-center justify-between text-[10px] bg-[#101520] border border-slate-800 px-2.5 py-1 rounded-lg mb-2 text-slate-400">
-                    <span className="flex items-center gap-1">
+                  {/* Horizon & Meta Strip */}
+                  <div className="flex items-center gap-1.5 flex-wrap my-2 font-mono text-[10px]">
+                    <span className="px-2 py-0.5 rounded border border-slate-800 bg-[#101520] text-slate-300 font-medium flex items-center gap-1">
                       <Calendar className="w-3 h-3 text-emerald-400" />
-                      Horizon: <b className="text-slate-200">{stock.expectedHolding}</b>
+                      {stock.expectedHolding}
                     </span>
-                    {isWatchlisted && (
-                      <span className="text-amber-400 font-mono font-bold">
-                        Day {metrics.daysHeld} of {stock.holdingDaysHorizon}
-                      </span>
-                    )}
+                    <span className="px-2 py-0.5 rounded border border-slate-800 bg-[#101520] text-slate-300 font-medium">
+                      Vol {stock.volMultiplier}x
+                    </span>
+                    <span className="px-2 py-0.5 rounded border border-purple-500/30 bg-purple-500/10 text-purple-300 font-medium ml-auto">
+                      Score {stock.aiScore}/100
+                    </span>
                   </div>
 
-                  {/* AI Score & Volume Spike */}
-                  <div className="grid grid-cols-2 gap-2 my-2.5 p-2 bg-[#101520] border border-slate-800/80 rounded-xl">
-                    <div>
-                      <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 mb-1">
-                        <span className="flex items-center gap-1"><BrainCircuit className="w-3 h-3 text-purple-400" /> AI Score</span>
-                        <span className="font-mono font-black text-purple-400">{stock.aiScore}</span>
-                      </div>
-                      <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-400" style={{ width: `${stock.aiScore}%` }} />
-                      </div>
-                    </div>
-
-                    <div className="border-l border-slate-800 pl-2">
-                      <div className="text-[10px] font-bold text-slate-400 flex items-center gap-1 mb-0.5">
-                        <Zap className="w-3 h-3 text-yellow-400" /> Vol Spike
-                      </div>
-                      <div className="text-xs font-black text-yellow-400 font-mono">
-                        {stock.volMultiplier}x <span className="text-[9px] text-slate-500 font-normal">avg</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Target Progress Bar */}
-                  <div className="my-2.5 p-2 bg-[#101520] border border-slate-800/90 rounded-xl space-y-1.5">
-                    <div className="flex items-center justify-between text-[10px]">
-                      <span className="text-slate-400 font-bold flex items-center gap-1">
-                        <Target className="w-3 h-3 text-sky-400" /> Swing Targets
-                      </span>
-                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${metrics.statusBg} ${metrics.statusColor}`}>
+                  {/* Single Clean Execution Status Pill */}
+                  <div className="my-2 p-2.5 bg-[#101520] border border-slate-800 rounded-lg space-y-2">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-slate-400 font-medium">Swing Status</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium border ${metrics.statusBg} ${metrics.statusColor}`}>
                         {metrics.statusLabel}
                       </span>
                     </div>
 
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[9px] font-mono text-slate-400">
-                        <span className="text-rose-400">SL: ₹{metrics.stopLoss.toFixed(1)}</span>
-                        <span className="text-slate-200 font-bold">LTP: ₹{metrics.currentPrice.toFixed(1)}</span>
-                        <span className="text-emerald-400">T1: ₹{metrics.target1.toFixed(1)}</span>
+                    {/* Clean Tabular Order Levels Grid */}
+                    <div className="grid grid-cols-4 gap-1 text-[10px] font-mono pt-1 border-t border-slate-800/80">
+                      <div>
+                        <div className="text-slate-500 text-[9px] uppercase">Trigger</div>
+                        <div className="font-bold text-slate-200">₹{stock.entryPrice.toFixed(1)}</div>
                       </div>
-                      
-                      <div className="w-full h-1.5 bg-slate-800/80 rounded-full overflow-hidden flex">
-                        <div 
-                          className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-300" 
-                          style={{ width: `${Math.min(100, Math.max(8, metrics.target1Progress))}%` }} 
-                        />
+                      <div>
+                        <div className="text-slate-500 text-[9px] uppercase">Stop Loss</div>
+                        <div className="font-bold text-rose-400">₹{stock.stopLoss.toFixed(1)}</div>
                       </div>
-                      
-                      <div className="flex justify-between text-[8.5px] text-slate-500">
-                        <span>SL Buffer: {metrics.slBuffer.toFixed(1)}%</span>
-                        <span>{metrics.target1Progress}% towards T1</span>
+                      <div>
+                        <div className="text-slate-500 text-[9px] uppercase">Target 1</div>
+                        <div className="font-bold text-emerald-400">₹{stock.target1.toFixed(1)}</div>
+                      </div>
+                      <div>
+                        <div className="text-slate-500 text-[9px] uppercase">Target 2</div>
+                        <div className="font-bold text-teal-400">₹{stock.target2.toFixed(1)}</div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Target Values */}
-                  <div className="space-y-1 my-2">
-                    <div className="flex items-center justify-between text-xs font-mono">
-                      <span className="text-slate-400 text-[11px]">🎯 Target 1 (1:2):</span>
-                      <span className="font-black text-emerald-400">₹{stock.target1.toFixed(1)}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs font-mono">
-                      <span className="text-slate-400 text-[11px]">🚀 Target 2 (Runner):</span>
-                      <span className="font-black text-teal-400">₹{stock.target2.toFixed(1)}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs font-mono">
-                      <span className="text-slate-400 text-[11px]">🛑 Stop Loss:</span>
-                      <span className="text-slate-300 font-black">₹{stock.stopLoss.toFixed(1)}</span>
+                    {/* Progress Track */}
+                    <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-emerald-500 transition-all duration-300" 
+                        style={{ width: `${Math.min(100, Math.max(8, metrics.target1Progress))}%` }} 
+                      />
                     </div>
                   </div>
                 </div>
 
-                {/* Card Footer */}
-                <div className="mt-3 pt-2.5 border-t border-slate-800 flex items-center justify-between">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1">
-                    <Crosshair className="w-3 h-3 text-emerald-400" /> R:R {stock.riskReward}
+                {/* Footer Actions */}
+                <div className="mt-2.5 pt-2 border-t border-slate-800 flex items-center justify-between">
+                  <span className="text-[10px] text-slate-400 font-mono font-medium">
+                    R:R {stock.riskReward} {isWatchlisted && <span className="text-amber-400 ml-1">· Held {metrics.daysHeld}d</span>}
                   </span>
                   <div className="flex items-center gap-1.5">
                     <button
@@ -738,20 +716,20 @@ const SwingPlayer: React.FC = () => {
                       }}
                       className={`p-1.5 rounded-lg border transition cursor-pointer select-none ${
                         isWatchlisted
-                          ? 'bg-amber-500/20 text-amber-400 border-amber-500/40 shadow-sm shadow-amber-500/10'
+                          ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
                           : 'bg-slate-800/40 text-slate-400 border-slate-700 hover:text-amber-400 hover:bg-slate-800'
                       }`}
-                      title={isWatchlisted ? 'Remove from Swing Watchlist' : 'Add to Swing Watchlist'}
+                      title={isWatchlisted ? 'Remove from Tracked Swings' : 'Track Swing Position'}
                     >
                       <Bookmark className={`w-3.5 h-3.5 ${isWatchlisted ? 'fill-amber-400' : ''}`} />
                     </button>
                     <button
                       type="button"
                       onClick={() => setSelectedStock(stock)}
-                      className="flex items-center gap-1 text-xs font-black text-emerald-400 hover:text-emerald-300"
+                      className="flex items-center gap-1 text-xs font-bold text-emerald-400 hover:text-emerald-300 px-2 py-1 rounded-md hover:bg-emerald-500/10 transition"
                     >
-                      <span>View Setup</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
+                      <span>Setup</span>
+                      <ChevronRight className="w-3 h-3" />
                     </button>
                   </div>
                 </div>
@@ -777,8 +755,8 @@ const SwingPlayer: React.FC = () => {
                   <div>
                     <div className="flex items-center gap-2">
                       <h2 className="text-xl font-black text-white">{selectedStock.symbol}</h2>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-emerald-500/10 text-emerald-400">
-                        🟢 BUY SWING (DELIVERY CNC)
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        BUY · CNC SWING
                       </span>
                     </div>
                     <p className="text-xs text-slate-400 font-mono mt-0.5">
@@ -813,7 +791,7 @@ const SwingPlayer: React.FC = () => {
                   <span className="font-bold uppercase tracking-wider text-[10px] text-slate-400">Swing Strategy</span>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-mono font-bold text-purple-300 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
-                      AI Score: {selectedStock.aiScore}/100
+                      Rating: {selectedStock.aiScore}/100
                     </span>
                     <span className="text-[10px] font-mono font-bold text-yellow-300 bg-yellow-500/10 px-1.5 py-0.5 rounded border border-yellow-500/20">
                       {selectedStock.volMultiplier}x Vol

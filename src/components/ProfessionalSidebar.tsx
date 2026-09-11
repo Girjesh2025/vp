@@ -16,7 +16,8 @@ import {
   Activity,
   Radar,
   Sparkles,
-  Target
+  Target,
+  Zap
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -51,6 +52,7 @@ const ProfessionalSidebar: React.FC<ProfessionalSidebarProps> = ({
     { id: 'tools', label: 'Sector Look', icon: Globe },
     { id: 'market-eye', label: 'Market Eye', icon: Eye },
     { id: 'swing-player', label: 'Swing Player', icon: Activity },
+    { id: 'intraday-player', label: 'Intraday Player', icon: Zap, isNew: true },
     { id: 'guru-scan', label: 'Guru Scan', icon: Target, isNew: true },
     { id: 'options-player', label: 'Options Player', icon: TrendingUp },
     { id: 'options-watch', label: 'Options Watch', icon: Radar, isNew: true },
