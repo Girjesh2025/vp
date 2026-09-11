@@ -3,7 +3,7 @@ import {
   Search, BrainCircuit, Zap, Crosshair, TrendingUp, TrendingDown, 
   ExternalLink, ArrowUpRight, Filter, ShieldCheck, CheckCircle2, 
   ChevronRight, RefreshCw, Layers, Calculator, Sparkles, X,
-  ArrowDownRight, ArrowUp
+  ArrowDownRight, ArrowUp, Bookmark, Copy
 } from 'lucide-react';
 import { fetchHistoricalPrices, fetchMultipleStockPrices, isMarketOpen } from '../utils/priceApi';
 import StockLogo from './StockLogo';
@@ -56,9 +56,31 @@ const SwingPlayer: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeCategoryFilter, setActiveCategoryFilter] = useState<'ALL' | 'BREAKOUTS' | 'BREAKDOWNS' | '10_DAY_BO' | '10_DAY_BD' | '50_DAY_BO' | '50_DAY_BD'>('ALL');
+  const [activeCategoryFilter, setActiveCategoryFilter] = useState<'ALL' | 'BREAKOUTS' | 'BREAKDOWNS' | 'WATCHLIST' | '10_DAY_BO' | '10_DAY_BD' | '50_DAY_BO' | '50_DAY_BD'>('ALL');
   const [highConvictionOnly, setHighConvictionOnly] = useState(false);
   const [highVolumeOnly, setHighVolumeOnly] = useState(false);
+
+  // Saved Watchlist State
+  const [savedWatchlist, setSavedWatchlist] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('pp_swing_watchlist');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const toggleWatchlist = (symbol: string) => {
+    setSavedWatchlist(prev => {
+      const next = prev.includes(symbol) ? prev.filter(s => s !== symbol) : [...prev, symbol];
+      try {
+        localStorage.setItem('pp_swing_watchlist', JSON.stringify(next));
+      } catch (e) {
+        console.error(e);
+      }
+      return next;
+    });
+  };
 
   // Interactive Trade Setup Modal State
   const [selectedStock, setSelectedStock] = useState<SwingData | null>(null);
@@ -247,6 +269,7 @@ const SwingPlayer: React.FC = () => {
       // Category / Type Filter
       if (activeCategoryFilter === 'BREAKOUTS' && !item.isBull) return false;
       if (activeCategoryFilter === 'BREAKDOWNS' && item.isBull) return false;
+      if (activeCategoryFilter === 'WATCHLIST' && !savedWatchlist.includes(item.symbol)) return false;
       if (activeCategoryFilter === '10_DAY_BO' && item.setupCategory !== '10_DAY_BO') return false;
       if (activeCategoryFilter === '10_DAY_BD' && item.setupCategory !== '10_DAY_BD') return false;
       if (activeCategoryFilter === '50_DAY_BO' && item.setupCategory !== '50_DAY_BO') return false;
@@ -263,7 +286,7 @@ const SwingPlayer: React.FC = () => {
       }
       return true;
     });
-  }, [marketData, activeCategoryFilter, highConvictionOnly, highVolumeOnly, searchQuery]);
+  }, [marketData, activeCategoryFilter, highConvictionOnly, highVolumeOnly, searchQuery, savedWatchlist]);
 
   // Statistics Counts
   const breakoutCount = useMemo(() => marketData.filter(d => d.isBull).length, [marketData]);
@@ -291,15 +314,20 @@ const SwingPlayer: React.FC = () => {
 
   const handleCopySetup = () => {
     if (!selectedStock) return;
+    const riskPct = ((Math.abs(selectedStock.stopLoss - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1);
+    const t1Pct = ((Math.abs(selectedStock.target1 - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1);
+    const t2Pct = ((Math.abs(selectedStock.target2 - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1);
+    
     const text = `🎯 SWING ${selectedStock.tradeType} SETUP: ${selectedStock.symbol}
 • Action: ${selectedStock.tradeType === 'BUY' ? 'BUY (Breakout)' : 'SELL / SHORT (Breakdown)'}
-• Entry: ₹${selectedStock.entryPrice.toFixed(2)}
-• Stop Loss: ₹${selectedStock.stopLoss.toFixed(2)}
-• Target 1: ₹${selectedStock.target1.toFixed(2)}
-• Target 2: ₹${selectedStock.target2.toFixed(2)}
+• Entry Trigger: ₹${selectedStock.entryPrice.toFixed(2)}
+• Stop Loss: ₹${selectedStock.stopLoss.toFixed(2)} (${riskPct}% Risk)
+• Target 1 (1:2): ₹${selectedStock.target1.toFixed(2)} (+${t1Pct}% Book 50%)
+• Target 2 (Runner): ₹${selectedStock.target2.toFixed(2)} (+${t2Pct}% Trail SL)
 • Risk:Reward: ${selectedStock.riskReward}
-• Holding Horizon: ${selectedStock.expectedHolding}
-• AI Conviction: ${selectedStock.aiScore}/100`;
+• Horizon: ${selectedStock.expectedHolding}
+• AI Conviction: ${selectedStock.aiScore}/100
+• Suggested Qty: ${positionSizing.shares} Shares (Max Risk: ₹${positionSizing.maxLoss.toFixed(0)})`;
     navigator.clipboard.writeText(text);
     setCopiedNotification(true);
     setTimeout(() => setCopiedNotification(false), 2500);
@@ -364,8 +392,9 @@ const SwingPlayer: React.FC = () => {
         <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1 md:pb-0">
           {[
             { id: 'ALL', label: `All Setups (${marketData.length})` },
-            { id: 'BREAKOUTS', label: `🟢 Breakouts (Buy) (${breakoutCount})` },
-            { id: 'BREAKDOWNS', label: `🔴 Breakdowns (Sell) (${breakdownCount})` },
+            { id: 'BREAKOUTS', label: `🟢 Breakouts (${breakoutCount})` },
+            { id: 'BREAKDOWNS', label: `🔴 Breakdowns (${breakdownCount})` },
+            { id: 'WATCHLIST', label: `★ Watchlist (${savedWatchlist.length})` },
             { id: '10_DAY_BO', label: `🚀 10-Day BO (${bo10Count})` },
             { id: '10_DAY_BD', label: `📉 10-Day BD (${bd10Count})` },
             { id: '50_DAY_BO', label: `📈 50-EMA BO (${bo50Count})` },
@@ -380,6 +409,8 @@ const SwingPlayer: React.FC = () => {
                     ? 'bg-emerald-600 text-white shadow-sm'
                     : tab.id === 'BREAKDOWNS' || tab.id === '10_DAY_BD' || tab.id === '50_DAY_BD'
                     ? 'bg-rose-600 text-white shadow-sm'
+                    : tab.id === 'WATCHLIST'
+                    ? 'bg-amber-600 text-white shadow-sm'
                     : 'bg-blue-600 text-white shadow-sm'
                   : 'bg-[#101520] border border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
               }`}
@@ -549,7 +580,22 @@ const SwingPlayer: React.FC = () => {
                   <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1">
                     <Crosshair className="w-3 h-3 text-blue-400" /> R:R {stock.riskReward}
                   </span>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleWatchlist(stock.symbol);
+                      }}
+                      className={`p-1.5 rounded-lg border transition cursor-pointer select-none ${
+                        savedWatchlist.includes(stock.symbol)
+                          ? 'bg-amber-500/20 text-amber-400 border-amber-500/40 shadow-sm shadow-amber-500/10'
+                          : 'bg-[#101520] text-slate-500 hover:text-slate-300 border-slate-800'
+                      }`}
+                      title={savedWatchlist.includes(stock.symbol) ? 'Remove from Watchlist' : 'Add to Watchlist'}
+                    >
+                      <Bookmark className={`w-3 h-3 ${savedWatchlist.includes(stock.symbol) ? 'fill-amber-400' : ''}`} />
+                    </button>
                     <a
                       href={`https://in.tradingview.com/chart/?symbol=NSE:${stock.symbol}`}
                       target="_blank"
@@ -622,18 +668,30 @@ const SwingPlayer: React.FC = () => {
               </div>
             </div>
 
-            {/* Rationale Callout */}
-            <div className={`border rounded-xl p-3 text-xs leading-relaxed ${
+            {/* Rationale & Conviction Callout */}
+            <div className={`border rounded-xl p-3 text-xs leading-relaxed space-y-1.5 ${
               selectedStock.isBull 
                 ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-200/90' 
                 : 'bg-rose-500/5 border-rose-500/20 text-rose-200/90'
             }`}>
-              <span className="font-bold">Strategy Trigger: </span>
-              {selectedStock.strategyRationale}
+              <div className="flex items-center justify-between">
+                <span className="font-bold uppercase tracking-wider text-[10px] text-slate-400">Strategy Rationale</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono font-bold text-purple-300 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
+                    AI Score: {selectedStock.aiScore}/100
+                  </span>
+                  <span className="text-[10px] font-mono font-bold text-yellow-300 bg-yellow-500/10 px-1.5 py-0.5 rounded border border-yellow-500/20">
+                    {selectedStock.volMultiplier}x Vol
+                  </span>
+                </div>
+              </div>
+              <p className="text-xs text-slate-300">
+                {selectedStock.strategyRationale}
+              </p>
             </div>
 
-            {/* Trade Levels Matrix */}
-            <div className="grid grid-cols-3 gap-3">
+            {/* Trade Levels Matrix (Entry, Stop Loss, Target 1, Target 2) */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               <div className="bg-[#101520] border border-slate-800 rounded-xl p-3 text-center">
                 <div className="text-[10px] uppercase font-bold text-slate-400">Entry Trigger</div>
                 <div className="text-base font-black text-white font-mono mt-0.5">
@@ -647,7 +705,9 @@ const SwingPlayer: React.FC = () => {
                 <div className="text-base font-black text-rose-400 font-mono mt-0.5">
                   ₹{selectedStock.stopLoss.toFixed(2)}
                 </div>
-                <div className="text-[9px] text-rose-500/80 mt-0.5">Strict Exit</div>
+                <div className="text-[9px] text-rose-400/80 font-mono mt-0.5 font-bold">
+                  {((Math.abs(selectedStock.stopLoss - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1)}% Risk
+                </div>
               </div>
 
               <div className="bg-[#101520] border border-emerald-500/20 rounded-xl p-3 text-center bg-emerald-500/5">
@@ -655,7 +715,19 @@ const SwingPlayer: React.FC = () => {
                 <div className="text-base font-black text-emerald-400 font-mono mt-0.5">
                   ₹{selectedStock.target1.toFixed(2)}
                 </div>
-                <div className="text-[9px] text-emerald-500/80 mt-0.5">Primary Target</div>
+                <div className="text-[9px] text-emerald-400/80 font-mono mt-0.5 font-bold">
+                  +{((Math.abs(selectedStock.target1 - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1)}% (Book 50%)
+                </div>
+              </div>
+
+              <div className="bg-[#101520] border border-teal-500/20 rounded-xl p-3 text-center bg-teal-500/5">
+                <div className="text-[10px] uppercase font-bold text-teal-400">Target 2 (Runner)</div>
+                <div className="text-base font-black text-teal-400 font-mono mt-0.5">
+                  ₹{selectedStock.target2.toFixed(2)}
+                </div>
+                <div className="text-[9px] text-teal-400/80 font-mono mt-0.5 font-bold">
+                  +{((Math.abs(selectedStock.target2 - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1)}% (Trail SL)
+                </div>
               </div>
             </div>
 
@@ -666,7 +738,7 @@ const SwingPlayer: React.FC = () => {
                   <Calculator className="w-3.5 h-3.5 text-sky-400" />
                   Auto Position Size (Capital Risk)
                 </span>
-                <span className="text-xs font-mono font-bold text-sky-400">₹{capitalRisk}</span>
+                <span className="text-xs font-mono font-bold text-sky-400">₹{capitalRisk.toLocaleString('en-IN')}</span>
               </div>
 
               <input
@@ -679,13 +751,17 @@ const SwingPlayer: React.FC = () => {
                 className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
               />
 
-              <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-800/80 text-center">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-slate-800/80 text-center">
                 <div>
                   <div className="text-[10px] text-slate-500">Rec. Quantity</div>
                   <div className="text-xs font-black text-white font-mono">{positionSizing.shares} Shares</div>
                 </div>
                 <div>
-                  <div className="text-[10px] text-slate-500">Max Loss</div>
+                  <div className="text-[10px] text-slate-500">Capital Required</div>
+                  <div className="text-xs font-black text-sky-400 font-mono">₹{positionSizing.totalCapital.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] text-slate-500">Max Risk (Loss)</div>
                   <div className="text-xs font-black text-rose-400 font-mono">₹{positionSizing.maxLoss.toFixed(0)}</div>
                 </div>
                 <div>
@@ -695,30 +771,54 @@ const SwingPlayer: React.FC = () => {
               </div>
             </div>
 
+            {/* Trade Execution Rules */}
+            <div className="bg-[#101520]/60 border border-slate-800/80 rounded-xl p-3 text-[11px] text-slate-300 space-y-1">
+              <div className="font-bold text-slate-200 flex items-center gap-1.5 text-xs mb-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Trade Execution Rules</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-400">
+                <div className="flex items-start gap-1.5">
+                  <span className="text-blue-400 font-bold shrink-0">1.</span>
+                  <span>Wait for 15m candle {selectedStock.isBull ? 'close above' : 'break below'} ₹{selectedStock.entryPrice.toFixed(1)} before entry.</span>
+                </div>
+                <div className="flex items-start gap-1.5">
+                  <span className="text-emerald-400 font-bold shrink-0">2.</span>
+                  <span>Book 50% profit at Target 1 & trail Stop Loss to breakeven (₹{selectedStock.entryPrice.toFixed(1)}).</span>
+                </div>
+                <div className="flex items-start gap-1.5">
+                  <span className="text-amber-400 font-bold shrink-0">3.</span>
+                  <span>Exit runner at Target 2 or holding horizon ({selectedStock.expectedHolding}).</span>
+                </div>
+              </div>
+            </div>
+
             {/* Modal Actions */}
             <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-2">
-              <a
-                href={`https://in.tradingview.com/chart/?symbol=NSE:${selectedStock.symbol}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full sm:flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-98 text-white font-bold text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
+              <button
+                onClick={() => toggleWatchlist(selectedStock.symbol)}
+                className={`w-full sm:flex-1 py-3 rounded-xl border font-bold text-xs transition flex items-center justify-center gap-2 active:scale-98 cursor-pointer ${
+                  savedWatchlist.includes(selectedStock.symbol)
+                    ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25 shadow-lg shadow-amber-500/10'
+                    : 'bg-[#101520] border-slate-700 hover:bg-slate-800 text-slate-300'
+                }`}
               >
-                <ExternalLink className="w-4 h-4" />
-                <span>Open TradingView Chart</span>
-              </a>
+                <Bookmark className={`w-4 h-4 ${savedWatchlist.includes(selectedStock.symbol) ? 'fill-amber-400 text-amber-400' : 'text-slate-400'}`} />
+                <span>{savedWatchlist.includes(selectedStock.symbol) ? 'Saved in Watchlist' : 'Add to Watchlist'}</span>
+              </button>
 
               <button
                 onClick={handleCopySetup}
-                className="w-full sm:flex-1 py-3 rounded-xl bg-[#101520] hover:bg-slate-800 border border-slate-700 active:scale-98 text-white font-bold text-xs transition flex items-center justify-center gap-2 shadow-sm"
+                className="w-full sm:flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-98 text-white font-bold text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer"
               >
                 {copiedNotification ? (
                   <>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    <span>Copied to Clipboard!</span>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+                    <span>Copied Trade Setup!</span>
                   </>
                 ) : (
                   <>
-                    <Layers className="w-4 h-4 text-slate-400" />
+                    <Copy className="w-4 h-4" />
                     <span>Copy Setup Parameters</span>
                   </>
                 )}
@@ -726,7 +826,7 @@ const SwingPlayer: React.FC = () => {
 
               <button
                 onClick={() => setSelectedStock(null)}
-                className="w-full sm:w-auto px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition"
+                className="w-full sm:w-auto px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition cursor-pointer"
               >
                 Close
               </button>
