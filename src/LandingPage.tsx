@@ -10,7 +10,9 @@ import {
   CheckCircle2,
   Sparkles,
   ArrowRight,
-  Radio
+  Radio,
+  BrainCircuit,
+  Crosshair
 } from 'lucide-react';
 
 interface LandingPageProps {
@@ -50,7 +52,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
 
   return (
     <div className="min-h-screen bg-[#030712] text-slate-100 selection:bg-emerald-500 selection:text-black font-sans relative overflow-x-hidden">
-      {/* Dynamic Background Mesh & Grid */}
+      {/* Dynamic Background Mesh & Ambient Glow */}
       <div className="fixed inset-0 pointer-events-none z-0">
         <div className="absolute top-[-10%] left-[-5%] w-[600px] h-[600px] bg-emerald-500/10 rounded-full blur-[140px]" />
         <div className="absolute top-[40%] right-[-10%] w-[500px] h-[500px] bg-teal-500/8 rounded-full blur-[140px]" />
@@ -189,7 +191,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
 
             {/* Right: 2.5D Angled Dynamic Trading Terminal Showcase */}
             <div className="lg:col-span-6 relative perspective-[1200px]">
-              {/* Outer Glow Halo */}
               <div className="absolute inset-0 bg-gradient-to-tr from-emerald-500/20 via-teal-500/10 to-transparent blur-3xl -z-10 transform -rotate-6 scale-95" />
 
               {/* Floating Order Execution Toast */}
@@ -261,7 +262,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
 
                 {/* Terminal Body */}
                 <div className="p-5 space-y-4">
-                  {/* Symbol Price Display */}
                   <div className="flex items-end justify-between">
                     <div>
                       <div className="text-xs font-medium text-slate-400">
@@ -307,7 +307,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                       <circle cx="500" cy="12" r="4" fill="#ffffff" />
                     </svg>
 
-                    {/* Volume Histogram Bars */}
                     <div className="flex items-end gap-1 h-8 w-full pt-1 border-t border-slate-800/60">
                       {[35, 55, 40, 70, 85, 60, 95, 80, 65, 90, 75, 100, 85, 92, 110].map((val, idx) => (
                         <div 
@@ -402,7 +401,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
         </div>
       </section>
 
-      {/* ─── 05. PRO FEATURE SUITE (6 GLOWING CARDS) ─── */}
+      {/* ─── 05. PRO FEATURE SUITE (RICH VISUAL GRAPHIC CARDS MATCHING MOCKUP) ─── */}
       <section id="features" className="relative z-10 py-24 px-6">
         <div className="max-w-7xl mx-auto">
           {/* Section Header */}
@@ -414,160 +413,367 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               Built For The Serious Trader
             </h2>
             <p className="text-slate-400 text-base mt-3">
-              Everything you need to master equities, options, and market psychology without burning real funds.
+              Everything you need to master equities, options, and market psychology with institutional-grade visual tools.
             </p>
           </div>
 
-          {/* 3x2 Grid */}
+          {/* 3x2 Grid of Rich Illustrated Feature Cards */}
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Card 1: Guru Scan */}
-            <div className="group relative bg-[#090e1a]/90 border border-slate-800/80 hover:border-emerald-500/50 rounded-2xl p-6 transition-all duration-300 hover:shadow-[0_10px_35px_rgba(16,185,129,0.15)] flex flex-col justify-between overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl group-hover:bg-amber-500/10 transition-colors" />
-              <div>
-                <div className="w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center mb-5 text-amber-400">
-                  <Target className="w-6 h-6" />
+
+            {/* ── CARD 1: GURU SCAN PRO (GOLDEN RADAR SCANNER VISUAL) ── */}
+            <div className="group relative bg-[#090e1a]/90 border border-slate-800/80 hover:border-amber-500/50 rounded-2xl p-6 transition-all duration-300 hover:shadow-[0_10px_35px_rgba(245,158,11,0.15)] flex flex-col justify-between overflow-hidden">
+              <div className="absolute top-0 right-0 w-36 h-36 bg-amber-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-amber-500/15 transition-colors" />
+              
+              {/* Rich Visual Graphic Area: Golden Radar Sweep */}
+              <div className="relative h-44 w-full bg-gradient-to-b from-[#0e1628] to-[#080d18] rounded-xl border border-amber-500/30 mb-5 overflow-hidden flex items-center justify-center p-3">
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-16 h-16 rounded-full border border-amber-500/20" />
+                  <div className="w-28 h-28 rounded-full border border-amber-500/25 absolute" />
+                  <div className="w-40 h-40 rounded-full border border-amber-500/35 absolute" />
+                  <div className="w-full h-[1px] bg-amber-500/20 absolute" />
+                  <div className="h-full w-[1px] bg-amber-500/20 absolute" />
+                  
+                  <div 
+                    className="absolute w-36 h-36 rounded-full origin-center animate-spin"
+                    style={{
+                      animationDuration: '6s',
+                      background: 'conic-gradient(from 0deg, rgba(245, 158, 11, 0.4) 0deg, rgba(245, 158, 11, 0.0) 90deg, transparent 90deg)'
+                    }}
+                  />
+                  
+                  <div className="absolute top-10 right-14 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                    <span className="text-[10px] font-mono font-bold text-amber-300 bg-black/60 px-1.5 py-0.5 rounded border border-amber-500/40">TCS (VCP 96%)</span>
+                  </div>
+                  <div className="absolute bottom-12 left-12 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                    <span className="text-[10px] font-mono font-bold text-amber-300 bg-black/60 px-1.5 py-0.5 rounded border border-amber-500/40">RELIANCE (Buffett 91%)</span>
+                  </div>
                 </div>
-                <h3 className="text-xl font-bold text-white mb-2 group-hover:text-amber-300 transition-colors">
-                  Guru Scan Pro
-                </h3>
-                <p className="text-slate-400 text-sm leading-relaxed mb-6">
-                  Scan high-momentum NSE stocks matching rules of Mark Minervini, Warren Buffett, and Peter Lynch setups.
-                </p>
+
+                <div className="relative z-10 w-3 h-3 rounded-full bg-amber-400 shadow-[0_0_15px_rgba(245,158,11,1)]" />
               </div>
-              <div className="h-20 bg-slate-950/80 rounded-xl border border-slate-800 p-3 flex items-center justify-center">
-                <div className="flex items-center gap-3 text-xs font-mono text-amber-400">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-                  <span>Scanning 1,850+ NSE Stocks for VCP Breakouts...</span>
+
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                    <Crosshair className="w-4 h-4" />
+                  </div>
+                  <h3 className="text-xl font-bold text-white group-hover:text-amber-300 transition-colors">
+                    Guru Scan Pro
+                  </h3>
+                </div>
+                <p className="text-slate-400 text-sm leading-relaxed mb-4">
+                  Autonomous scanner testing 1,850+ NSE/BSE stocks against legendary strategies of Mark Minervini, Warren Buffett, and Peter Lynch.
+                </p>
+                <div className="flex items-center gap-2 text-xs font-mono text-amber-400 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-lg">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+                  <span>VCP Breakouts & Low Debt Moats Screened Live</span>
                 </div>
               </div>
             </div>
 
-            {/* Card 2: Options Terminal */}
-            <div className="group relative bg-[#090e1a]/90 border border-slate-800/80 hover:border-emerald-500/50 rounded-2xl p-6 transition-all duration-300 hover:shadow-[0_10px_35px_rgba(16,185,129,0.15)] flex flex-col justify-between overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl group-hover:bg-purple-500/10 transition-colors" />
-              <div>
-                <div className="w-12 h-12 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center mb-5 text-purple-400">
-                  <Zap className="w-6 h-6" />
+            {/* ── CARD 2: F&O OPTIONS TERMINAL (PAYOFF CURVE & GREEKS MATRIX) ── */}
+            <div className="group relative bg-[#090e1a]/90 border border-slate-800/80 hover:border-purple-500/50 rounded-2xl p-6 transition-all duration-300 hover:shadow-[0_10px_35px_rgba(168,85,247,0.15)] flex flex-col justify-between overflow-hidden">
+              <div className="absolute top-0 right-0 w-36 h-36 bg-purple-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-purple-500/15 transition-colors" />
+              
+              <div className="relative h-44 w-full bg-gradient-to-b from-[#0e1628] to-[#080d18] rounded-xl border border-purple-500/30 mb-5 overflow-hidden p-3 flex flex-col justify-between">
+                <div className="flex justify-between items-center text-[10px] font-mono text-slate-400 border-b border-purple-500/20 pb-1.5">
+                  <span className="text-purple-300 font-bold">BULL CALL SPREAD</span>
+                  <span className="text-emerald-400 font-bold">MAX PROFIT: ₹24,500</span>
                 </div>
-                <h3 className="text-xl font-bold text-white mb-2 group-hover:text-purple-300 transition-colors">
-                  F&O Options Suite
-                </h3>
-                <p className="text-slate-400 text-sm leading-relaxed mb-6">
-                  Simulate complex multi-leg options strategies with real Greeks (Delta, Gamma, Theta), payoff charts, and strike ladders.
-                </p>
+
+                <svg className="w-full h-24 overflow-visible my-1" viewBox="0 0 300 80">
+                  <defs>
+                    <linearGradient id="profitGlow" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#10b981" stopOpacity="0.4" />
+                      <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+                    </linearGradient>
+                    <linearGradient id="lossGlow" x1="0" y1="1" x2="0" y2="0">
+                      <stop offset="0%" stopColor="#ef4444" stopOpacity="0.3" />
+                      <stop offset="100%" stopColor="#ef4444" stopOpacity="0.0" />
+                    </linearGradient>
+                  </defs>
+                  
+                  <line x1="0" y1="40" x2="300" y2="40" stroke="#475569" strokeWidth="1" strokeDasharray="3 3" />
+                  
+                  <path d="M 0,65 L 120,65 L 200,15 L 300,15 L 300,40 L 0,40 Z" fill="url(#profitGlow)" />
+                  <path d="M 0,65 L 120,65 L 120,40 L 0,40 Z" fill="url(#lossGlow)" />
+                  <path d="M 0,65 L 120,65 L 200,15 L 300,15" fill="none" stroke="#a855f7" strokeWidth="2.5" />
+                  
+                  <circle cx="120" cy="65" r="4" fill="#ef4444" />
+                  <circle cx="200" cy="15" r="4" fill="#10b981" />
+                  <text x="110" y="78" fill="#94a3b8" fontSize="8" fontFamily="monospace">22,400 CE</text>
+                  <text x="190" y="10" fill="#94a3b8" fontSize="8" fontFamily="monospace">22,600 CE</text>
+                </svg>
+
+                <div className="grid grid-cols-4 gap-1 text-[10px] font-mono text-center pt-1 border-t border-purple-500/20">
+                  <div className="bg-purple-950/40 rounded py-0.5"><span className="text-slate-500">Δ </span><span className="text-purple-300 font-bold">0.52</span></div>
+                  <div className="bg-purple-950/40 rounded py-0.5"><span className="text-slate-500">Γ </span><span className="text-purple-300 font-bold">0.08</span></div>
+                  <div className="bg-purple-950/40 rounded py-0.5"><span className="text-slate-500">Θ </span><span className="text-red-400 font-bold">-6.2</span></div>
+                  <div className="bg-purple-950/40 rounded py-0.5"><span className="text-slate-500">IV </span><span className="text-emerald-400 font-bold">13.4%</span></div>
+                </div>
               </div>
-              <div className="h-20 bg-slate-950/80 rounded-xl border border-slate-800 p-3 flex items-center justify-between text-xs font-mono">
-                <div className="text-left">
-                  <div className="text-slate-500">NIFTY 22,500 CE</div>
-                  <div className="text-emerald-400 font-bold">₹142.50 (+18%)</div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400">
+                    <Zap className="w-4 h-4" />
+                  </div>
+                  <h3 className="text-xl font-bold text-white group-hover:text-purple-300 transition-colors">
+                    F&O Options Suite
+                  </h3>
                 </div>
-                <div className="text-right">
-                  <div className="text-slate-500">Delta 0.52 · Theta -4.8</div>
-                  <div className="text-purple-400 font-bold">Max Profit: ₹18,400</div>
+                <p className="text-slate-400 text-sm leading-relaxed mb-4">
+                  Multi-leg strategy builder with live Greeks, visual payoff curves, IV skew heatmap, and strike chain open interest.
+                </p>
+                <div className="flex items-center gap-2 text-xs font-mono text-purple-400 bg-purple-500/10 border border-purple-500/20 px-3 py-1.5 rounded-lg">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+                  <span>Real Options Greeks & Strike Chain Heatmaps</span>
                 </div>
               </div>
             </div>
 
-            {/* Card 3: Swing Momentum */}
+            {/* ── CARD 3: SWING MOMENTUM TRACKER (CANDLESTICK BREAKOUT VISUAL) ── */}
             <div className="group relative bg-[#090e1a]/90 border border-slate-800/80 hover:border-emerald-500/50 rounded-2xl p-6 transition-all duration-300 hover:shadow-[0_10px_35px_rgba(16,185,129,0.15)] flex flex-col justify-between overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition-colors" />
-              <div>
-                <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mb-5 text-emerald-400">
-                  <TrendingUp className="w-6 h-6" />
+              <div className="absolute top-0 right-0 w-36 h-36 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-emerald-500/15 transition-colors" />
+              
+              <div className="relative h-44 w-full bg-gradient-to-b from-[#0e1628] to-[#080d18] rounded-xl border border-emerald-500/30 mb-5 overflow-hidden p-3 flex flex-col justify-between">
+                <div className="flex justify-between items-center text-[10px] font-mono text-slate-400 border-b border-emerald-500/20 pb-1.5">
+                  <span className="text-emerald-300 font-bold">RELIANCE · 50 EMA CROSSOVER</span>
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold">BREAKOUT BUY</span>
                 </div>
-                <h3 className="text-xl font-bold text-white mb-2 group-hover:text-emerald-300 transition-colors">
-                  Swing Momentum Tracker
-                </h3>
-                <p className="text-slate-400 text-sm leading-relaxed mb-6">
-                  Spot multi-day swing setups with volume surges, 20/50 EMA crosses, and automatic risk-reward stop loss calculations.
-                </p>
+
+                <div className="relative h-28 flex items-end justify-between px-2 pt-2">
+                  <div className="absolute top-7 left-0 right-0 border-b border-dashed border-emerald-400/80 z-10 flex justify-end">
+                    <span className="text-[9px] font-mono text-emerald-400 bg-[#090e1a] px-1 -mt-2">Res: ₹2,880</span>
+                  </div>
+
+                  {[
+                    { c: 'red', h: 32, w: 50 },
+                    { c: 'green', h: 42, w: 46 },
+                    { c: 'red', h: 28, w: 48 },
+                    { c: 'green', h: 54, w: 38 },
+                    { c: 'green', h: 68, w: 32 },
+                    { c: 'green', h: 84, w: 26 },
+                    { c: 'green', h: 96, w: 20, breakout: true },
+                  ].map((candle, idx) => (
+                    <div key={idx} className="relative flex flex-col items-center justify-end h-full w-5">
+                      <div className={`w-[1px] ${candle.c === 'green' ? 'bg-emerald-400' : 'bg-red-400'}`} style={{ height: `${candle.w}%` }} />
+                      <div 
+                        className={`w-3.5 rounded-sm ${candle.c === 'green' ? 'bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-red-500'}`}
+                        style={{ height: `${candle.h}%` }}
+                      />
+                      {candle.breakout && (
+                        <span className="absolute -top-3 w-2 h-2 rounded-full bg-white animate-ping" />
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex justify-between items-center text-[10px] font-mono text-slate-400 pt-1 border-t border-emerald-500/20">
+                  <span>Target: ₹3,050 (1:3.2 R:R)</span>
+                  <span className="text-emerald-400 font-bold">+5.4% Swing Target</span>
+                </div>
               </div>
-              <div className="h-20 bg-slate-950/80 rounded-xl border border-slate-800 p-3 flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-bold text-white">RELIANCE 50 EMA Breakout</div>
-                  <div className="text-[11px] text-emerald-400 font-medium mt-0.5">R:R Ratio 1:3.2 Target ₹3,050</div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                    <TrendingUp className="w-4 h-4" />
+                  </div>
+                  <h3 className="text-xl font-bold text-white group-hover:text-emerald-300 transition-colors">
+                    Swing Momentum Tracker
+                  </h3>
                 </div>
-                <span className="px-2 py-1 rounded bg-emerald-500/20 text-emerald-400 text-xs font-bold">BULLISH</span>
+                <p className="text-slate-400 text-sm leading-relaxed mb-4">
+                  Detect high-probability swing trading setups with 20/50 EMA momentum crossovers, volume spikes, and automatic stop-loss calculation.
+                </p>
+                <div className="flex items-center gap-2 text-xs font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>Technical Breakouts & Automated Risk/Reward Targets</span>
+                </div>
               </div>
             </div>
 
-            {/* Card 4: Market Depth */}
-            <div className="group relative bg-[#090e1a]/90 border border-slate-800/80 hover:border-emerald-500/50 rounded-2xl p-6 transition-all duration-300 hover:shadow-[0_10px_35px_rgba(16,185,129,0.15)] flex flex-col justify-between overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-2xl group-hover:bg-cyan-500/10 transition-colors" />
-              <div>
-                <div className="w-12 h-12 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center mb-5 text-cyan-400">
-                  <BarChart2 className="w-6 h-6" />
+            {/* ── CARD 4: LIVE NSE/BSE DEPTH (ORDER BOOK LADDER VISUAL) ── */}
+            <div className="group relative bg-[#090e1a]/90 border border-slate-800/80 hover:border-cyan-500/50 rounded-2xl p-6 transition-all duration-300 hover:shadow-[0_10px_35px_rgba(6,182,212,0.15)] flex flex-col justify-between overflow-hidden">
+              <div className="absolute top-0 right-0 w-36 h-36 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-cyan-500/15 transition-colors" />
+              
+              <div className="relative h-44 w-full bg-gradient-to-b from-[#0e1628] to-[#080d18] rounded-xl border border-cyan-500/30 mb-5 overflow-hidden p-3 flex flex-col justify-between">
+                <div className="flex justify-between items-center text-[10px] font-mono text-slate-400 border-b border-cyan-500/20 pb-1.5">
+                  <span className="text-cyan-300 font-bold">NIFTY ORDER BOOK · L2 DEPTH</span>
+                  <span className="text-emerald-400 font-bold">BUYERS 64% / SELLERS 36%</span>
                 </div>
-                <h3 className="text-xl font-bold text-white mb-2 group-hover:text-cyan-300 transition-colors">
-                  Live NSE/BSE Depth
-                </h3>
-                <p className="text-slate-400 text-sm leading-relaxed mb-6">
-                  Learn to read real liquidity, buyers vs sellers strength, and institutional order wall clusters before placing paper trades.
-                </p>
+
+                <div className="space-y-1.5 text-[10px] font-mono my-1">
+                  <div className="relative flex items-center justify-between px-2 py-0.5 rounded bg-slate-900/60 overflow-hidden">
+                    <div className="absolute left-0 top-0 bottom-0 bg-emerald-500/20 w-[65%]" />
+                    <span className="relative z-10 text-emerald-400 font-bold">18,450 Qty</span>
+                    <span className="relative z-10 text-slate-200 font-bold">₹22,547.00</span>
+                    <span className="relative z-10 text-red-400">9,200 Qty</span>
+                    <div className="absolute right-0 top-0 bottom-0 bg-red-500/20 w-[35%]" />
+                  </div>
+                  <div className="relative flex items-center justify-between px-2 py-0.5 rounded bg-slate-900/60 overflow-hidden">
+                    <div className="absolute left-0 top-0 bottom-0 bg-emerald-500/20 w-[78%]" />
+                    <span className="relative z-10 text-emerald-400 font-bold">24,100 Qty</span>
+                    <span className="relative z-10 text-slate-200 font-bold">₹22,546.50</span>
+                    <span className="relative z-10 text-red-400">6,150 Qty</span>
+                    <div className="absolute right-0 top-0 bottom-0 bg-red-500/20 w-[22%]" />
+                  </div>
+                  <div className="relative flex items-center justify-between px-2 py-0.5 rounded bg-slate-900/60 overflow-hidden">
+                    <div className="absolute left-0 top-0 bottom-0 bg-emerald-500/20 w-[55%]" />
+                    <span className="relative z-10 text-emerald-400 font-bold">14,200 Qty</span>
+                    <span className="relative z-10 text-slate-200 font-bold">₹22,546.00</span>
+                    <span className="relative z-10 text-red-400">11,800 Qty</span>
+                    <div className="absolute right-0 top-0 bottom-0 bg-red-500/20 w-[45%]" />
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center text-[10px] font-mono text-slate-400 pt-1 border-t border-cyan-500/20">
+                  <span className="text-emerald-400">Institutional Wall: ₹22,540</span>
+                  <span className="text-cyan-400 font-bold">Live Bid/Ask Feed</span>
+                </div>
               </div>
-              <div className="h-20 bg-slate-950/80 rounded-xl border border-slate-800 p-3 flex items-center justify-between text-xs font-mono">
-                <div className="w-1/2 pr-2 border-r border-slate-800 text-emerald-400">
-                  <div className="text-[10px] text-slate-500">BUY DEPTH 64%</div>
-                  <div className="font-bold">42,100 Shares</div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                    <BarChart2 className="w-4 h-4" />
+                  </div>
+                  <h3 className="text-xl font-bold text-white group-hover:text-cyan-300 transition-colors">
+                    Live NSE/BSE Depth
+                  </h3>
                 </div>
-                <div className="w-1/2 pl-2 text-right text-red-400">
-                  <div className="text-[10px] text-slate-500">SELL DEPTH 36%</div>
-                  <div className="font-bold">23,700 Shares</div>
+                <p className="text-slate-400 text-sm leading-relaxed mb-4">
+                  Master market microstructure. Analyze order books, institutional block volume walls, and buyer-seller strength before trading.
+                </p>
+                <div className="flex items-center gap-2 text-xs font-mono text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-3 py-1.5 rounded-lg">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                  <span>Real-Time Level 2 Order Depth & Liquidity Clusters</span>
                 </div>
               </div>
             </div>
 
-            {/* Card 5: Trading Psychology */}
-            <div className="group relative bg-[#090e1a]/90 border border-slate-800/80 hover:border-emerald-500/50 rounded-2xl p-6 transition-all duration-300 hover:shadow-[0_10px_35px_rgba(16,185,129,0.15)] flex flex-col justify-between overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-pink-500/5 rounded-full blur-2xl group-hover:bg-pink-500/10 transition-colors" />
-              <div>
-                <div className="w-12 h-12 rounded-xl bg-pink-500/15 border border-pink-500/30 flex items-center justify-center mb-5 text-pink-400">
-                  <Activity className="w-6 h-6" />
+            {/* ── CARD 5: TRADING PSYCHOLOGY ENGINE (MINDSET GAUGE METER VISUAL) ── */}
+            <div className="group relative bg-[#090e1a]/90 border border-slate-800/80 hover:border-pink-500/50 rounded-2xl p-6 transition-all duration-300 hover:shadow-[0_10px_35px_rgba(236,72,153,0.15)] flex flex-col justify-between overflow-hidden">
+              <div className="absolute top-0 right-0 w-36 h-36 bg-pink-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-pink-500/15 transition-colors" />
+              
+              <div className="relative h-44 w-full bg-gradient-to-b from-[#0e1628] to-[#080d18] rounded-xl border border-pink-500/30 mb-5 overflow-hidden p-3 flex flex-col items-center justify-center">
+                <div className="relative flex items-center justify-center">
+                  <svg className="w-36 h-36 transform -rotate-90" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="40" stroke="#1e293b" strokeWidth="8" fill="none" />
+                    <circle 
+                      cx="50" 
+                      cy="50" 
+                      r="40" 
+                      stroke="#ec4899" 
+                      strokeWidth="8" 
+                      strokeDasharray="251.2" 
+                      strokeDashoffset="25" 
+                      strokeLinecap="round" 
+                      fill="none" 
+                      className="transition-all duration-1000"
+                    />
+                  </svg>
+                  
+                  <div className="absolute flex flex-col items-center justify-center text-center">
+                    <BrainCircuit className="w-6 h-6 text-pink-400 animate-pulse mb-0.5" />
+                    <div className="text-xl font-black text-white">94%</div>
+                    <div className="text-[9px] font-mono text-emerald-400 font-bold uppercase">Discipline</div>
+                  </div>
                 </div>
-                <h3 className="text-xl font-bold text-white mb-2 group-hover:text-pink-300 transition-colors">
-                  Trading Psychology Engine
-                </h3>
-                <p className="text-slate-400 text-sm leading-relaxed mb-6">
-                  Eliminate FOMO and revenge trading. Our system tracks your emotional patterns, rule adherence, and discipline score.
-                </p>
+
+                <div className="w-full flex justify-between text-[10px] font-mono text-slate-400 mt-1 border-t border-pink-500/20 pt-1">
+                  <span>Revenge Trades: 0</span>
+                  <span className="text-emerald-400 font-bold">Rule Followed: 100%</span>
+                </div>
               </div>
-              <div className="h-20 bg-slate-950/80 rounded-xl border border-slate-800 p-3 flex items-center justify-between text-xs">
-                <div>
-                  <div className="text-slate-400">Discipline Score</div>
-                  <div className="text-lg font-black text-pink-400 mt-0.5">94 / 100</div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-pink-500/15 border border-pink-500/30 flex items-center justify-center text-pink-400">
+                    <Activity className="w-4 h-4" />
+                  </div>
+                  <h3 className="text-xl font-bold text-white group-hover:text-pink-300 transition-colors">
+                    Trading Psychology Engine
+                  </h3>
                 </div>
-                <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 font-bold">
-                  Rule Adherent
-                </span>
+                <p className="text-slate-400 text-sm leading-relaxed mb-4">
+                  Track emotional discipline, revenge trading triggers, and cognitive biases with automated post-trade mental performance scoring.
+                </p>
+                <div className="flex items-center gap-2 text-xs font-mono text-pink-400 bg-pink-500/10 border border-pink-500/20 px-3 py-1.5 rounded-lg">
+                  <span className="w-1.5 h-1.5 rounded-full bg-pink-400 animate-pulse" />
+                  <span>Emotional Discipline Score & Behavioral Analytics</span>
+                </div>
               </div>
             </div>
 
-            {/* Card 6: Multi-Portfolio Labs */}
-            <div className="group relative bg-[#090e1a]/90 border border-slate-800/80 hover:border-emerald-500/50 rounded-2xl p-6 transition-all duration-300 hover:shadow-[0_10px_35px_rgba(16,185,129,0.15)] flex flex-col justify-between overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-teal-500/5 rounded-full blur-2xl group-hover:bg-teal-500/10 transition-colors" />
-              <div>
-                <div className="w-12 h-12 rounded-xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center mb-5 text-teal-400">
-                  <Layers className="w-6 h-6" />
+            {/* ── CARD 6: MULTI-PORTFOLIO LABS (OVERLAPPING SEGREGATED CARDS VISUAL) ── */}
+            <div className="group relative bg-[#090e1a]/90 border border-slate-800/80 hover:border-teal-500/50 rounded-2xl p-6 transition-all duration-300 hover:shadow-[0_10px_35px_rgba(20,184,166,0.15)] flex flex-col justify-between overflow-hidden">
+              <div className="absolute top-0 right-0 w-36 h-36 bg-teal-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-teal-500/15 transition-colors" />
+              
+              <div className="relative h-44 w-full bg-gradient-to-b from-[#0e1628] to-[#080d18] rounded-xl border border-teal-500/30 mb-5 overflow-hidden p-3 flex flex-col justify-between">
+                <div className="flex justify-between items-center text-[10px] font-mono text-slate-400 border-b border-teal-500/20 pb-1.5">
+                  <span className="text-teal-300 font-bold">MULTI-ACCOUNT SANDBOX</span>
+                  <span className="text-emerald-400 font-bold">2 ACTIVE ACCOUNTS</span>
                 </div>
-                <h3 className="text-xl font-bold text-white mb-2 group-hover:text-teal-300 transition-colors">
-                  Multi-Portfolio Labs
-                </h3>
-                <p className="text-slate-400 text-sm leading-relaxed mb-6">
-                  Create isolated sandboxes for different trading styles: Long-Term Bluechip, Swing Momentum, or Intraday Breakouts.
-                </p>
+
+                <div className="space-y-2 my-1">
+                  <div className="bg-[#0a1222] border border-teal-500/30 rounded-lg p-2 flex items-center justify-between shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-bold">S</div>
+                      <div>
+                        <div className="text-[11px] font-bold text-white">Swing Portfolio</div>
+                        <div className="text-[9px] text-slate-400">8 Indian Equities</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[11px] font-bold text-emerald-400">+28.4%</div>
+                      <div className="text-[9px] text-slate-400">₹24,80,000</div>
+                    </div>
+                  </div>
+
+                  <div className="bg-[#0a1222] border border-purple-500/30 rounded-lg p-2 flex items-center justify-between shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded bg-purple-500/20 text-purple-400 flex items-center justify-center text-xs font-bold">O</div>
+                      <div>
+                        <div className="text-[11px] font-bold text-white">Options Lab</div>
+                        <div className="text-[9px] text-slate-400">F&O Iron Condors</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[11px] font-bold text-teal-400">+41.2%</div>
+                      <div className="text-[9px] text-slate-400">₹18,50,000</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center text-[10px] font-mono text-slate-400 pt-1 border-t border-teal-500/20">
+                  <span>Isolated Risk Sandboxes</span>
+                  <span className="text-teal-400 font-bold">Side-by-Side P&L</span>
+                </div>
               </div>
-              <div className="h-20 bg-slate-950/80 rounded-xl border border-slate-800 p-3 flex items-center justify-around text-center text-xs">
-                <div>
-                  <div className="text-slate-500">Portfolio A (Swing)</div>
-                  <div className="text-emerald-400 font-bold mt-0.5">+24.5%</div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-400">
+                    <Layers className="w-4 h-4" />
+                  </div>
+                  <h3 className="text-xl font-bold text-white group-hover:text-teal-300 transition-colors">
+                    Multi-Portfolio Labs
+                  </h3>
                 </div>
-                <div className="w-px h-8 bg-slate-800" />
-                <div>
-                  <div className="text-slate-500">Portfolio B (Options)</div>
-                  <div className="text-teal-400 font-bold mt-0.5">+38.2%</div>
+                <p className="text-slate-400 text-sm leading-relaxed mb-4">
+                  Run multiple independent simulated accounts simultaneously. Test long-term value investing vs high-octane intraday options.
+                </p>
+                <div className="flex items-center gap-2 text-xs font-mono text-teal-400 bg-teal-500/10 border border-teal-500/20 px-3 py-1.5 rounded-lg">
+                  <span className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-pulse" />
+                  <span>Segregated Strategies & Comparative Performance</span>
                 </div>
               </div>
             </div>
+
           </div>
         </div>
       </section>
@@ -583,12 +789,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               Start in Under 60 Seconds
             </h2>
             <p className="text-slate-400 text-base mt-2">
-              No paper work, zero bank link requirement, straight into the action.
+              No paperwork, zero bank link requirement, straight into simulated live markets.
             </p>
           </div>
 
           <div className="grid md:grid-cols-4 gap-8 relative">
-            {/* Step 1 */}
             <div className="relative text-center md:text-left space-y-3">
               <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-xl font-black text-emerald-400 mb-4 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
                 01
@@ -599,7 +804,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               </p>
             </div>
 
-            {/* Step 2 */}
             <div className="relative text-center md:text-left space-y-3">
               <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-xl font-black text-emerald-400 mb-4 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
                 02
@@ -610,7 +814,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               </p>
             </div>
 
-            {/* Step 3 */}
             <div className="relative text-center md:text-left space-y-3">
               <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-xl font-black text-emerald-400 mb-4 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
                 03
@@ -621,7 +824,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               </p>
             </div>
 
-            {/* Step 4 */}
             <div className="relative text-center md:text-left space-y-3">
               <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-xl font-black text-emerald-400 mb-4 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
                 04
@@ -639,7 +841,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
       <section className="relative z-10 py-20 px-6">
         <div className="max-w-5xl mx-auto">
           <div className="relative rounded-3xl bg-gradient-to-b from-[#0c1626] to-[#050b16] border border-emerald-500/30 p-10 md:p-16 text-center shadow-[0_20px_70px_rgba(0,0,0,0.8)] overflow-hidden">
-            {/* Ambient Background Light */}
             <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
 
             <div className="relative z-10 space-y-6 max-w-2xl mx-auto">
@@ -672,7 +873,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
       {/* ─── 08. INSTITUTIONAL FOOTER ─── */}
       <footer className="relative z-10 border-t border-slate-800/80 bg-[#02050c] py-12 px-6">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6 text-sm text-slate-500">
-          {/* Logo & Tag */}
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-green-600 rounded-lg flex items-center justify-center border border-emerald-400/30">
               <TrendingUp className="w-4 h-4 text-white stroke-[2.5]" />
