@@ -12,8 +12,12 @@ import {
   ArrowRight,
   Radio,
   BrainCircuit,
-  Crosshair
+  Crosshair,
+  ShieldCheck,
+  Award,
+  Search
 } from 'lucide-react';
+import { fetchMultipleStockPrices } from './utils/priceApi';
 
 interface LandingPageProps {
   onGetStarted: () => void;
@@ -36,6 +40,42 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
   const [scrollY, setScrollY] = useState(0);
   const [activeTab, setActiveTab] = useState<'NIFTY' | 'RELIANCE'>('NIFTY');
   const [hoverTerminal, setHoverTerminal] = useState(false);
+  const [tickerList, setTickerList] = useState(TICKER_DATA);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchLatestTicker = async () => {
+      try {
+        const symbols = ['RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ITC.NS', 'BAJFINANCE.NS', 'TATAMOTORS.NS'];
+        const prices = await fetchMultipleStockPrices(symbols);
+        if (isMounted && Object.keys(prices).length > 0) {
+          setTickerList(prev => prev.map(item => {
+            const sym = item.symbol === 'HDFC BANK' ? 'HDFCBANK.NS' : item.symbol === 'INFOSYS' ? 'INFY.NS' : `${item.symbol}.NS`;
+            const live = prices[sym];
+            if (live && live.price) {
+              const diff = live.change || 0;
+              return {
+                ...item,
+                price: live.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+                change: `${diff >= 0 ? '+' : ''}${diff.toFixed(2)}%`,
+                up: diff >= 0
+              };
+            }
+            return item;
+          }));
+        }
+      } catch {
+        // Fallback gracefully to default snapshot
+      }
+    };
+
+    fetchLatestTicker();
+    const interval = setInterval(fetchLatestTicker, 60000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => setScrollY(window.scrollY);
@@ -46,7 +86,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
   const scrollTo = (id: string) => {
     const element = document.getElementById(id);
     if (element) {
-      element.scrollIntoView({ behavior: 'smooth' });
+      const headerOffset = 95; // Account for fixed top ticker and navbar
+      const elementPosition = element.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth'
+      });
     }
   };
 
@@ -68,69 +114,113 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
         />
       </div>
 
-      {/* ─── 01. NAVIGATION HEADER ─── */}
-      <nav 
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-          scrollY > 30 
-            ? 'bg-[#030712]/85 backdrop-blur-xl border-b border-emerald-500/15 py-3.5 shadow-[0_10px_30px_rgba(0,0,0,0.5)]' 
-            : 'bg-transparent py-5'
-        }`}
-      >
-        <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
-          {/* Exact Brand Logo */}
-          <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-            <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-green-600 rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)] border border-emerald-400/30">
-              <TrendingUp className="w-5 h-5 text-white stroke-[2.5]" />
-            </div>
-            <div className="flex items-center text-xl font-black tracking-tight">
-              <span className="text-emerald-400">Paper</span>
-              <span className="text-white">Profit</span>
-            </div>
+      {/* ─── 01. TOP HEADER: LIVE MARQUEE TICKER TAPE + NAVIGATION ─── */}
+      <header className="fixed top-0 left-0 right-0 z-50 transition-all duration-300">
+        {/* Top Professional Marquee Ticker */}
+        <div className="h-8 bg-[#040814]/95 border-b border-emerald-500/15 backdrop-blur-md flex items-center overflow-hidden marquee-pause-on-hover select-none shadow-sm">
+          {/* Fixed Pinned LIVE Indicator Badge */}
+          <div className="relative z-20 flex items-center gap-2 px-3 sm:px-4 h-full bg-[#040814] border-r border-slate-800/90 shrink-0 shadow-[4px_0_12px_rgba(0,0,0,0.6)]">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="text-[10px] font-extrabold font-mono uppercase tracking-wider text-emerald-400 flex items-center gap-1">
+              <span>LIVE</span>
+              <span className="hidden sm:inline text-slate-400 font-medium">MARKET</span>
+            </span>
           </div>
 
-          {/* Nav Items */}
-          <div className="hidden md:flex items-center gap-8">
-            <button 
-              onClick={() => scrollTo('features')}
-              className="text-sm font-medium text-slate-400 hover:text-emerald-400 transition-colors"
-            >
-              Features
-            </button>
-            <button 
-              onClick={() => scrollTo('features')}
-              className="text-sm font-medium text-slate-400 hover:text-emerald-400 transition-colors"
-            >
-              Guru Scan
-            </button>
-            <button 
-              onClick={() => scrollTo('features')}
-              className="text-sm font-medium text-slate-400 hover:text-emerald-400 transition-colors"
-            >
-              Options Suite
-            </button>
-            <button 
-              onClick={() => scrollTo('how-it-works')}
-              className="text-sm font-medium text-slate-400 hover:text-emerald-400 transition-colors"
-            >
-              How It Works
-            </button>
-          </div>
+          {/* Marquee Track Container with Pause on Hover */}
+          <div className="relative flex-1 overflow-hidden h-full flex items-center">
+            {/* Edge fade gradient masks */}
+            <div className="absolute inset-y-0 left-0 w-8 sm:w-12 bg-gradient-to-r from-[#040814] to-transparent z-10 pointer-events-none" />
+            <div className="absolute inset-y-0 right-0 w-8 sm:w-12 bg-gradient-to-l from-[#040814] to-transparent z-10 pointer-events-none" />
 
-          {/* Nav CTA */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onGetStarted}
-              className="relative group px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-green-500 text-slate-950 font-bold text-sm transition-all duration-300 hover:shadow-[0_0_25px_rgba(16,185,129,0.5)] hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2"
-            >
-              <span>Start Paper Trading</span>
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-            </button>
+            {/* Seamless Infinite Marquee Content */}
+            <div className="animate-marquee items-center space-x-6 sm:space-x-8 text-xs font-mono">
+              {[...tickerList, ...tickerList, ...tickerList].map((stock, i) => (
+                <div 
+                  key={i} 
+                  className="flex items-center gap-2 px-2 py-0.5 rounded hover:bg-slate-800/60 transition cursor-pointer group"
+                  title={`${stock.symbol} · ₹${stock.price} (${stock.change})`}
+                >
+                  <span className="font-bold text-slate-300 group-hover:text-white tracking-tight">{stock.symbol}</span>
+                  <span className="text-slate-100 font-medium">₹{stock.price}</span>
+                  <span className={`font-semibold flex items-center gap-0.5 text-[11px] ${stock.up ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    <span>{stock.up ? '▲' : '▼'}</span>
+                    <span>{stock.change}</span>
+                  </span>
+                  <span className="text-slate-700/80 ml-2">|</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </nav>
+
+        {/* Main Navigation Bar */}
+        <nav 
+          className={`transition-all duration-300 ${
+            scrollY > 30 
+              ? 'bg-[#030712]/85 backdrop-blur-xl border-b border-emerald-500/15 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.5)]' 
+              : 'bg-[#030712]/40 backdrop-blur-sm py-4'
+          }`}
+        >
+          <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
+            {/* Exact Brand Logo */}
+            <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+              <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-green-600 rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)] border border-emerald-400/30">
+                <TrendingUp className="w-5 h-5 text-white stroke-[2.5]" />
+              </div>
+              <div className="flex items-center text-xl font-black tracking-tight">
+                <span className="text-emerald-400">Paper</span>
+                <span className="text-white">Profit</span>
+              </div>
+            </div>
+
+            {/* Nav Items */}
+            <div className="hidden md:flex items-center gap-8">
+              <button 
+                onClick={() => scrollTo('features')}
+                className="text-sm font-medium text-slate-400 hover:text-emerald-400 transition-colors cursor-pointer"
+              >
+                Features
+              </button>
+              <button 
+                onClick={() => scrollTo('guru-scan')}
+                className="text-sm font-medium text-slate-400 hover:text-emerald-400 transition-colors cursor-pointer"
+              >
+                Guru Scan
+              </button>
+              <button 
+                onClick={() => scrollTo('options-suite')}
+                className="text-sm font-medium text-slate-400 hover:text-emerald-400 transition-colors cursor-pointer"
+              >
+                Options Suite
+              </button>
+              <button 
+                onClick={() => scrollTo('how-it-works')}
+                className="text-sm font-medium text-slate-400 hover:text-emerald-400 transition-colors cursor-pointer"
+              >
+                How It Works
+              </button>
+            </div>
+
+            {/* Nav CTA */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={onGetStarted}
+                className="relative group px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-green-500 text-slate-950 font-bold text-sm transition-all duration-300 hover:shadow-[0_0_25px_rgba(16,185,129,0.5)] hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2"
+              >
+                <span>Start Paper Trading</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              </button>
+            </div>
+          </div>
+        </nav>
+      </header>
 
       {/* ─── 02. HERO SECTION WITH 2.5D TRADING TERMINAL ─── */}
-      <section className="relative z-10 pt-32 pb-16 md:pt-40 md:pb-24 px-6 overflow-hidden">
+      <section className="relative z-10 pt-36 pb-16 md:pt-44 md:pb-24 px-6 overflow-hidden">
         <div className="max-w-7xl mx-auto">
           <div className="grid lg:grid-cols-12 gap-12 lg:gap-8 items-center">
             {/* Left Hero Content */}
@@ -363,23 +453,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
         </div>
       </section>
 
-      {/* ─── 03. LIVE NSE/BSE MARKET TICKER TAPE ─── */}
-      <div className="relative z-20 border-y border-emerald-500/20 bg-[#050b18]/90 backdrop-blur-md py-3 overflow-hidden shadow-[0_0_20px_rgba(0,0,0,0.5)]">
-        <div className="flex w-max animate-marquee space-x-10 items-center">
-          {[...TICKER_DATA, ...TICKER_DATA].map((stock, i) => (
-            <div key={i} className="flex items-center gap-3 text-xs font-mono tracking-tight">
-              <span className="font-bold text-slate-300">{stock.symbol}</span>
-              <span className="text-slate-100 font-medium">₹{stock.price}</span>
-              <span className={`font-bold ${stock.up ? 'text-emerald-400' : 'text-red-400'}`}>
-                {stock.up ? '▲' : '▼'} {stock.change}
-              </span>
-              <span className="text-slate-700">|</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ─── 04. KEY STATS & TRUST STRIP ─── */}
+      {/* ─── 03. KEY STATS & TRUST STRIP ─── */}
       <section className="relative z-10 py-12 px-6 border-b border-slate-800/60 bg-slate-950/40">
         <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
           <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800/60 hover:border-emerald-500/30 transition-colors">
@@ -402,7 +476,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
       </section>
 
       {/* ─── 05. PRO FEATURE SUITE (RICH VISUAL GRAPHIC CARDS MATCHING MOCKUP) ─── */}
-      <section id="features" className="relative z-10 py-24 px-6">
+      <section id="features" className="relative z-10 py-24 px-6 scroll-mt-20">
         <div className="max-w-7xl mx-auto">
           {/* Section Header */}
           <div className="text-center max-w-2xl mx-auto mb-16">
@@ -421,7 +495,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
 
             {/* ── CARD 1: GURU SCAN PRO (GOLDEN RADAR SCANNER VISUAL) ── */}
-            <div className="group relative bg-[#090e1a]/90 border border-slate-800/80 hover:border-amber-500/50 rounded-2xl p-6 transition-all duration-300 hover:shadow-[0_10px_35px_rgba(245,158,11,0.15)] flex flex-col justify-between overflow-hidden">
+            <div id="guru-scan" className="group relative bg-[#090e1a]/90 border border-slate-800/80 hover:border-amber-500/50 rounded-2xl p-6 transition-all duration-300 hover:shadow-[0_10px_35px_rgba(245,158,11,0.15)] flex flex-col justify-between overflow-hidden scroll-mt-24">
               <div className="absolute top-0 right-0 w-36 h-36 bg-amber-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-amber-500/15 transition-colors" />
               
               {/* Rich Visual Graphic Area: Golden Radar Sweep */}
@@ -474,7 +548,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
             </div>
 
             {/* ── CARD 2: F&O OPTIONS TERMINAL (PAYOFF CURVE & GREEKS MATRIX) ── */}
-            <div className="group relative bg-[#090e1a]/90 border border-slate-800/80 hover:border-purple-500/50 rounded-2xl p-6 transition-all duration-300 hover:shadow-[0_10px_35px_rgba(168,85,247,0.15)] flex flex-col justify-between overflow-hidden">
+            <div id="options-suite" className="group relative bg-[#090e1a]/90 border border-slate-800/80 hover:border-purple-500/50 rounded-2xl p-6 transition-all duration-300 hover:shadow-[0_10px_35px_rgba(168,85,247,0.15)] flex flex-col justify-between overflow-hidden scroll-mt-24">
               <div className="absolute top-0 right-0 w-36 h-36 bg-purple-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-purple-500/15 transition-colors" />
               
               <div className="relative h-44 w-full bg-gradient-to-b from-[#0e1628] to-[#080d18] rounded-xl border border-purple-500/30 mb-5 overflow-hidden p-3 flex flex-col justify-between">
@@ -778,74 +852,170 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
         </div>
       </section>
 
-      {/* ─── 06. HOW IT WORKS TIMELINE (4 STEPS CONNECTED) ─── */}
-      <section id="how-it-works" className="relative z-10 py-24 px-6 bg-slate-950/60 border-t border-slate-800/60">
+      {/* ─── 06. HOW IT WORKS TIMELINE (4 INTERACTIVE FINTECH STEPS) ─── */}
+      <section id="how-it-works" className="relative z-10 py-28 px-6 bg-slate-950/80 border-t border-slate-800/60 scroll-mt-20">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center max-w-xl mx-auto mb-16">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-semibold uppercase tracking-wider mb-3">
-              Fast Track Onboarding
+          {/* Section Header */}
+          <div className="text-center max-w-2xl mx-auto mb-20">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider mb-4 shadow-[0_0_15px_rgba(16,185,129,0.15)]">
+              <Zap className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Fast Track Onboarding · Zero Friction</span>
             </div>
             <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-              Start in Under 60 Seconds
+              Start in Under{' '}
+              <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-green-400 bg-clip-text text-transparent">
+                60 Seconds
+              </span>
             </h2>
-            <p className="text-slate-400 text-base mt-2">
-              No paperwork, zero bank link requirement, straight into simulated live markets.
+            <p className="text-slate-400 text-base sm:text-lg mt-3">
+              No paperwork, zero bank link requirement, straight into simulated live Indian markets.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-4 gap-8 relative">
-            <div className="relative text-center md:text-left space-y-3">
-              <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-xl font-black text-emerald-400 mb-4 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
-                01
-              </div>
-              <h4 className="text-lg font-bold text-white">Instant Signup</h4>
-              <p className="text-slate-400 text-sm leading-relaxed">
-                Create your free paper account in 1 click. No KYC, no demat or Aadhaar required.
-              </p>
-            </div>
+          {/* Connected 4 Steps Container */}
+          <div className="relative">
+            {/* Ambient Connecting Line across steps in desktop */}
+            <div className="hidden lg:block absolute top-14 left-16 right-16 h-[2px] bg-gradient-to-r from-emerald-500/30 via-teal-500/50 to-emerald-500/30 z-0" />
 
-            <div className="relative text-center md:text-left space-y-3">
-              <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-xl font-black text-emerald-400 mb-4 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
-                02
-              </div>
-              <h4 className="text-lg font-bold text-white">Pick Stocks & F&O</h4>
-              <p className="text-slate-400 text-sm leading-relaxed">
-                Search over 2,000+ NSE & BSE stocks, NIFTY options, or explore Guru Scan presets.
-              </p>
-            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 relative z-10">
+              {/* STEP 1 */}
+              <div className="group relative bg-[#090f1e]/90 hover:bg-[#0d1629] border border-slate-800 hover:border-emerald-500/50 rounded-2xl p-6 transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_20px_40px_rgba(16,185,129,0.15)] flex flex-col justify-between overflow-hidden">
+                <div className="absolute top-0 right-0 w-28 h-28 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all pointer-events-none" />
+                
+                <div>
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center text-lg font-black text-slate-950 shadow-[0_0_25px_rgba(16,185,129,0.45)] group-hover:scale-110 transition-transform">
+                      01
+                    </div>
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                      10s Setup
+                    </span>
+                  </div>
 
-            <div className="relative text-center md:text-left space-y-3">
-              <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-xl font-black text-emerald-400 mb-4 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
-                03
-              </div>
-              <h4 className="text-lg font-bold text-white">Execute Paper Trades</h4>
-              <p className="text-slate-400 text-sm leading-relaxed">
-                Place market or limit orders with virtual capital. Watch your live P&L respond.
-              </p>
-            </div>
+                  <h4 className="text-lg font-bold text-white group-hover:text-emerald-300 transition-colors mb-2">
+                    Instant Signup
+                  </h4>
+                  <p className="text-slate-400 text-xs sm:text-sm leading-relaxed mb-5">
+                    Launch directly into simulated markets without entering PAN, Aadhaar, or linking any bank account.
+                  </p>
+                </div>
 
-            <div className="relative text-center md:text-left space-y-3">
-              <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-xl font-black text-emerald-400 mb-4 shadow-[0_0_20px_rgba(16,185,129,0.2)]">
-                04
+                <div className="p-3 bg-[#050811] rounded-xl border border-slate-800/90 text-xs font-mono space-y-1.5">
+                  <div className="flex items-center gap-2 text-emerald-400">
+                    <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                    <span>Zero KYC or Bank Link</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-300">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span>Free ₹50,00,000 Wallet</span>
+                  </div>
+                </div>
               </div>
-              <h4 className="text-lg font-bold text-white">Master Strategy</h4>
-              <p className="text-slate-400 text-sm leading-relaxed">
-                Analyze win rate, sharpen risk management, and step into the real markets prepared.
-              </p>
+
+              {/* STEP 2 */}
+              <div className="group relative bg-[#090f1e]/90 hover:bg-[#0d1629] border border-slate-800 hover:border-teal-500/50 rounded-2xl p-6 transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_20px_40px_rgba(20,184,166,0.15)] flex flex-col justify-between overflow-hidden">
+                <div className="absolute top-0 right-0 w-28 h-28 bg-teal-500/10 rounded-full blur-2xl group-hover:bg-teal-500/20 transition-all pointer-events-none" />
+                
+                <div>
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center text-lg font-black text-slate-950 shadow-[0_0_25px_rgba(20,184,166,0.45)] group-hover:scale-110 transition-transform">
+                      02
+                    </div>
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-teal-400 bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 rounded-full">
+                      2,000+ Assets
+                    </span>
+                  </div>
+
+                  <h4 className="text-lg font-bold text-white group-hover:text-teal-300 transition-colors mb-2">
+                    Pick Stocks & F&O
+                  </h4>
+                  <p className="text-slate-400 text-xs sm:text-sm leading-relaxed mb-5">
+                    Scan liquid NSE & BSE equities, NIFTY weekly options, or screen high-probability setups with Guru Scan.
+                  </p>
+                </div>
+
+                <div className="p-3 bg-[#050811] rounded-xl border border-slate-800/90 text-[11px] font-mono flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Search className="w-3 h-3 text-slate-400" />
+                    <span className="text-slate-300 font-bold">NIFTY 50</span>
+                  </div>
+                  <span className="text-emerald-400 font-bold">₹22,547.10</span>
+                  <span className="text-teal-400 bg-teal-500/15 px-1.5 py-0.5 rounded text-[10px] font-bold">Live</span>
+                </div>
+              </div>
+
+              {/* STEP 3 */}
+              <div className="group relative bg-[#090f1e]/90 hover:bg-[#0d1629] border border-slate-800 hover:border-emerald-500/50 rounded-2xl p-6 transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_20px_40px_rgba(16,185,129,0.15)] flex flex-col justify-between overflow-hidden">
+                <div className="absolute top-0 right-0 w-28 h-28 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all pointer-events-none" />
+                
+                <div>
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-400 to-green-500 flex items-center justify-center text-lg font-black text-slate-950 shadow-[0_0_25px_rgba(16,185,129,0.45)] group-hover:scale-110 transition-transform">
+                      03
+                    </div>
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                      &lt;50ms Fills
+                    </span>
+                  </div>
+
+                  <h4 className="text-lg font-bold text-white group-hover:text-emerald-300 transition-colors mb-2">
+                    Execute Paper Trades
+                  </h4>
+                  <p className="text-slate-400 text-xs sm:text-sm leading-relaxed mb-5">
+                    Execute Market, Limit, and Stop-Loss orders with realistic slippage, liquidity depth, and instant P&L feedback.
+                  </p>
+                </div>
+
+                <div className="p-3 bg-[#050811] rounded-xl border border-slate-800/90 text-xs font-mono flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                    <span className="text-slate-300 font-bold">BUY RELIANCE</span>
+                  </div>
+                  <span className="text-emerald-400 font-bold">+₹4,250 P&L</span>
+                </div>
+              </div>
+
+              {/* STEP 4 */}
+              <div className="group relative bg-[#090f1e]/90 hover:bg-[#0d1629] border border-slate-800 hover:border-amber-500/50 rounded-2xl p-6 transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_20px_40px_rgba(245,158,11,0.15)] flex flex-col justify-between overflow-hidden">
+                <div className="absolute top-0 right-0 w-28 h-28 bg-amber-500/10 rounded-full blur-2xl group-hover:bg-amber-500/20 transition-all pointer-events-none" />
+                
+                <div>
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-lg font-black text-slate-950 shadow-[0_0_25px_rgba(245,158,11,0.45)] group-hover:scale-110 transition-transform">
+                      04
+                    </div>
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                      Edge Verified
+                    </span>
+                  </div>
+
+                  <h4 className="text-lg font-bold text-white group-hover:text-amber-300 transition-colors mb-2">
+                    Master & Scale Strategy
+                  </h4>
+                  <p className="text-slate-400 text-xs sm:text-sm leading-relaxed mb-5">
+                    Analyze win rate, Sharpe ratio, and psychological discipline so you step into the real markets prepared to win.
+                  </p>
+                </div>
+
+                <div className="p-3 bg-[#050811] rounded-xl border border-slate-800/90 text-xs font-mono flex items-center justify-between">
+                  <span className="text-slate-400">Win Rate: <strong className="text-emerald-400 font-bold">68.4%</strong></span>
+                  <span className="text-amber-400 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded text-[10px]">Sharpe 2.4</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
       {/* ─── 07. FINAL CTA CONVERSION CARD WITH TRADING MENTOR LADY ─── */}
-      <section className="relative z-10 py-20 px-6">
+      <section className="relative z-10 py-24 px-6">
         <div className="max-w-6xl mx-auto">
           <div className="relative rounded-3xl bg-gradient-to-br from-[#0c1626] via-[#091120] to-[#040813] border border-emerald-500/35 p-8 sm:p-12 lg:p-14 shadow-[0_25px_80px_rgba(0,0,0,0.85)] overflow-hidden">
             {/* Ambient Background Glows */}
             <div className="absolute -top-24 -left-24 w-96 h-96 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
             <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
 
-            <div className="relative z-10 grid lg:grid-cols-12 gap-10 lg:gap-8 items-center">
+            <div className="relative z-10 grid lg:grid-cols-12 gap-10 lg:gap-12 items-center">
               {/* Left Column: Text & CTA Action */}
               <div className="lg:col-span-7 text-left space-y-6">
                 <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider">
@@ -864,8 +1034,20 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                   Join thousands of Indian retail traders practicing daily on PaperProfit. Build confidence, master setups, and test strategies with your virtual <span className="text-emerald-400 font-bold">₹50,00,000 wallet</span>.
                 </p>
 
+                {/* Dual Pill Highlights */}
+                <div className="grid grid-cols-2 gap-3 max-w-md">
+                  <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center gap-2.5 text-xs text-slate-300">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                    <span className="font-semibold">₹50 Lakh Virtual Capital</span>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center gap-2.5 text-xs text-slate-300">
+                    <span className="w-2 h-2 rounded-full bg-teal-400" />
+                    <span className="font-semibold">Zero Demat Required</span>
+                  </div>
+                </div>
+
                 {/* Mentor Quote Callout */}
-                <div className="p-4 rounded-xl bg-slate-950/70 border border-emerald-500/25 flex items-start gap-3">
+                <div className="p-4 rounded-xl bg-slate-950/80 border border-emerald-500/25 flex items-start gap-3 shadow-inner">
                   <span className="text-xl">💡</span>
                   <div className="text-xs sm:text-sm text-slate-300 leading-snug">
                     <span className="text-emerald-400 font-bold">Mentor's Rule: </span>
@@ -876,7 +1058,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                 <div className="pt-2 flex flex-col sm:flex-row items-start sm:items-center gap-4">
                   <button
                     onClick={onGetStarted}
-                    className="px-8 py-4 rounded-xl bg-gradient-to-r from-emerald-500 to-green-500 text-slate-950 font-black text-base transition-all duration-300 hover:shadow-[0_0_40px_rgba(16,185,129,0.55)] hover:scale-105 active:scale-95 flex items-center gap-3"
+                    className="w-full sm:w-auto px-8 py-4 rounded-xl bg-gradient-to-r from-emerald-500 to-green-500 text-slate-950 font-black text-base transition-all duration-300 hover:shadow-[0_0_40px_rgba(16,185,129,0.55)] hover:scale-105 active:scale-95 flex items-center justify-center gap-3 cursor-pointer"
                   >
                     <Sparkles className="w-5 h-5 fill-slate-950" />
                     <span>Get Started in 60 Seconds — 100% Free</span>
@@ -893,22 +1075,34 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
               {/* Right Column: Attractive Female Mentor Guiding and Pointing */}
               <div className="lg:col-span-5 relative flex justify-center">
                 {/* Glowing border frame around mentor */}
-                <div className="relative rounded-2xl p-1 bg-gradient-to-b from-emerald-500/40 via-teal-500/20 to-transparent shadow-[0_15px_45px_rgba(16,185,129,0.25)] group">
-                  <div className="relative rounded-xl overflow-hidden bg-slate-950 max-w-[360px] sm:max-w-[400px]">
+                <div className="relative rounded-2xl p-1 bg-gradient-to-b from-emerald-500/50 via-teal-500/30 to-transparent shadow-[0_15px_50px_rgba(16,185,129,0.3)] group max-w-[360px] sm:max-w-[390px] w-full">
+                  <div className="relative rounded-xl overflow-hidden bg-slate-950">
+                    {/* Top Floating Simulator Live Pill */}
+                    <div className="absolute top-3 left-3 z-10 bg-slate-950/85 backdrop-blur-md border border-emerald-500/40 rounded-full px-3 py-1 flex items-center gap-2 shadow-lg">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                      <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider">Simulator Active</span>
+                    </div>
+
                     <img 
                       src="/mentor_lady.jpg" 
                       alt="Trading Mentor Instruction" 
-                      className="w-full h-auto object-cover transform group-hover:scale-105 transition-transform duration-700"
+                      className="w-full h-[360px] sm:h-[400px] object-cover object-center transform group-hover:scale-105 transition-transform duration-700"
                     />
 
                     {/* Instruction Overlay Tag */}
-                    <div className="absolute bottom-4 left-4 right-4 bg-slate-950/85 backdrop-blur-md border border-emerald-500/35 rounded-xl p-3 shadow-lg flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
-                        <TrendingUp className="w-4 h-4 text-emerald-400" />
+                    <div className="absolute bottom-4 left-4 right-4 bg-slate-950/90 backdrop-blur-md border border-emerald-500/40 rounded-xl p-3.5 shadow-xl flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
+                        <TrendingUp className="w-4.5 h-4.5 text-emerald-400" />
                       </div>
                       <div className="text-left">
-                        <div className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">Trading Instructor</div>
-                        <div className="text-xs font-semibold text-slate-200">"Click here & start paper trading today!"</div>
+                        <div className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <span>Trading Mentor</span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          <span className="text-[10px] text-slate-400 font-normal">Verified Guide</span>
+                        </div>
+                        <div className="text-xs font-semibold text-slate-200 mt-0.5">
+                          "Click above & start your free simulation today!"
+                        </div>
                       </div>
                     </div>
                   </div>
