@@ -837,33 +837,82 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
         </div>
       </section>
 
-      {/* ─── 07. FINAL CTA CONVERSION CARD ─── */}
+      {/* ─── 07. FINAL CTA CONVERSION CARD WITH TRADING MENTOR LADY ─── */}
       <section className="relative z-10 py-20 px-6">
-        <div className="max-w-5xl mx-auto">
-          <div className="relative rounded-3xl bg-gradient-to-b from-[#0c1626] to-[#050b16] border border-emerald-500/30 p-10 md:p-16 text-center shadow-[0_20px_70px_rgba(0,0,0,0.8)] overflow-hidden">
-            <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="max-w-6xl mx-auto">
+          <div className="relative rounded-3xl bg-gradient-to-br from-[#0c1626] via-[#091120] to-[#040813] border border-emerald-500/35 p-8 sm:p-12 lg:p-14 shadow-[0_25px_80px_rgba(0,0,0,0.85)] overflow-hidden">
+            {/* Ambient Background Glows */}
+            <div className="absolute -top-24 -left-24 w-96 h-96 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
 
-            <div className="relative z-10 space-y-6 max-w-2xl mx-auto">
-              <h3 className="text-3xl sm:text-5xl font-black text-white tracking-tight leading-tight">
-                Ready to trade like an institutional pro?
-              </h3>
-              <p className="text-slate-300 text-base sm:text-lg">
-                Join thousands of Indian retail traders practicing daily on PaperProfit. Your virtual ₹50,00,000 wallet is ready.
-              </p>
+            <div className="relative z-10 grid lg:grid-cols-12 gap-10 lg:gap-8 items-center">
+              {/* Left Column: Text & CTA Action */}
+              <div className="lg:col-span-7 text-left space-y-6">
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  <span>Expert Guidance · Zero Financial Stress</span>
+                </div>
 
-              <div className="pt-2 flex justify-center">
-                <button
-                  onClick={onGetStarted}
-                  className="px-9 py-4 rounded-xl bg-gradient-to-r from-emerald-500 to-green-500 text-slate-950 font-black text-base transition-all duration-300 hover:shadow-[0_0_40px_rgba(16,185,129,0.5)] hover:scale-105 active:scale-95 flex items-center gap-3"
-                >
-                  <Sparkles className="w-5 h-5 fill-slate-950" />
-                  <span>Get Started in 60 Seconds — 100% Free</span>
-                  <ArrowRight className="w-5 h-5 stroke-[2.5]" />
-                </button>
+                <h3 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-[1.12]">
+                  Ready to trade like an{' '}
+                  <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-green-400 bg-clip-text text-transparent">
+                    institutional pro?
+                  </span>
+                </h3>
+
+                <p className="text-slate-300 text-base sm:text-lg leading-relaxed max-w-xl">
+                  Join thousands of Indian retail traders practicing daily on PaperProfit. Build confidence, master setups, and test strategies with your virtual <span className="text-emerald-400 font-bold">₹50,00,000 wallet</span>.
+                </p>
+
+                {/* Mentor Quote Callout */}
+                <div className="p-4 rounded-xl bg-slate-950/70 border border-emerald-500/25 flex items-start gap-3">
+                  <span className="text-xl">💡</span>
+                  <div className="text-xs sm:text-sm text-slate-300 leading-snug">
+                    <span className="text-emerald-400 font-bold">Mentor's Rule: </span>
+                    "Never risk your real hard-earned money until you have proved your trading edge in simulation first."
+                  </div>
+                </div>
+
+                <div className="pt-2 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                  <button
+                    onClick={onGetStarted}
+                    className="px-8 py-4 rounded-xl bg-gradient-to-r from-emerald-500 to-green-500 text-slate-950 font-black text-base transition-all duration-300 hover:shadow-[0_0_40px_rgba(16,185,129,0.55)] hover:scale-105 active:scale-95 flex items-center gap-3"
+                  >
+                    <Sparkles className="w-5 h-5 fill-slate-950" />
+                    <span>Get Started in 60 Seconds — 100% Free</span>
+                    <ArrowRight className="w-5 h-5 stroke-[2.5]" />
+                  </button>
+                </div>
+
+                <div className="text-xs text-slate-400 font-medium flex items-center gap-2 pt-1">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>No credit card required · No broker login · 100% simulated paper trading</span>
+                </div>
               </div>
 
-              <div className="text-xs text-slate-500 font-medium">
-                No credit card required · No broker login · 100% simulated paper trading
+              {/* Right Column: Attractive Female Mentor Guiding and Pointing */}
+              <div className="lg:col-span-5 relative flex justify-center">
+                {/* Glowing border frame around mentor */}
+                <div className="relative rounded-2xl p-1 bg-gradient-to-b from-emerald-500/40 via-teal-500/20 to-transparent shadow-[0_15px_45px_rgba(16,185,129,0.25)] group">
+                  <div className="relative rounded-xl overflow-hidden bg-slate-950 max-w-[360px] sm:max-w-[400px]">
+                    <img 
+                      src="/mentor_lady.jpg" 
+                      alt="Trading Mentor Instruction" 
+                      className="w-full h-auto object-cover transform group-hover:scale-105 transition-transform duration-700"
+                    />
+
+                    {/* Instruction Overlay Tag */}
+                    <div className="absolute bottom-4 left-4 right-4 bg-slate-950/85 backdrop-blur-md border border-emerald-500/35 rounded-xl p-3 shadow-lg flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
+                        <TrendingUp className="w-4 h-4 text-emerald-400" />
+                      </div>
+                      <div className="text-left">
+                        <div className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">Trading Instructor</div>
+                        <div className="text-xs font-semibold text-slate-200">"Click here & start paper trading today!"</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
