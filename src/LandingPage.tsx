@@ -15,7 +15,10 @@ import {
   Crosshair,
   ShieldCheck,
   Award,
-  Search
+  Search,
+  Star,
+  Wallet,
+  Lock
 } from 'lucide-react';
 import { fetchMultipleStockPrices } from './utils/priceApi';
 
@@ -1010,19 +1013,31 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
       {/* ─── 07. FINAL CTA CONVERSION CARD WITH TRADING MENTOR LADY ─── */}
       <section className="relative z-10 py-24 px-6">
         <div className="max-w-6xl mx-auto">
-          <div className="relative rounded-3xl bg-gradient-to-br from-[#0c1626] via-[#091120] to-[#040813] border border-emerald-500/35 p-8 sm:p-12 lg:p-14 shadow-[0_25px_80px_rgba(0,0,0,0.85)] overflow-hidden">
+          {/* Main Card Container */}
+          <div className="relative rounded-3xl bg-gradient-to-br from-[#0c1626]/95 via-[#08111e]/95 to-[#040813] border border-emerald-500/40 p-8 sm:p-12 lg:p-14 shadow-[0_25px_80px_rgba(0,0,0,0.85),0_0_60px_rgba(16,185,129,0.18)] overflow-hidden backdrop-blur-2xl">
             {/* Ambient Background Glows */}
-            <div className="absolute -top-24 -left-24 w-96 h-96 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
-            <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -top-32 -left-32 w-[450px] h-[450px] bg-emerald-500/20 rounded-full blur-[140px] pointer-events-none" />
+            <div className="absolute -bottom-32 -right-32 w-[450px] h-[450px] bg-teal-500/15 rounded-full blur-[140px] pointer-events-none" />
+
+            {/* Subtle Cyber Grid Accent */}
+            <div 
+              className="absolute inset-0 opacity-[0.03] pointer-events-none"
+              style={{
+                backgroundImage: 'linear-gradient(rgba(16,185,129,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(16,185,129,0.4) 1px, transparent 1px)',
+                backgroundSize: '36px 36px'
+              }}
+            />
 
             <div className="relative z-10 grid lg:grid-cols-12 gap-10 lg:gap-12 items-center">
-              {/* Left Column: Text & CTA Action */}
+              {/* Left Column: Text, Feature Grid & CTA Action */}
               <div className="lg:col-span-7 text-left space-y-6">
-                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider">
+                {/* Top Badge */}
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-400 text-xs font-bold uppercase tracking-wider shadow-[0_0_20px_rgba(16,185,129,0.2)]">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                  <span>Expert Guidance · Zero Financial Stress</span>
+                  <span>Institutional-Grade Simulator · Zero Risk</span>
                 </div>
 
+                {/* Main Headline */}
                 <h3 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-[1.12]">
                   Ready to trade like an{' '}
                   <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-green-400 bg-clip-text text-transparent">
@@ -1030,78 +1045,129 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
                   </span>
                 </h3>
 
+                {/* Subtitle */}
                 <p className="text-slate-300 text-base sm:text-lg leading-relaxed max-w-xl">
-                  Join thousands of Indian retail traders practicing daily on PaperProfit. Build confidence, master setups, and test strategies with your virtual <span className="text-emerald-400 font-bold">₹50,00,000 wallet</span>.
+                  Join over <span className="text-white font-bold">45,000+ Indian retail traders</span> practicing daily on PaperProfit. Build confidence, master setups, and test strategies with your virtual <span className="text-emerald-400 font-bold">₹50,00,000 wallet</span>.
                 </p>
 
-                {/* Dual Pill Highlights */}
-                <div className="grid grid-cols-2 gap-3 max-w-md">
-                  <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center gap-2.5 text-xs text-slate-300">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                    <span className="font-semibold">₹50 Lakh Virtual Capital</span>
+                {/* 3 High-Impact Micro-Perk Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="p-3 rounded-xl bg-slate-900/70 border border-slate-800 hover:border-emerald-500/40 transition-colors">
+                    <div className="flex items-center gap-2 text-emerald-400 mb-1">
+                      <Wallet className="w-4 h-4" />
+                      <span className="text-xs font-bold text-white">₹50 Lakh Wallet</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-tight">Instant 1-Click Refills</p>
                   </div>
-                  <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center gap-2.5 text-xs text-slate-300">
-                    <span className="w-2 h-2 rounded-full bg-teal-400" />
-                    <span className="font-semibold">Zero Demat Required</span>
+
+                  <div className="p-3 rounded-xl bg-slate-900/70 border border-slate-800 hover:border-teal-500/40 transition-colors">
+                    <div className="flex items-center gap-2 text-teal-400 mb-1">
+                      <Zap className="w-4 h-4" />
+                      <span className="text-xs font-bold text-white">Zero Demat / KYC</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-tight">Start in Under 10 Seconds</p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-900/70 border border-slate-800 hover:border-emerald-500/40 transition-colors">
+                    <div className="flex items-center gap-2 text-emerald-400 mb-1">
+                      <TrendingUp className="w-4 h-4" />
+                      <span className="text-xs font-bold text-white">Live NSE & BSE</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-tight">Tick-by-Tick Market Depth</p>
                   </div>
                 </div>
 
                 {/* Mentor Quote Callout */}
-                <div className="p-4 rounded-xl bg-slate-950/80 border border-emerald-500/25 flex items-start gap-3 shadow-inner">
+                <div className="p-4 rounded-xl bg-slate-950/90 border border-amber-500/30 flex items-start gap-3 shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
                   <span className="text-xl">💡</span>
-                  <div className="text-xs sm:text-sm text-slate-300 leading-snug">
-                    <span className="text-emerald-400 font-bold">Mentor's Rule: </span>
-                    "Never risk your real hard-earned money until you have proved your trading edge in simulation first."
+                  <div className="text-xs sm:text-sm text-slate-200 leading-snug">
+                    <span className="text-amber-400 font-bold">Mentor's Golden Rule: </span>
+                    "Never risk your real hard-earned capital until you have proved your statistical edge in simulation first."
                   </div>
                 </div>
 
-                <div className="pt-2 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                  <button
-                    onClick={onGetStarted}
-                    className="w-full sm:w-auto px-8 py-4 rounded-xl bg-gradient-to-r from-emerald-500 to-green-500 text-slate-950 font-black text-base transition-all duration-300 hover:shadow-[0_0_40px_rgba(16,185,129,0.55)] hover:scale-105 active:scale-95 flex items-center justify-center gap-3 cursor-pointer"
-                  >
-                    <Sparkles className="w-5 h-5 fill-slate-950" />
-                    <span>Get Started in 60 Seconds — 100% Free</span>
-                    <ArrowRight className="w-5 h-5 stroke-[2.5]" />
-                  </button>
-                </div>
+                {/* CTA Action & Social Proof */}
+                <div className="pt-2 space-y-4">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                    <button
+                      onClick={onGetStarted}
+                      className="w-full sm:w-auto px-8 py-4 rounded-xl bg-gradient-to-r from-emerald-400 via-emerald-500 to-green-500 text-slate-950 font-black text-base transition-all duration-300 hover:shadow-[0_0_50px_rgba(16,185,129,0.7)] hover:scale-105 active:scale-95 flex items-center justify-center gap-3 cursor-pointer group shadow-[0_0_30px_rgba(16,185,129,0.45)]"
+                    >
+                      <Sparkles className="w-5 h-5 fill-slate-950 group-hover:rotate-12 transition-transform" />
+                      <span>Get Started in 60 Seconds — 100% Free</span>
+                      <ArrowRight className="w-5 h-5 stroke-[2.5] group-hover:translate-x-1 transition-transform" />
+                    </button>
+                  </div>
 
-                <div className="text-xs text-slate-400 font-medium flex items-center gap-2 pt-1">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>No credit card required · No broker login · 100% simulated paper trading</span>
+                  {/* Social Proof + Trust Row */}
+                  <div className="flex flex-wrap items-center gap-4 pt-1">
+                    {/* Star Rating Badge */}
+                    <div className="flex items-center gap-2 bg-slate-900/60 border border-slate-800 px-3 py-1.5 rounded-full">
+                      <div className="flex text-amber-400 text-xs">
+                        {[...Array(5)].map((_, i) => (
+                          <Star key={i} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                        ))}
+                      </div>
+                      <span className="text-xs font-bold text-white">4.9/5</span>
+                      <span className="text-[11px] text-slate-400">(45k+ Traders)</span>
+                    </div>
+
+                    {/* Trust Checks */}
+                    <div className="text-xs text-slate-400 font-medium flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>No credit card required · No broker login needed</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Right Column: Attractive Female Mentor Guiding and Pointing */}
+              {/* Right Column: High-End Cyberpunk Mentor Showcase */}
               <div className="lg:col-span-5 relative flex justify-center">
-                {/* Glowing border frame around mentor */}
-                <div className="relative rounded-2xl p-1 bg-gradient-to-b from-emerald-500/50 via-teal-500/30 to-transparent shadow-[0_15px_50px_rgba(16,185,129,0.3)] group max-w-[360px] sm:max-w-[390px] w-full">
-                  <div className="relative rounded-xl overflow-hidden bg-slate-950">
-                    {/* Top Floating Simulator Live Pill */}
-                    <div className="absolute top-3 left-3 z-10 bg-slate-950/85 backdrop-blur-md border border-emerald-500/40 rounded-full px-3 py-1 flex items-center gap-2 shadow-lg">
+                {/* Glowing Outer Frame with Gradient Stroke */}
+                <div className="relative rounded-3xl p-1.5 bg-gradient-to-b from-emerald-400/60 via-teal-500/30 to-transparent shadow-[0_20px_60px_rgba(16,185,129,0.35)] group max-w-[360px] sm:max-w-[400px] w-full">
+                  <div className="relative rounded-2xl overflow-hidden bg-slate-950">
+                    
+                    {/* Floating Top-Left Badge: Live Simulator Status */}
+                    <div className="absolute top-3.5 left-3.5 z-20 bg-slate-950/85 backdrop-blur-md border border-emerald-500/40 rounded-full px-3 py-1 flex items-center gap-2 shadow-[0_4px_15px_rgba(0,0,0,0.6)]">
                       <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                      <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider">Simulator Active</span>
+                      <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider">Live Simulator Active</span>
                     </div>
 
+                    {/* Floating Top-Right Badge: Live P&L Return Card */}
+                    <div className="absolute top-3.5 right-3.5 z-20 bg-slate-950/90 backdrop-blur-md border border-emerald-500/50 rounded-xl px-2.5 py-1.5 shadow-[0_10px_25px_rgba(0,0,0,0.7)] text-right">
+                      <div className="text-[9px] font-mono text-slate-400 uppercase">Today's Simulated P&L</div>
+                      <div className="text-xs font-mono font-black text-emerald-400 flex items-center justify-end gap-1">
+                        <span>▲</span>
+                        <span>+₹48,250.00</span>
+                      </div>
+                    </div>
+
+                    {/* Floating Middle-Left Mini Tag: Win Rate */}
+                    <div className="absolute top-20 left-3.5 z-20 bg-slate-950/85 backdrop-blur-md border border-teal-500/40 rounded-lg px-2.5 py-1 shadow-lg text-left hidden sm:block">
+                      <div className="text-[8px] font-mono text-slate-400 uppercase">Verified Edge</div>
+                      <div className="text-xs font-mono font-bold text-teal-300">78.4% Win Rate</div>
+                    </div>
+
+                    {/* Mentor Image */}
                     <img 
                       src="/mentor_lady.jpg" 
                       alt="Trading Mentor Instruction" 
-                      className="w-full h-[360px] sm:h-[400px] object-cover object-center transform group-hover:scale-105 transition-transform duration-700"
+                      className="w-full h-[380px] sm:h-[420px] object-cover object-center transform group-hover:scale-105 transition-transform duration-700"
                     />
 
-                    {/* Instruction Overlay Tag */}
-                    <div className="absolute bottom-4 left-4 right-4 bg-slate-950/90 backdrop-blur-md border border-emerald-500/40 rounded-xl p-3.5 shadow-xl flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
-                        <TrendingUp className="w-4.5 h-4.5 text-emerald-400" />
+                    {/* Bottom Frosted Glass Tag: Verified Instructor Callout */}
+                    <div className="absolute bottom-4 left-4 right-4 bg-slate-950/90 backdrop-blur-md border border-emerald-500/45 rounded-xl p-3.5 shadow-[0_10px_30px_rgba(0,0,0,0.8)] flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0 shadow-inner">
+                        <TrendingUp className="w-5 h-5 text-emerald-400" />
                       </div>
                       <div className="text-left">
                         <div className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
                           <span>Trading Mentor</span>
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                          <span className="text-[10px] text-slate-400 font-normal">Verified Guide</span>
+                          <span className="text-[10px] text-slate-400 font-normal">Verified Strategy Guide</span>
                         </div>
-                        <div className="text-xs font-semibold text-slate-200 mt-0.5">
-                          "Click above & start your free simulation today!"
+                        <div className="text-xs font-semibold text-slate-100 mt-0.5 leading-snug">
+                          "Click the green button & start paper trading today!"
                         </div>
                       </div>
                     </div>
