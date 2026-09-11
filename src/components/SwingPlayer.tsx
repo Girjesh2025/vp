@@ -549,15 +549,28 @@ const SwingPlayer: React.FC = () => {
                   <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1">
                     <Crosshair className="w-3 h-3 text-blue-400" /> R:R {stock.riskReward}
                   </span>
-                  <button
-                    type="button"
-                    className={`flex items-center gap-1 text-xs font-black transition-transform group-hover:translate-x-0.5 ${
-                      isBull ? 'text-emerald-400 hover:text-emerald-300' : 'text-rose-400 hover:text-rose-300'
-                    }`}
-                  >
-                    <span>View Setup</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={`https://in.tradingview.com/chart/?symbol=NSE:${stock.symbol}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[#101520] hover:bg-blue-600/20 text-slate-400 hover:text-blue-400 border border-slate-800 text-[11px] font-bold transition"
+                      title={`Open ${stock.symbol} TradingView chart in new tab`}
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      <span>Chart</span>
+                    </a>
+                    <button
+                      type="button"
+                      className={`flex items-center gap-1 text-xs font-black transition-transform group-hover:translate-x-0.5 ${
+                        isBull ? 'text-emerald-400 hover:text-emerald-300' : 'text-rose-400 hover:text-rose-300'
+                      }`}
+                    >
+                      <span>View Setup</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -589,12 +602,24 @@ const SwingPlayer: React.FC = () => {
                 </div>
               </div>
               
-              <button
-                onClick={() => setSelectedStock(null)}
-                className="w-8 h-8 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                <a
+                  href={`https://in.tradingview.com/chart/?symbol=NSE:${selectedStock.symbol}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/30 hover:border-blue-400 text-blue-400 hover:text-blue-300 text-xs font-bold transition shadow-sm"
+                  title="Open live chart in TradingView"
+                >
+                  <span>Chart</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+                <button
+                  onClick={() => setSelectedStock(null)}
+                  className="w-8 h-8 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {/* Rationale Callout */}
@@ -671,19 +696,29 @@ const SwingPlayer: React.FC = () => {
             </div>
 
             {/* Modal Actions */}
-            <div className="flex items-center gap-3 pt-2">
+            <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-2">
+              <a
+                href={`https://in.tradingview.com/chart/?symbol=NSE:${selectedStock.symbol}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full sm:flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-98 text-white font-bold text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>Open TradingView Chart</span>
+              </a>
+
               <button
                 onClick={handleCopySetup}
-                className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-98 text-white font-bold text-xs transition flex items-center justify-center gap-2 shadow-lg"
+                className="w-full sm:flex-1 py-3 rounded-xl bg-[#101520] hover:bg-slate-800 border border-slate-700 active:scale-98 text-white font-bold text-xs transition flex items-center justify-center gap-2 shadow-sm"
               >
                 {copiedNotification ? (
                   <>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-                    <span>Setup Copied to Clipboard!</span>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>Copied to Clipboard!</span>
                   </>
                 ) : (
                   <>
-                    <Layers className="w-4 h-4" />
+                    <Layers className="w-4 h-4 text-slate-400" />
                     <span>Copy Setup Parameters</span>
                   </>
                 )}
@@ -691,7 +726,7 @@ const SwingPlayer: React.FC = () => {
 
               <button
                 onClick={() => setSelectedStock(null)}
-                className="px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition"
+                className="w-full sm:w-auto px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition"
               >
                 Close
               </button>
