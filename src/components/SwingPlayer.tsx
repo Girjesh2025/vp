@@ -39,6 +39,10 @@ export interface SwingData {
   channel?: boolean;
   setupCategory: '10_DAY_BO' | '10_DAY_BD' | '50_DAY_BO' | '50_DAY_BD' | 'REVERSAL' | 'CHANNEL_BO';
   setupTitle: string;
+  dayHigh?: number;
+  dayLow?: number;
+  openPrice?: number;
+  prevClose?: number;
   
   // High Value Metrics
   aiScore: number;
@@ -69,7 +73,7 @@ const SwingPlayer: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeCategoryFilter, setActiveCategoryFilter] = useState<'ALL' | 'BREAKOUTS' | 'BREAKDOWNS' | 'WATCHLIST' | '10_DAY_BO' | '10_DAY_BD' | '50_DAY_BO' | '50_DAY_BD'>('ALL');
+  const [activeCategoryFilter, setActiveCategoryFilter] = useState<'ALL' | 'BREAKOUTS' | 'BREAKDOWNS' | 'TARGET_HIT' | 'SL_HIT' | 'WATCHLIST' | '10_DAY_BO' | '10_DAY_BD' | '50_DAY_BO' | '50_DAY_BD'>('ALL');
   const [highConvictionOnly, setHighConvictionOnly] = useState(false);
   const [highVolumeOnly, setHighVolumeOnly] = useState(false);
 
@@ -135,15 +139,18 @@ const SwingPlayer: React.FC = () => {
     });
   };
 
-  // Helper to compute live Target / SL performance and progress
+  // Helper to compute live Target / SL performance, day's high/low checks, and EOD outcome
   const getPerformanceMetrics = (stock: SwingData) => {
     const tracked = trackedSetups[stock.symbol];
     const isBull = stock.isBull;
     const entryPrice = tracked?.entryPrice ?? stock.entryPrice;
     const currentPrice = stock.price;
+    const dayHigh = stock.dayHigh ?? currentPrice;
+    const dayLow = stock.dayLow ?? currentPrice;
     const target1 = tracked?.target1 ?? stock.target1;
     const target2 = tracked?.target2 ?? stock.target2;
     const stopLoss = tracked?.stopLoss ?? stock.stopLoss;
+    const marketOpen = isMarketOpen();
 
     const pnlPercent = isBull
       ? ((currentPrice - entryPrice) / entryPrice) * 100
@@ -153,66 +160,111 @@ const SwingPlayer: React.FC = () => {
     let statusLabel = '';
     let statusColor = 'text-emerald-400';
     let statusBg = 'bg-emerald-500/15 border-emerald-500/30';
+    let eodOutcome: 'TARGET_HIT' | 'SL_HIT' | 'MIS_CLOSED' | 'SWING_ACTIVE' = 'SWING_ACTIVE';
+    let eodOutcomeLabel = '';
+    let eodOutcomeColor = '';
 
     if (isBull) {
-      if (currentPrice >= target2) {
+      const hitT2 = currentPrice >= target2 || dayHigh >= target2;
+      const hitT1 = currentPrice >= target1 || dayHigh >= target1;
+      const hitSL = currentPrice <= stopLoss || dayLow <= stopLoss;
+
+      if (hitT2) {
         status = 'TARGET_2_HIT';
-        statusLabel = `🚀 Target 2 Hit (+${pnlPercent.toFixed(1)}%)`;
+        statusLabel = `🚀 Target 2 Hit (High ₹${dayHigh.toFixed(1)})`;
         statusColor = 'text-teal-400';
         statusBg = 'bg-teal-500/20 border-teal-500/40';
-      } else if (currentPrice >= target1) {
+        eodOutcome = 'TARGET_HIT';
+        eodOutcomeLabel = `🎯 EOD TARGET 2 HIT (High ₹${dayHigh.toFixed(1)})`;
+        eodOutcomeColor = 'bg-teal-500/20 text-teal-300 border-teal-500/40';
+      } else if (hitT1) {
         status = 'TARGET_1_HIT';
-        statusLabel = `🎯 Target 1 Hit (+${pnlPercent.toFixed(1)}%)`;
+        statusLabel = `🎯 Target 1 Hit (High ₹${dayHigh.toFixed(1)})`;
         statusColor = 'text-emerald-400';
         statusBg = 'bg-emerald-500/20 border-emerald-500/40';
-      } else if (currentPrice <= stopLoss) {
+        eodOutcome = 'TARGET_HIT';
+        eodOutcomeLabel = `🎯 EOD TARGET 1 HIT (High ₹${dayHigh.toFixed(1)})`;
+        eodOutcomeColor = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
+      } else if (hitSL) {
         status = 'SL_HIT';
-        statusLabel = `🛑 Stop Loss Hit (${pnlPercent.toFixed(1)}%)`;
+        statusLabel = `🛑 Stop Loss Hit (Low ₹${dayLow.toFixed(1)})`;
         statusColor = 'text-rose-400';
         statusBg = 'bg-rose-500/20 border-rose-500/40';
+        eodOutcome = 'SL_HIT';
+        eodOutcomeLabel = `🛑 EOD SL TRIGGERED (Low ₹${dayLow.toFixed(1)})`;
+        eodOutcomeColor = 'bg-rose-500/20 text-rose-300 border-rose-500/40';
       } else if (pnlPercent >= 0) {
         status = 'IN_PROFIT';
         statusLabel = `🟢 In Profit (+${pnlPercent.toFixed(1)}%)`;
         statusColor = 'text-emerald-400';
         statusBg = 'bg-emerald-500/15 border-emerald-500/30';
+        eodOutcome = 'SWING_ACTIVE';
+        eodOutcomeLabel = `⏳ EOD SWING ACTIVE (+${pnlPercent.toFixed(1)}%) • Carrying Forward`;
+        eodOutcomeColor = 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40';
       } else {
         status = 'IN_DRAWDOWN';
         statusLabel = `⚠️ In Drawdown (${pnlPercent.toFixed(1)}%)`;
         statusColor = 'text-amber-400';
         statusBg = 'bg-amber-500/15 border-amber-500/30';
+        eodOutcome = 'SWING_ACTIVE';
+        eodOutcomeLabel = `⏳ EOD SWING ACTIVE (${pnlPercent.toFixed(1)}%) • SL Protected`;
+        eodOutcomeColor = 'bg-amber-500/20 text-amber-300 border-amber-500/40';
       }
     } else {
       // BEARISH SHORT (Intraday MIS)
-      if (currentPrice <= target2) {
+      const hitT2 = currentPrice <= target2 || dayLow <= target2;
+      const hitT1 = currentPrice <= target1 || dayLow <= target1;
+      const hitSL = currentPrice >= stopLoss || dayHigh >= stopLoss;
+
+      if (hitT2) {
         status = 'TARGET_2_HIT';
-        statusLabel = `🚀 Target 2 Hit (+${pnlPercent.toFixed(1)}%)`;
+        statusLabel = `🚀 Target 2 Hit (Low ₹${dayLow.toFixed(1)})`;
         statusColor = 'text-teal-400';
         statusBg = 'bg-teal-500/20 border-teal-500/40';
-      } else if (currentPrice <= target1) {
+        eodOutcome = 'TARGET_HIT';
+        eodOutcomeLabel = `🎯 EOD TARGET 2 HIT (Low ₹${dayLow.toFixed(1)})`;
+        eodOutcomeColor = 'bg-teal-500/20 text-teal-300 border-teal-500/40';
+      } else if (hitT1) {
         status = 'TARGET_1_HIT';
-        statusLabel = `🎯 Target 1 Hit (+${pnlPercent.toFixed(1)}%)`;
+        statusLabel = `🎯 Target 1 Hit (Low ₹${dayLow.toFixed(1)})`;
         statusColor = 'text-emerald-400';
         statusBg = 'bg-emerald-500/20 border-emerald-500/40';
-      } else if (currentPrice >= stopLoss) {
+        eodOutcome = 'TARGET_HIT';
+        eodOutcomeLabel = `🎯 EOD TARGET 1 HIT (Low ₹${dayLow.toFixed(1)})`;
+        eodOutcomeColor = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
+      } else if (hitSL) {
         status = 'SL_HIT';
-        statusLabel = `🛑 Stop Loss Hit (${pnlPercent.toFixed(1)}%)`;
+        statusLabel = `🛑 Stop Loss Hit (High ₹${dayHigh.toFixed(1)})`;
         statusColor = 'text-rose-400';
         statusBg = 'bg-rose-500/20 border-rose-500/40';
-      } else if (pnlPercent >= 0) {
-        status = 'IN_PROFIT';
-        statusLabel = `🟢 In Profit (+${pnlPercent.toFixed(1)}%)`;
-        statusColor = 'text-emerald-400';
-        statusBg = 'bg-emerald-500/15 border-emerald-500/30';
+        eodOutcome = 'SL_HIT';
+        eodOutcomeLabel = `🛑 EOD SL TRIGGERED (High ₹${dayHigh.toFixed(1)})`;
+        eodOutcomeColor = 'bg-rose-500/20 text-rose-300 border-rose-500/40';
       } else {
-        status = 'IN_DRAWDOWN';
-        statusLabel = `⚠️ In Drawdown (${pnlPercent.toFixed(1)}%)`;
-        statusColor = 'text-amber-400';
-        statusBg = 'bg-amber-500/15 border-amber-500/30';
+        // Intraday MIS exit by 3:15 PM per SEBI rules
+        eodOutcome = 'MIS_CLOSED';
+        if (pnlPercent >= 0) {
+          status = 'IN_PROFIT';
+          statusLabel = `🟢 In Profit (+${pnlPercent.toFixed(1)}%)`;
+          statusColor = 'text-emerald-400';
+          statusBg = 'bg-emerald-500/15 border-emerald-500/30';
+          eodOutcomeLabel = `⏱️ EOD INTRADAY MIS CLOSED (+${pnlPercent.toFixed(1)}%)`;
+          eodOutcomeColor = 'bg-blue-500/20 text-blue-300 border-blue-500/40';
+        } else {
+          status = 'IN_DRAWDOWN';
+          statusLabel = `⚠️ In Drawdown (${pnlPercent.toFixed(1)}%)`;
+          statusColor = 'text-amber-400';
+          statusBg = 'bg-amber-500/15 border-amber-500/30';
+          eodOutcomeLabel = `⏱️ EOD INTRADAY MIS CLOSED (${pnlPercent.toFixed(1)}%)`;
+          eodOutcomeColor = 'bg-slate-700/50 text-slate-300 border-slate-600';
+        }
       }
     }
 
     const t1Dist = Math.abs(target1 - entryPrice);
-    const curDist = isBull ? currentPrice - entryPrice : entryPrice - currentPrice;
+    const curDist = isBull 
+      ? Math.max(currentPrice - entryPrice, (dayHigh || currentPrice) - entryPrice)
+      : Math.max(entryPrice - currentPrice, entryPrice - (dayLow || currentPrice));
     const target1Progress = Math.max(0, Math.min(100, Math.round((curDist / t1Dist) * 100)));
 
     const slDist = isBull
@@ -225,10 +277,16 @@ const SwingPlayer: React.FC = () => {
       statusLabel,
       statusColor,
       statusBg,
+      eodOutcome,
+      eodOutcomeLabel,
+      eodOutcomeColor,
+      isMarketClosed: !marketOpen,
       target1Progress,
       slDistancePercent: Math.max(0, slDist),
       entryPrice,
       currentPrice,
+      dayHigh,
+      dayLow,
       target1,
       target2,
       stopLoss,
@@ -253,7 +311,16 @@ const SwingPlayer: React.FC = () => {
       // 1. Fetch current live prices in parallel batches
       const batchData = await fetchMultipleStockPrices(scanSymbols);
       
-      const intermediateList: { symbol: string; price: number; change: number; isBull: boolean }[] = [];
+      const intermediateList: { 
+        symbol: string; 
+        price: number; 
+        change: number; 
+        isBull: boolean;
+        dayHigh?: number;
+        dayLow?: number;
+        openPrice?: number;
+        prevClose?: number;
+      }[] = [];
       for (const [symWithSuffix, data] of Object.entries(batchData)) {
         if (data && data.price > 0) {
           const sym = symWithSuffix.replace('.NS', '');
@@ -261,7 +328,11 @@ const SwingPlayer: React.FC = () => {
             symbol: sym,
             price: data.price,
             change: data.change || 0,
-            isBull: (data.change || 0) >= 0
+            isBull: (data.change || 0) >= 0,
+            dayHigh: typeof data.high === 'number' && data.high > 0 ? data.high : data.price,
+            dayLow: typeof data.low === 'number' && data.low > 0 ? data.low : data.price,
+            openPrice: data.open,
+            prevClose: data.previousClose
           });
         }
       }
@@ -377,6 +448,10 @@ const SwingPlayer: React.FC = () => {
                   symbol: candidate.symbol,
                   change: candidate.change,
                   price: currentPrice,
+                  dayHigh: candidate.dayHigh,
+                  dayLow: candidate.dayLow,
+                  openPrice: candidate.openPrice,
+                  prevClose: candidate.prevClose,
                   date: dateStr,
                   isBull,
                   tradeType: isBull ? 'BUY' : 'SELL',
@@ -429,6 +504,14 @@ const SwingPlayer: React.FC = () => {
       if (activeCategoryFilter === 'BREAKOUTS' && !item.isBull) return false;
       if (activeCategoryFilter === 'BREAKDOWNS' && item.isBull) return false;
       if (activeCategoryFilter === 'WATCHLIST' && !savedWatchlist.includes(item.symbol)) return false;
+      if (activeCategoryFilter === 'TARGET_HIT') {
+        const m = getPerformanceMetrics(item);
+        if (m.status !== 'TARGET_1_HIT' && m.status !== 'TARGET_2_HIT') return false;
+      }
+      if (activeCategoryFilter === 'SL_HIT') {
+        const m = getPerformanceMetrics(item);
+        if (m.status !== 'SL_HIT') return false;
+      }
       if (activeCategoryFilter === '10_DAY_BO' && item.setupCategory !== '10_DAY_BO') return false;
       if (activeCategoryFilter === '10_DAY_BD' && item.setupCategory !== '10_DAY_BD') return false;
       if (activeCategoryFilter === '50_DAY_BO' && item.setupCategory !== '50_DAY_BO') return false;
@@ -445,7 +528,7 @@ const SwingPlayer: React.FC = () => {
       }
       return true;
     });
-  }, [marketData, activeCategoryFilter, highConvictionOnly, highVolumeOnly, searchQuery, savedWatchlist]);
+  }, [marketData, activeCategoryFilter, highConvictionOnly, highVolumeOnly, searchQuery, savedWatchlist, trackedSetups]);
 
   // Statistics Counts
   const breakoutCount = useMemo(() => marketData.filter(d => d.isBull).length, [marketData]);
@@ -455,6 +538,17 @@ const SwingPlayer: React.FC = () => {
   const bo50Count = useMemo(() => marketData.filter(d => d.setupCategory === '50_DAY_BO').length, [marketData]);
   const bd50Count = useMemo(() => marketData.filter(d => d.setupCategory === '50_DAY_BD').length, [marketData]);
   const highConvictionCount = useMemo(() => marketData.filter(d => d.aiScore >= 80).length, [marketData]);
+
+  // EOD Target Hit & SL Hit counts across market
+  const targetHitTotalCount = useMemo(() => marketData.filter(d => {
+    const m = getPerformanceMetrics(d);
+    return m.status === 'TARGET_1_HIT' || m.status === 'TARGET_2_HIT';
+  }).length, [marketData, trackedSetups]);
+
+  const slHitTotalCount = useMemo(() => marketData.filter(d => {
+    const m = getPerformanceMetrics(d);
+    return m.status === 'SL_HIT';
+  }).length, [marketData, trackedSetups]);
 
   // Aggregate metrics for Watchlist performance
   const watchlistMetrics = useMemo(() => {
@@ -559,6 +653,14 @@ ${!isBull ? '⚠️ SEBI Rule: Cash shorts cannot be held overnight. Must square
             <div className="text-[10px] text-rose-400 font-bold uppercase tracking-wider">🔴 Breakdowns (Sell)</div>
             <div className="text-base font-black text-rose-400 font-mono mt-0.5">{breakdownCount} Found</div>
           </div>
+          <div className="bg-[#101520] border border-teal-500/30 rounded-xl px-3.5 py-2 min-w-[110px] bg-teal-500/5">
+            <div className="text-[10px] text-teal-400 font-bold uppercase tracking-wider">🎯 Targets Hit</div>
+            <div className="text-base font-black text-teal-400 font-mono mt-0.5">{targetHitTotalCount} Today</div>
+          </div>
+          <div className="bg-[#101520] border border-amber-500/30 rounded-xl px-3.5 py-2 min-w-[100px] bg-amber-500/5">
+            <div className="text-[10px] text-amber-400 font-bold uppercase tracking-wider">🛑 SL Triggered</div>
+            <div className="text-base font-black text-amber-400 font-mono mt-0.5">{slHitTotalCount} Today</div>
+          </div>
           <div className="bg-[#101520] border border-purple-500/20 rounded-xl px-3.5 py-2 min-w-[110px]">
             <div className="text-[10px] text-purple-400 font-bold uppercase tracking-wider">High Conviction</div>
             <div className="text-base font-black text-purple-300 font-mono mt-0.5">{highConvictionCount} Setups</div>
@@ -582,6 +684,8 @@ ${!isBull ? '⚠️ SEBI Rule: Cash shorts cannot be held overnight. Must square
         <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1 md:pb-0">
           {[
             { id: 'ALL', label: `All Setups (${marketData.length})` },
+            { id: 'TARGET_HIT', label: `🎯 Targets Hit (${targetHitTotalCount})` },
+            { id: 'SL_HIT', label: `🛑 SL Triggered (${slHitTotalCount})` },
             { id: 'BREAKOUTS', label: `🟢 Breakouts (${breakoutCount})` },
             { id: 'BREAKDOWNS', label: `🔴 Breakdowns (${breakdownCount})` },
             { id: 'WATCHLIST', label: `★ Watchlist (${savedWatchlist.length})` },
@@ -595,9 +699,9 @@ ${!isBull ? '⚠️ SEBI Rule: Cash shorts cannot be held overnight. Must square
               onClick={() => setActiveCategoryFilter(tab.id as any)}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer select-none ${
                 activeCategoryFilter === tab.id
-                  ? tab.id === 'BREAKOUTS' || tab.id === '10_DAY_BO' || tab.id === '50_DAY_BO'
+                  ? tab.id === 'TARGET_HIT' || tab.id === 'BREAKOUTS' || tab.id === '10_DAY_BO' || tab.id === '50_DAY_BO'
                     ? 'bg-emerald-600 text-white shadow-sm'
-                    : tab.id === 'BREAKDOWNS' || tab.id === '10_DAY_BD' || tab.id === '50_DAY_BD'
+                    : tab.id === 'SL_HIT' || tab.id === 'BREAKDOWNS' || tab.id === '10_DAY_BD' || tab.id === '50_DAY_BD'
                     ? 'bg-rose-600 text-white shadow-sm'
                     : tab.id === 'WATCHLIST'
                     ? 'bg-amber-600 text-white shadow-sm'
@@ -849,6 +953,14 @@ ${!isBull ? '⚠️ SEBI Rule: Cash shorts cannot be held overnight. Must square
                         <span>{metrics.target1Progress}% towards T1</span>
                       </div>
                     </div>
+
+                    {/* EOD Session Verdict Strip */}
+                    <div className={`mt-1.5 py-1 px-2 rounded-lg border text-[9px] font-mono font-bold flex items-center justify-between ${metrics.eodOutcomeColor}`}>
+                      <span className="truncate">{metrics.eodOutcomeLabel}</span>
+                      <span className="shrink-0 text-[8px] opacity-75 ml-1">
+                        H: ₹{metrics.dayHigh?.toFixed(0)} · L: ₹{metrics.dayLow?.toFixed(0)}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Auto Risk:Reward Strategy Strip */}
@@ -1010,6 +1122,18 @@ ${!isBull ? '⚠️ SEBI Rule: Cash shorts cannot be held overnight. Must square
                   <div className="flex justify-between text-[10px] text-slate-400">
                     <span>Risk Buffer: {modalMetrics.slDistancePercent.toFixed(1)}% above SL</span>
                     <span>{modalMetrics.target1Progress}% progress towards Target 1</span>
+                  </div>
+                </div>
+
+                {/* EOD Session Verdict Banner */}
+                <div className={`mt-2 p-2.5 rounded-xl border text-xs font-mono font-bold flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 ${modalMetrics.eodOutcomeColor}`}>
+                  <div className="flex items-center gap-1.5">
+                    <span>{modalMetrics.eodOutcomeLabel}</span>
+                  </div>
+                  <div className="text-[10px] text-slate-300 font-normal flex items-center gap-2">
+                    <span>Day High: <b className="text-emerald-400 font-mono">₹{modalMetrics.dayHigh?.toFixed(2)}</b></span>
+                    <span>•</span>
+                    <span>Day Low: <b className="text-rose-400 font-mono">₹{modalMetrics.dayLow?.toFixed(2)}</b></span>
                   </div>
                 </div>
               </div>
