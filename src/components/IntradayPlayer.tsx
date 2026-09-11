@@ -8,9 +8,7 @@ import {
   RefreshCw, 
   Calculator, 
   ExternalLink, 
-  X, 
-  Copy, 
-  Check, 
+  X,
   ArrowUp, 
   ArrowDownRight, 
   Bookmark, 
@@ -262,7 +260,6 @@ const IntradayPlayer: React.FC = () => {
   // Interactive Trade Setup Modal State
   const [selectedStock, setSelectedStock] = useState<IntradayData | null>(null);
   const [capitalRisk, setCapitalRisk] = useState<number>(2000);
-  const [copiedNotification, setCopiedNotification] = useState(false);
 
   const loadData = async (isManualRefresh = false) => {
     if (isManualRefresh) setIsRefreshing(true);
@@ -465,27 +462,6 @@ const IntradayPlayer: React.FC = () => {
 
     return { shares, totalCapital, maxLoss, targetProfit };
   }, [selectedStock, capitalRisk]);
-
-  const handleCopySetup = () => {
-    if (!selectedStock) return;
-    const isBull = selectedStock.isBull;
-    const riskPct = ((Math.abs(selectedStock.stopLoss - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1);
-    const t1Pct = ((Math.abs(selectedStock.target1 - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1);
-    const t2Pct = ((Math.abs(selectedStock.target2 - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1);
-    
-    const text = `INTRADAY ORDER SLIP: ${selectedStock.symbol}
-Segment: NSE MIS (Cash Intraday · Square-off 15:15 IST)
-Action: ${isBull ? 'BUY' : 'SELL'}
-Trigger / Entry: ₹${selectedStock.entryPrice.toFixed(2)}
-Stop Loss: ₹${selectedStock.stopLoss.toFixed(2)} (${riskPct}% risk buffer)
-Target 1 (50% Book): ₹${selectedStock.target1.toFixed(2)} (+${t1Pct}%)
-Target 2 (Runner): ₹${selectedStock.target2.toFixed(2)} (+${t2Pct}%)
-RVOL: ${selectedStock.volMultiplier}x | RSI: ${selectedStock.rsi} | VWAP: ${selectedStock.vwapStatus}
-SEBI Compliance: Must be closed by 15:15 IST today.`;
-    navigator.clipboard.writeText(text);
-    setCopiedNotification(true);
-    setTimeout(() => setCopiedNotification(false), 2500);
-  };
 
   const marketLive = isMarketOpen();
 
@@ -936,17 +912,6 @@ SEBI Compliance: Must be closed by 15:15 IST today.`;
                     <div className="text-sm font-bold text-emerald-400">+₹{positionSizing.targetProfit.toFixed(0)}</div>
                   </div>
                 </div>
-              </div>
-
-              {/* Copy Action */}
-              <div className="pt-1">
-                <button
-                  onClick={handleCopySetup}
-                  className="w-full py-2.5 rounded-lg bg-slate-200 hover:bg-white text-slate-900 text-xs font-semibold transition flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  {copiedNotification ? <Check className="w-4 h-4 text-emerald-700" /> : <Copy className="w-4 h-4" />}
-                  <span>{copiedNotification ? 'Order Format Copied!' : 'Copy Order Execution Format'}</span>
-                </button>
               </div>
             </div>
           </div>
