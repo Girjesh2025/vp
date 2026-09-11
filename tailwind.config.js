@@ -10,8 +10,13 @@ export default {
         'glow': 'glow 2s ease-in-out infinite alternate',
         'gradient': 'gradient 15s ease infinite',
         'border-flow': 'border-flow 3s linear infinite',
+        'marquee': 'marquee 35s linear infinite',
       },
       keyframes: {
+        marquee: {
+          '0%': { transform: 'translateX(0%)' },
+          '100%': { transform: 'translateX(-50%)' },
+        },
         slideIn: {
           '0%': { transform: 'translateX(-100%)', opacity: '0' },
           '100%': { transform: 'translateX(0)', opacity: '1' },
