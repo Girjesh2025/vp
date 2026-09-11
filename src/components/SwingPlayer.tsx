@@ -3,7 +3,7 @@ import {
   Search, BrainCircuit, Zap, Crosshair, TrendingUp, TrendingDown, 
   ExternalLink, ArrowUpRight, Filter, ShieldCheck, CheckCircle2, 
   ChevronRight, RefreshCw, Layers, Calculator, Sparkles, X,
-  ArrowDownRight, ArrowUp, Bookmark, Copy
+  ArrowDownRight, ArrowUp, Bookmark, Copy, Target, AlertTriangle, Clock, Activity, Check
 } from 'lucide-react';
 import { fetchHistoricalPrices, fetchMultipleStockPrices, isMarketOpen } from '../utils/priceApi';
 import StockLogo from './StockLogo';
@@ -30,6 +30,7 @@ export interface SwingData {
   date: string;
   isBull: boolean;
   tradeType: 'BUY' | 'SELL';
+  productType: 'CNC_SWING' | 'MIS_INTRADAY';
   bo10?: boolean;
   bo50?: boolean;
   bd10?: boolean;
@@ -51,6 +52,18 @@ export interface SwingData {
   strategyRationale: string;
 }
 
+export interface TrackedSetup {
+  symbol: string;
+  savedAt: string;
+  entryPrice: number;
+  stopLoss: number;
+  target1: number;
+  target2: number;
+  tradeType: 'BUY' | 'SELL';
+  isBull: boolean;
+  setupTitle: string;
+}
+
 const SwingPlayer: React.FC = () => {
   const [marketData, setMarketData] = useState<SwingData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,7 +73,16 @@ const SwingPlayer: React.FC = () => {
   const [highConvictionOnly, setHighConvictionOnly] = useState(false);
   const [highVolumeOnly, setHighVolumeOnly] = useState(false);
 
-  // Saved Watchlist State
+  // Saved Watchlist & Performance Tracker State
+  const [trackedSetups, setTrackedSetups] = useState<Record<string, TrackedSetup>>(() => {
+    try {
+      const saved = localStorage.getItem('pp_swing_tracked_setups');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
   const [savedWatchlist, setSavedWatchlist] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('pp_swing_watchlist');
@@ -70,9 +92,15 @@ const SwingPlayer: React.FC = () => {
     }
   });
 
-  const toggleWatchlist = (symbol: string) => {
+  const toggleWatchlist = (stockOrSymbol: SwingData | string) => {
+    const sym = typeof stockOrSymbol === 'string' ? stockOrSymbol : stockOrSymbol.symbol;
+    const stockObj = typeof stockOrSymbol === 'string' 
+      ? marketData.find(s => s.symbol === sym) 
+      : stockOrSymbol;
+
     setSavedWatchlist(prev => {
-      const next = prev.includes(symbol) ? prev.filter(s => s !== symbol) : [...prev, symbol];
+      const isAlready = prev.includes(sym);
+      const next = isAlready ? prev.filter(s => s !== sym) : [...prev, sym];
       try {
         localStorage.setItem('pp_swing_watchlist', JSON.stringify(next));
       } catch (e) {
@@ -80,6 +108,133 @@ const SwingPlayer: React.FC = () => {
       }
       return next;
     });
+
+    setTrackedSetups(prev => {
+      const next = { ...prev };
+      if (next[sym]) {
+        delete next[sym];
+      } else if (stockObj) {
+        next[sym] = {
+          symbol: stockObj.symbol,
+          savedAt: new Date().toISOString(),
+          entryPrice: stockObj.entryPrice,
+          stopLoss: stockObj.stopLoss,
+          target1: stockObj.target1,
+          target2: stockObj.target2,
+          tradeType: stockObj.tradeType,
+          isBull: stockObj.isBull,
+          setupTitle: stockObj.setupTitle
+        };
+      }
+      try {
+        localStorage.setItem('pp_swing_tracked_setups', JSON.stringify(next));
+      } catch (e) {
+        console.error(e);
+      }
+      return next;
+    });
+  };
+
+  // Helper to compute live Target / SL performance and progress
+  const getPerformanceMetrics = (stock: SwingData) => {
+    const tracked = trackedSetups[stock.symbol];
+    const isBull = stock.isBull;
+    const entryPrice = tracked?.entryPrice ?? stock.entryPrice;
+    const currentPrice = stock.price;
+    const target1 = tracked?.target1 ?? stock.target1;
+    const target2 = tracked?.target2 ?? stock.target2;
+    const stopLoss = tracked?.stopLoss ?? stock.stopLoss;
+
+    const pnlPercent = isBull
+      ? ((currentPrice - entryPrice) / entryPrice) * 100
+      : ((entryPrice - currentPrice) / entryPrice) * 100;
+
+    let status: 'TARGET_2_HIT' | 'TARGET_1_HIT' | 'SL_HIT' | 'IN_PROFIT' | 'IN_DRAWDOWN' = 'IN_PROFIT';
+    let statusLabel = '';
+    let statusColor = 'text-emerald-400';
+    let statusBg = 'bg-emerald-500/15 border-emerald-500/30';
+
+    if (isBull) {
+      if (currentPrice >= target2) {
+        status = 'TARGET_2_HIT';
+        statusLabel = `🚀 Target 2 Hit (+${pnlPercent.toFixed(1)}%)`;
+        statusColor = 'text-teal-400';
+        statusBg = 'bg-teal-500/20 border-teal-500/40';
+      } else if (currentPrice >= target1) {
+        status = 'TARGET_1_HIT';
+        statusLabel = `🎯 Target 1 Hit (+${pnlPercent.toFixed(1)}%)`;
+        statusColor = 'text-emerald-400';
+        statusBg = 'bg-emerald-500/20 border-emerald-500/40';
+      } else if (currentPrice <= stopLoss) {
+        status = 'SL_HIT';
+        statusLabel = `🛑 Stop Loss Hit (${pnlPercent.toFixed(1)}%)`;
+        statusColor = 'text-rose-400';
+        statusBg = 'bg-rose-500/20 border-rose-500/40';
+      } else if (pnlPercent >= 0) {
+        status = 'IN_PROFIT';
+        statusLabel = `🟢 In Profit (+${pnlPercent.toFixed(1)}%)`;
+        statusColor = 'text-emerald-400';
+        statusBg = 'bg-emerald-500/15 border-emerald-500/30';
+      } else {
+        status = 'IN_DRAWDOWN';
+        statusLabel = `⚠️ In Drawdown (${pnlPercent.toFixed(1)}%)`;
+        statusColor = 'text-amber-400';
+        statusBg = 'bg-amber-500/15 border-amber-500/30';
+      }
+    } else {
+      // BEARISH SHORT (Intraday MIS)
+      if (currentPrice <= target2) {
+        status = 'TARGET_2_HIT';
+        statusLabel = `🚀 Target 2 Hit (+${pnlPercent.toFixed(1)}%)`;
+        statusColor = 'text-teal-400';
+        statusBg = 'bg-teal-500/20 border-teal-500/40';
+      } else if (currentPrice <= target1) {
+        status = 'TARGET_1_HIT';
+        statusLabel = `🎯 Target 1 Hit (+${pnlPercent.toFixed(1)}%)`;
+        statusColor = 'text-emerald-400';
+        statusBg = 'bg-emerald-500/20 border-emerald-500/40';
+      } else if (currentPrice >= stopLoss) {
+        status = 'SL_HIT';
+        statusLabel = `🛑 Stop Loss Hit (${pnlPercent.toFixed(1)}%)`;
+        statusColor = 'text-rose-400';
+        statusBg = 'bg-rose-500/20 border-rose-500/40';
+      } else if (pnlPercent >= 0) {
+        status = 'IN_PROFIT';
+        statusLabel = `🟢 In Profit (+${pnlPercent.toFixed(1)}%)`;
+        statusColor = 'text-emerald-400';
+        statusBg = 'bg-emerald-500/15 border-emerald-500/30';
+      } else {
+        status = 'IN_DRAWDOWN';
+        statusLabel = `⚠️ In Drawdown (${pnlPercent.toFixed(1)}%)`;
+        statusColor = 'text-amber-400';
+        statusBg = 'bg-amber-500/15 border-amber-500/30';
+      }
+    }
+
+    const t1Dist = Math.abs(target1 - entryPrice);
+    const curDist = isBull ? currentPrice - entryPrice : entryPrice - currentPrice;
+    const target1Progress = Math.max(0, Math.min(100, Math.round((curDist / t1Dist) * 100)));
+
+    const slDist = isBull
+      ? ((currentPrice - stopLoss) / currentPrice) * 100
+      : ((stopLoss - currentPrice) / currentPrice) * 100;
+
+    return {
+      pnlPercent,
+      status,
+      statusLabel,
+      statusColor,
+      statusBg,
+      target1Progress,
+      slDistancePercent: Math.max(0, slDist),
+      entryPrice,
+      currentPrice,
+      target1,
+      target2,
+      stopLoss,
+      isBull,
+      tradeType: isBull ? 'BUY' : 'SELL'
+    };
   };
 
   // Interactive Trade Setup Modal State
@@ -217,13 +372,15 @@ const SwingPlayer: React.FC = () => {
                   ? Number((currentPrice * (1 + (riskPercent * 3.2) / 100)).toFixed(1)) 
                   : Number((currentPrice * (1 - (riskPercent * 3.2) / 100)).toFixed(1));
                 
+                const isBull = candidate.isBull;
                 candidates.push({
                   symbol: candidate.symbol,
                   change: candidate.change,
                   price: currentPrice,
                   date: dateStr,
-                  isBull: candidate.isBull,
-                  tradeType: candidate.isBull ? 'BUY' : 'SELL',
+                  isBull,
+                  tradeType: isBull ? 'BUY' : 'SELL',
+                  productType: isBull ? 'CNC_SWING' : 'MIS_INTRADAY',
                   bo10: setupCat === '10_DAY_BO',
                   bo50: setupCat === '50_DAY_BO',
                   bd10: setupCat === '10_DAY_BD',
@@ -239,8 +396,10 @@ const SwingPlayer: React.FC = () => {
                   target1,
                   target2,
                   riskReward: '1:2.8',
-                  expectedHolding: candidate.isBull ? '3–7 Days' : '2–5 Days',
-                  strategyRationale: rationale
+                  expectedHolding: isBull ? '3–7 Days (Delivery CNC)' : 'Intraday MIS (Exit 3:15 PM)',
+                  strategyRationale: isBull 
+                    ? rationale 
+                    : `${rationale} [SEBI Rule: Cash short cannot be held overnight. Exit before 3:15 PM today].`
                 });
               }
             } catch (err) {
@@ -297,6 +456,35 @@ const SwingPlayer: React.FC = () => {
   const bd50Count = useMemo(() => marketData.filter(d => d.setupCategory === '50_DAY_BD').length, [marketData]);
   const highConvictionCount = useMemo(() => marketData.filter(d => d.aiScore >= 80).length, [marketData]);
 
+  // Aggregate metrics for Watchlist performance
+  const watchlistMetrics = useMemo(() => {
+    const watchlistedItems = marketData.filter(d => savedWatchlist.includes(d.symbol));
+    if (watchlistedItems.length === 0) {
+      return { total: 0, targetHits: 0, slHits: 0, inProfit: 0, avgReturn: 0 };
+    }
+
+    let targetHits = 0;
+    let slHits = 0;
+    let inProfit = 0;
+    let totalReturn = 0;
+
+    watchlistedItems.forEach(item => {
+      const metrics = getPerformanceMetrics(item);
+      if (metrics.status === 'TARGET_1_HIT' || metrics.status === 'TARGET_2_HIT') targetHits++;
+      else if (metrics.status === 'SL_HIT') slHits++;
+      else if (metrics.status === 'IN_PROFIT') inProfit++;
+      totalReturn += metrics.pnlPercent;
+    });
+
+    return {
+      total: watchlistedItems.length,
+      targetHits,
+      slHits,
+      inProfit,
+      avgReturn: totalReturn / watchlistedItems.length
+    };
+  }, [marketData, savedWatchlist, trackedSetups]);
+
   // Position Sizing Calculation
   const positionSizing = useMemo(() => {
     if (!selectedStock) return { shares: 0, totalCapital: 0, maxLoss: 0, targetProfit: 0 };
@@ -314,12 +502,13 @@ const SwingPlayer: React.FC = () => {
 
   const handleCopySetup = () => {
     if (!selectedStock) return;
+    const isBull = selectedStock.isBull;
     const riskPct = ((Math.abs(selectedStock.stopLoss - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1);
     const t1Pct = ((Math.abs(selectedStock.target1 - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1);
     const t2Pct = ((Math.abs(selectedStock.target2 - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1);
     
     const text = `🎯 SWING ${selectedStock.tradeType} SETUP: ${selectedStock.symbol}
-• Action: ${selectedStock.tradeType === 'BUY' ? 'BUY (Breakout)' : 'SELL / SHORT (Breakdown)'}
+• Segment: ${isBull ? 'BUY BREAKOUT (Delivery CNC · 3–7 Days)' : 'SELL BREAKDOWN (Intraday MIS · Exit 3:15 PM)'}
 • Entry Trigger: ₹${selectedStock.entryPrice.toFixed(2)}
 • Stop Loss: ₹${selectedStock.stopLoss.toFixed(2)} (${riskPct}% Risk)
 • Target 1 (1:2): ₹${selectedStock.target1.toFixed(2)} (+${t1Pct}% Book 50%)
@@ -327,7 +516,8 @@ const SwingPlayer: React.FC = () => {
 • Risk:Reward: ${selectedStock.riskReward}
 • Horizon: ${selectedStock.expectedHolding}
 • AI Conviction: ${selectedStock.aiScore}/100
-• Suggested Qty: ${positionSizing.shares} Shares (Max Risk: ₹${positionSizing.maxLoss.toFixed(0)})`;
+• Suggested Qty: ${positionSizing.shares} Shares (Max Risk: ₹${positionSizing.maxLoss.toFixed(0)})
+${!isBull ? '⚠️ SEBI Rule: Cash shorts cannot be held overnight. Must square-off by 3:15 PM today.' : ''}`;
     navigator.clipboard.writeText(text);
     setCopiedNotification(true);
     setTimeout(() => setCopiedNotification(false), 2500);
@@ -460,7 +650,63 @@ const SwingPlayer: React.FC = () => {
         </div>
       </div>
 
-      {/* ── 3. Main Setups Grid (Distinct Green Borders for Buy vs Red Borders for Sell) ── */}
+      {/* ── 3. Watchlist Performance & Indian Regulatory Banner (Only in Watchlist Tab) ── */}
+      {activeCategoryFilter === 'WATCHLIST' && (
+        <div className="bg-[#0c1017] border border-amber-500/30 rounded-2xl p-4 md:p-5 shadow-xl space-y-3.5">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Bookmark className="w-5 h-5 text-amber-400 fill-amber-400" />
+                <h3 className="text-base font-black text-white">Live Watchlist Performance Cockpit</h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  {watchlistMetrics.total} Saved Setups
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Real-time tracking of Target 1 / Target 2 progress, Stop Loss risk buffers, and live P&L returns.
+              </p>
+            </div>
+
+            {watchlistMetrics.total > 0 && (
+              <div className="flex items-center gap-2">
+                <div className="bg-[#101520] border border-slate-800 rounded-xl px-3 py-1.5 text-center min-w-[90px]">
+                  <div className="text-[10px] text-slate-400 font-bold uppercase">Targets Hit</div>
+                  <div className="text-xs font-black text-emerald-400 font-mono mt-0.5">
+                    {watchlistMetrics.targetHits} / {watchlistMetrics.total} Hit
+                  </div>
+                </div>
+                <div className="bg-[#101520] border border-slate-800 rounded-xl px-3 py-1.5 text-center min-w-[90px]">
+                  <div className="text-[10px] text-slate-400 font-bold uppercase">In Profit</div>
+                  <div className="text-xs font-black text-sky-400 font-mono mt-0.5">
+                    {watchlistMetrics.inProfit} Active
+                  </div>
+                </div>
+                <div className="bg-[#101520] border border-slate-800 rounded-xl px-3 py-1.5 text-center min-w-[90px]">
+                  <div className="text-[10px] text-slate-400 font-bold uppercase">Avg Return</div>
+                  <div className={`text-xs font-black font-mono mt-0.5 ${
+                    watchlistMetrics.avgReturn >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                  }`}>
+                    {watchlistMetrics.avgReturn >= 0 ? '+' : ''}{watchlistMetrics.avgReturn.toFixed(1)}%
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Indian Cash Market Regulatory Warning Banner */}
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-start gap-2.5 text-xs text-amber-300/90">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold text-amber-200">SEBI Indian Market Rule (Cash Equity Delivery vs Intraday MIS): </span>
+              <span>
+                In the Indian cash equity market, short positions <b>CANNOT be carried overnight</b>. All <b>SELL BREAKDOWN</b> setups are strictly <b>Intraday MIS</b> and must be squared off before <b>3:15 PM today</b>. Only <b>BUY BREAKOUT (CNC)</b> setups can be carried for 3–7 days swing delivery.
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 4. Main Setups Grid (Distinct Green Borders for Buy vs Red Borders for Sell) ── */}
       {loading ? (
         <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-12 text-center flex flex-col items-center justify-center">
           <div className="w-12 h-12 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin mb-4" />
@@ -470,13 +716,25 @@ const SwingPlayer: React.FC = () => {
           </p>
         </div>
       ) : filteredSetups.length === 0 ? (
-        <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-12 text-center text-slate-400 text-sm">
-          No setups found matching current filters. Click "Rescan" or reset filters.
+        <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-12 text-center text-slate-400 space-y-3">
+          <div className="w-12 h-12 mx-auto rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <Bookmark className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-bold text-white">
+            {activeCategoryFilter === 'WATCHLIST' ? 'No Setups in Watchlist Yet' : 'No Setups Found'}
+          </h3>
+          <p className="text-xs text-slate-400 max-w-md mx-auto">
+            {activeCategoryFilter === 'WATCHLIST'
+              ? 'Click the bookmark icon on any Breakout or Breakdown setup to track its real-time Target progress, Stop Loss buffer, and live P&L performance!'
+              : 'No setups match the current filters. Click "Rescan" or switch filter categories.'}
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredSetups.map((stock) => {
             const isBull = stock.isBull;
+            const metrics = getPerformanceMetrics(stock);
+            const isWatchlisted = savedWatchlist.includes(stock.symbol);
             const scoreColor = stock.aiScore >= 85 ? 'text-purple-400' : stock.aiScore >= 75 ? 'text-sky-400' : 'text-slate-300';
             const scoreBarColor = stock.aiScore >= 85 ? 'bg-gradient-to-r from-purple-500 to-fuchsia-500' : stock.aiScore >= 75 ? 'bg-sky-500' : 'bg-slate-500';
 
@@ -516,7 +774,7 @@ const SwingPlayer: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Trade Type Badge (BUY vs SELL) */}
+                    {/* Trade Type Badge (BUY CNC vs SELL MIS) */}
                     <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border shrink-0 flex items-center gap-1 ${
                       isBull
                         ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
@@ -525,12 +783,12 @@ const SwingPlayer: React.FC = () => {
                       {isBull ? (
                         <>
                           <ArrowUp className="w-2.5 h-2.5 stroke-[3]" />
-                          <span>BUY · {stock.setupTitle}</span>
+                          <span>BUY · CNC SWING</span>
                         </>
                       ) : (
                         <>
                           <ArrowDownRight className="w-2.5 h-2.5 stroke-[3]" />
-                          <span>SELL · {stock.setupTitle}</span>
+                          <span>SELL · MIS INTRADAY</span>
                         </>
                       )}
                     </span>
@@ -554,6 +812,41 @@ const SwingPlayer: React.FC = () => {
                       </div>
                       <div className="text-xs font-black text-yellow-400 font-mono">
                         {stock.volMultiplier}x <span className="text-[9px] text-slate-500 font-normal">avg</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Live Target & Stop Loss Tracker Meter */}
+                  <div className="my-2.5 p-2 bg-[#101520] border border-slate-800/90 rounded-xl space-y-1.5">
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="text-slate-400 font-bold flex items-center gap-1">
+                        <Target className="w-3 h-3 text-sky-400" /> Target Tracker
+                      </span>
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${metrics.statusBg} ${metrics.statusColor}`}>
+                        {metrics.statusLabel}
+                      </span>
+                    </div>
+
+                    {/* Progress Gauge Bar */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[9px] font-mono text-slate-400">
+                        <span className="text-rose-400">SL: ₹{metrics.stopLoss.toFixed(1)}</span>
+                        <span className="text-slate-200 font-bold">LTP: ₹{metrics.currentPrice.toFixed(1)}</span>
+                        <span className="text-emerald-400">T1: ₹{metrics.target1.toFixed(1)}</span>
+                      </div>
+                      
+                      <div className="w-full h-1.5 bg-slate-800/80 rounded-full overflow-hidden flex">
+                        <div 
+                          className={`h-full transition-all duration-300 ${
+                            metrics.pnlPercent >= 0 ? 'bg-gradient-to-r from-emerald-500 to-teal-400' : 'bg-rose-500'
+                          }`} 
+                          style={{ width: `${Math.min(100, Math.max(8, metrics.target1Progress))}%` }} 
+                        />
+                      </div>
+                      
+                      <div className="flex justify-between text-[8.5px] text-slate-500">
+                        <span>SL Buffer: {metrics.slDistancePercent.toFixed(1)}%</span>
+                        <span>{metrics.target1Progress}% towards T1</span>
                       </div>
                     </div>
                   </div>
@@ -585,16 +878,16 @@ const SwingPlayer: React.FC = () => {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        toggleWatchlist(stock.symbol);
+                        toggleWatchlist(stock);
                       }}
                       className={`p-1.5 rounded-lg border transition cursor-pointer select-none ${
-                        savedWatchlist.includes(stock.symbol)
+                        isWatchlisted
                           ? 'bg-amber-500/20 text-amber-400 border-amber-500/40 shadow-sm shadow-amber-500/10'
                           : 'bg-[#101520] text-slate-500 hover:text-slate-300 border-slate-800'
                       }`}
-                      title={savedWatchlist.includes(stock.symbol) ? 'Remove from Watchlist' : 'Add to Watchlist'}
+                      title={isWatchlisted ? 'Remove from Watchlist' : 'Add to Watchlist'}
                     >
-                      <Bookmark className={`w-3 h-3 ${savedWatchlist.includes(stock.symbol) ? 'fill-amber-400' : ''}`} />
+                      <Bookmark className={`w-3 h-3 ${isWatchlisted ? 'fill-amber-400' : ''}`} />
                     </button>
                     <a
                       href={`https://in.tradingview.com/chart/?symbol=NSE:${stock.symbol}`}
@@ -624,216 +917,289 @@ const SwingPlayer: React.FC = () => {
         </div>
       )}
 
-      {/* ── 4. Interactive Trade Setup Modal / Calculator ───────────────── */}
-      {selectedStock && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#0c1017] border border-slate-800 rounded-3xl max-w-xl w-full p-6 shadow-2xl relative overflow-hidden space-y-5">
-            
-            {/* Modal Header */}
-            <div className="flex items-start justify-between border-b border-slate-800 pb-4">
-              <div className="flex items-center gap-3">
-                <StockLogo symbol={selectedStock.symbol} className="w-12 h-12 rounded-2xl border border-slate-800 bg-[#101520]" />
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-xl font-black text-white">{selectedStock.symbol}</h2>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
-                      selectedStock.isBull ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
-                    }`}>
-                      {selectedStock.tradeType === 'BUY' ? '🟢 BUY BREAKOUT' : '🔴 SELL BREAKDOWN'}
-                    </span>
+      {/* ── 5. Interactive Trade Setup Modal / Calculator ───────────────── */}
+      {selectedStock && (() => {
+        const modalMetrics = getPerformanceMetrics(selectedStock);
+        const isWatchlisted = savedWatchlist.includes(selectedStock.symbol);
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-[#0c1017] border border-slate-800 rounded-3xl max-w-xl w-full p-6 shadow-2xl relative overflow-hidden space-y-4 max-h-[90vh] overflow-y-auto custom-scrollbar">
+              
+              {/* Modal Header */}
+              <div className="flex items-start justify-between border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-3">
+                  <StockLogo symbol={selectedStock.symbol} className="w-12 h-12 rounded-2xl border border-slate-800 bg-[#101520]" />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-xl font-black text-white">{selectedStock.symbol}</h2>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                        selectedStock.isBull ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                      }`}>
+                        {selectedStock.tradeType === 'BUY' ? '🟢 BUY BREAKOUT (CNC SWING)' : '🔴 SELL BREAKDOWN (INTRADAY MIS)'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 font-mono mt-0.5">
+                      LTP: ₹{selectedStock.price.toFixed(2)} • Horizon: {selectedStock.expectedHolding}
+                    </p>
                   </div>
-                  <p className="text-xs text-slate-400 font-mono mt-0.5">
-                    LTP: ₹{selectedStock.price.toFixed(2)} • Horizon: {selectedStock.expectedHolding}
-                  </p>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <a
+                    href={`https://in.tradingview.com/chart/?symbol=NSE:${selectedStock.symbol}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/30 hover:border-blue-400 text-blue-400 hover:text-blue-300 text-xs font-bold transition shadow-sm"
+                    title="Open live chart in TradingView"
+                  >
+                    <span>Chart</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                  <button
+                    onClick={() => setSelectedStock(null)}
+                    className="w-8 h-8 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
-              
-              <div className="flex items-center gap-2">
-                <a
-                  href={`https://in.tradingview.com/chart/?symbol=NSE:${selectedStock.symbol}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/30 hover:border-blue-400 text-blue-400 hover:text-blue-300 text-xs font-bold transition shadow-sm"
-                  title="Open live chart in TradingView"
+
+              {/* SEBI Intraday Short Rule Warning (Only for Breakdown Sell) */}
+              {!selectedStock.isBull && (
+                <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-3 flex items-start gap-2.5 text-xs text-rose-300">
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold text-rose-200">SEBI Indian Market Rule (Same-Day Square-Off): </span>
+                    <span>
+                      In the Indian cash equity market, short positions <b>CANNOT be carried overnight</b>. This setup is strictly an <b>Intraday MIS</b> trade. You must exit before <b>3:15 PM today</b> or when Target / Stop Loss is reached.
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Live Target & Stop Loss Performance Tracker */}
+              <div className="p-3 bg-[#101520] border border-slate-800 rounded-xl space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-300 font-bold flex items-center gap-1.5">
+                    <Target className="w-3.5 h-3.5 text-sky-400" />
+                    Live Target & Stop Loss Tracker
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${modalMetrics.statusBg} ${modalMetrics.statusColor}`}>
+                    {modalMetrics.statusLabel}
+                  </span>
+                </div>
+
+                {/* Progress Track */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs font-mono">
+                    <span className="text-rose-400 font-semibold">SL: ₹{modalMetrics.stopLoss.toFixed(1)}</span>
+                    <span className="text-white font-black bg-slate-800/80 px-2 py-0.5 rounded">LTP: ₹{modalMetrics.currentPrice.toFixed(1)}</span>
+                    <span className="text-emerald-400 font-semibold">T1: ₹{modalMetrics.target1.toFixed(1)}</span>
+                  </div>
+                  
+                  <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden flex">
+                    <div 
+                      className={`h-full transition-all duration-300 ${
+                        modalMetrics.pnlPercent >= 0 ? 'bg-gradient-to-r from-emerald-500 to-teal-400' : 'bg-rose-500'
+                      }`} 
+                      style={{ width: `${Math.min(100, Math.max(8, modalMetrics.target1Progress))}%` }} 
+                    />
+                  </div>
+                  
+                  <div className="flex justify-between text-[10px] text-slate-400">
+                    <span>Risk Buffer: {modalMetrics.slDistancePercent.toFixed(1)}% above SL</span>
+                    <span>{modalMetrics.target1Progress}% progress towards Target 1</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Rationale & Conviction Callout */}
+              <div className={`border rounded-xl p-3 text-xs leading-relaxed space-y-1.5 ${
+                selectedStock.isBull 
+                  ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-200/90' 
+                  : 'bg-rose-500/5 border-rose-500/20 text-rose-200/90'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold uppercase tracking-wider text-[10px] text-slate-400">Strategy Rationale</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono font-bold text-purple-300 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
+                      AI Score: {selectedStock.aiScore}/100
+                    </span>
+                    <span className="text-[10px] font-mono font-bold text-yellow-300 bg-yellow-500/10 px-1.5 py-0.5 rounded border border-yellow-500/20">
+                      {selectedStock.volMultiplier}x Vol
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-300">
+                  {selectedStock.strategyRationale}
+                </p>
+              </div>
+
+              {/* Trade Levels Matrix (Entry, Stop Loss, Target 1, Target 2) */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="bg-[#101520] border border-slate-800 rounded-xl p-3 text-center">
+                  <div className="text-[10px] uppercase font-bold text-slate-400">Entry Trigger</div>
+                  <div className="text-base font-black text-white font-mono mt-0.5">
+                    ₹{selectedStock.entryPrice.toFixed(2)}
+                  </div>
+                  <div className="text-[9px] text-slate-500 mt-0.5">Market / Limit</div>
+                </div>
+
+                <div className="bg-[#101520] border border-rose-500/20 rounded-xl p-3 text-center bg-rose-500/5">
+                  <div className="text-[10px] uppercase font-bold text-rose-400">Stop Loss</div>
+                  <div className="text-base font-black text-rose-400 font-mono mt-0.5">
+                    ₹{selectedStock.stopLoss.toFixed(2)}
+                  </div>
+                  <div className="text-[9px] text-rose-400/80 font-mono mt-0.5 font-bold">
+                    {((Math.abs(selectedStock.stopLoss - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1)}% Risk
+                  </div>
+                </div>
+
+                <div className="bg-[#101520] border border-emerald-500/20 rounded-xl p-3 text-center bg-emerald-500/5">
+                  <div className="text-[10px] uppercase font-bold text-emerald-400">Target 1 (1:2)</div>
+                  <div className="text-base font-black text-emerald-400 font-mono mt-0.5">
+                    ₹{selectedStock.target1.toFixed(2)}
+                  </div>
+                  <div className="text-[9px] text-emerald-400/80 font-mono mt-0.5 font-bold">
+                    +{((Math.abs(selectedStock.target1 - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1)}% (Book 50%)
+                  </div>
+                </div>
+
+                <div className="bg-[#101520] border border-teal-500/20 rounded-xl p-3 text-center bg-teal-500/5">
+                  <div className="text-[10px] uppercase font-bold text-teal-400">Target 2 (Runner)</div>
+                  <div className="text-base font-black text-teal-400 font-mono mt-0.5">
+                    ₹{selectedStock.target2.toFixed(2)}
+                  </div>
+                  <div className="text-[9px] text-teal-400/80 font-mono mt-0.5 font-bold">
+                    +{((Math.abs(selectedStock.target2 - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1)}% (Trail SL)
+                  </div>
+                </div>
+              </div>
+
+              {/* Position Sizing Calculator */}
+              <div className="bg-[#101520] border border-slate-800 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <Calculator className="w-3.5 h-3.5 text-sky-400" />
+                    Auto Position Size (Capital Risk)
+                  </span>
+                  <span className="text-xs font-mono font-bold text-sky-400">₹{capitalRisk.toLocaleString('en-IN')}</span>
+                </div>
+
+                <input
+                  type="range"
+                  min="500"
+                  max="25000"
+                  step="500"
+                  value={capitalRisk}
+                  onChange={(e) => setCapitalRisk(Number(e.target.value))}
+                  className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                />
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-slate-800/80 text-center">
+                  <div>
+                    <div className="text-[10px] text-slate-500">Rec. Quantity</div>
+                    <div className="text-xs font-black text-white font-mono">{positionSizing.shares} Shares</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-slate-500">Capital Required</div>
+                    <div className="text-xs font-black text-sky-400 font-mono">₹{positionSizing.totalCapital.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-slate-500">Max Risk (Loss)</div>
+                    <div className="text-xs font-black text-rose-400 font-mono">₹{positionSizing.maxLoss.toFixed(0)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-slate-500">Target 1 Profit</div>
+                    <div className="text-xs font-black text-emerald-400 font-mono">+₹{positionSizing.targetProfit.toFixed(0)}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Trade Execution Rules & Playbook */}
+              <div className="bg-[#101520]/60 border border-slate-800/80 rounded-xl p-3 text-[11px] text-slate-300 space-y-1.5">
+                <div className="font-bold text-slate-200 flex items-center gap-1.5 text-xs mb-1">
+                  <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Execution Rules & Playbook</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[11px] text-slate-400">
+                  {selectedStock.isBull ? (
+                    <>
+                      <div className="flex items-start gap-1.5">
+                        <span className="text-blue-400 font-bold shrink-0">1.</span>
+                        <span>Wait for 15m candle close above ₹{selectedStock.entryPrice.toFixed(1)} before entry in <b>CNC (Delivery)</b>.</span>
+                      </div>
+                      <div className="flex items-start gap-1.5">
+                        <span className="text-emerald-400 font-bold shrink-0">2.</span>
+                        <span>Book 50% profit at Target 1 & trail Stop Loss to breakeven (₹{selectedStock.entryPrice.toFixed(1)}).</span>
+                      </div>
+                      <div className="flex items-start gap-1.5">
+                        <span className="text-amber-400 font-bold shrink-0">3.</span>
+                        <span>Ride remaining 50% runner towards Target 2 or swing horizon ({selectedStock.expectedHolding}).</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-start gap-1.5">
+                        <span className="text-rose-400 font-bold shrink-0">1.</span>
+                        <span>Enter breakdown short order strictly in <b>MIS (Intraday)</b> below ₹{selectedStock.entryPrice.toFixed(1)}.</span>
+                      </div>
+                      <div className="flex items-start gap-1.5">
+                        <span className="text-amber-400 font-bold shrink-0">2.</span>
+                        <span><b>Mandatory Exit by 3:15 PM</b>: Auto square-off today. SEBI cash rule prohibits overnight shorting.</span>
+                      </div>
+                      <div className="flex items-start gap-1.5">
+                        <span className="text-emerald-400 font-bold shrink-0">3.</span>
+                        <span>Strict SL at ₹{selectedStock.stopLoss.toFixed(1)}. Book 50% at Target 1 (₹{selectedStock.target1.toFixed(1)}) & trail SL to cost.</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-2">
+                <button
+                  onClick={() => toggleWatchlist(selectedStock)}
+                  className={`w-full sm:flex-1 py-3 rounded-xl border font-bold text-xs transition flex items-center justify-center gap-2 active:scale-98 cursor-pointer ${
+                    isWatchlisted
+                      ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25 shadow-lg shadow-amber-500/10'
+                      : 'bg-[#101520] border-slate-700 hover:bg-slate-800 text-slate-300'
+                  }`}
                 >
-                  <span>Chart</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
+                  <Bookmark className={`w-4 h-4 ${isWatchlisted ? 'fill-amber-400 text-amber-400' : 'text-slate-400'}`} />
+                  <span>{isWatchlisted ? 'Saved in Watchlist' : 'Add to Watchlist'}</span>
+                </button>
+
+                <button
+                  onClick={handleCopySetup}
+                  className="w-full sm:flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-98 text-white font-bold text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer"
+                >
+                  {copiedNotification ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+                      <span>Copied Trade Setup!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      <span>Copy Setup Parameters</span>
+                    </>
+                  )}
+                </button>
+
                 <button
                   onClick={() => setSelectedStock(null)}
-                  className="w-8 h-8 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition"
+                  className="w-full sm:w-auto px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition cursor-pointer"
                 >
-                  <X className="w-4 h-4" />
+                  Close
                 </button>
               </div>
             </div>
-
-            {/* Rationale & Conviction Callout */}
-            <div className={`border rounded-xl p-3 text-xs leading-relaxed space-y-1.5 ${
-              selectedStock.isBull 
-                ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-200/90' 
-                : 'bg-rose-500/5 border-rose-500/20 text-rose-200/90'
-            }`}>
-              <div className="flex items-center justify-between">
-                <span className="font-bold uppercase tracking-wider text-[10px] text-slate-400">Strategy Rationale</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono font-bold text-purple-300 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
-                    AI Score: {selectedStock.aiScore}/100
-                  </span>
-                  <span className="text-[10px] font-mono font-bold text-yellow-300 bg-yellow-500/10 px-1.5 py-0.5 rounded border border-yellow-500/20">
-                    {selectedStock.volMultiplier}x Vol
-                  </span>
-                </div>
-              </div>
-              <p className="text-xs text-slate-300">
-                {selectedStock.strategyRationale}
-              </p>
-            </div>
-
-            {/* Trade Levels Matrix (Entry, Stop Loss, Target 1, Target 2) */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-              <div className="bg-[#101520] border border-slate-800 rounded-xl p-3 text-center">
-                <div className="text-[10px] uppercase font-bold text-slate-400">Entry Trigger</div>
-                <div className="text-base font-black text-white font-mono mt-0.5">
-                  ₹{selectedStock.entryPrice.toFixed(2)}
-                </div>
-                <div className="text-[9px] text-slate-500 mt-0.5">Market / Limit</div>
-              </div>
-
-              <div className="bg-[#101520] border border-rose-500/20 rounded-xl p-3 text-center bg-rose-500/5">
-                <div className="text-[10px] uppercase font-bold text-rose-400">Stop Loss</div>
-                <div className="text-base font-black text-rose-400 font-mono mt-0.5">
-                  ₹{selectedStock.stopLoss.toFixed(2)}
-                </div>
-                <div className="text-[9px] text-rose-400/80 font-mono mt-0.5 font-bold">
-                  {((Math.abs(selectedStock.stopLoss - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1)}% Risk
-                </div>
-              </div>
-
-              <div className="bg-[#101520] border border-emerald-500/20 rounded-xl p-3 text-center bg-emerald-500/5">
-                <div className="text-[10px] uppercase font-bold text-emerald-400">Target 1 (1:2)</div>
-                <div className="text-base font-black text-emerald-400 font-mono mt-0.5">
-                  ₹{selectedStock.target1.toFixed(2)}
-                </div>
-                <div className="text-[9px] text-emerald-400/80 font-mono mt-0.5 font-bold">
-                  +{((Math.abs(selectedStock.target1 - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1)}% (Book 50%)
-                </div>
-              </div>
-
-              <div className="bg-[#101520] border border-teal-500/20 rounded-xl p-3 text-center bg-teal-500/5">
-                <div className="text-[10px] uppercase font-bold text-teal-400">Target 2 (Runner)</div>
-                <div className="text-base font-black text-teal-400 font-mono mt-0.5">
-                  ₹{selectedStock.target2.toFixed(2)}
-                </div>
-                <div className="text-[9px] text-teal-400/80 font-mono mt-0.5 font-bold">
-                  +{((Math.abs(selectedStock.target2 - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1)}% (Trail SL)
-                </div>
-              </div>
-            </div>
-
-            {/* Position Sizing Calculator */}
-            <div className="bg-[#101520] border border-slate-800 rounded-2xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                  <Calculator className="w-3.5 h-3.5 text-sky-400" />
-                  Auto Position Size (Capital Risk)
-                </span>
-                <span className="text-xs font-mono font-bold text-sky-400">₹{capitalRisk.toLocaleString('en-IN')}</span>
-              </div>
-
-              <input
-                type="range"
-                min="500"
-                max="25000"
-                step="500"
-                value={capitalRisk}
-                onChange={(e) => setCapitalRisk(Number(e.target.value))}
-                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
-              />
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-slate-800/80 text-center">
-                <div>
-                  <div className="text-[10px] text-slate-500">Rec. Quantity</div>
-                  <div className="text-xs font-black text-white font-mono">{positionSizing.shares} Shares</div>
-                </div>
-                <div>
-                  <div className="text-[10px] text-slate-500">Capital Required</div>
-                  <div className="text-xs font-black text-sky-400 font-mono">₹{positionSizing.totalCapital.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] text-slate-500">Max Risk (Loss)</div>
-                  <div className="text-xs font-black text-rose-400 font-mono">₹{positionSizing.maxLoss.toFixed(0)}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] text-slate-500">Target 1 Profit</div>
-                  <div className="text-xs font-black text-emerald-400 font-mono">+₹{positionSizing.targetProfit.toFixed(0)}</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Trade Execution Rules */}
-            <div className="bg-[#101520]/60 border border-slate-800/80 rounded-xl p-3 text-[11px] text-slate-300 space-y-1">
-              <div className="font-bold text-slate-200 flex items-center gap-1.5 text-xs mb-1">
-                <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Trade Execution Rules</span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-400">
-                <div className="flex items-start gap-1.5">
-                  <span className="text-blue-400 font-bold shrink-0">1.</span>
-                  <span>Wait for 15m candle {selectedStock.isBull ? 'close above' : 'break below'} ₹{selectedStock.entryPrice.toFixed(1)} before entry.</span>
-                </div>
-                <div className="flex items-start gap-1.5">
-                  <span className="text-emerald-400 font-bold shrink-0">2.</span>
-                  <span>Book 50% profit at Target 1 & trail Stop Loss to breakeven (₹{selectedStock.entryPrice.toFixed(1)}).</span>
-                </div>
-                <div className="flex items-start gap-1.5">
-                  <span className="text-amber-400 font-bold shrink-0">3.</span>
-                  <span>Exit runner at Target 2 or holding horizon ({selectedStock.expectedHolding}).</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Actions */}
-            <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-2">
-              <button
-                onClick={() => toggleWatchlist(selectedStock.symbol)}
-                className={`w-full sm:flex-1 py-3 rounded-xl border font-bold text-xs transition flex items-center justify-center gap-2 active:scale-98 cursor-pointer ${
-                  savedWatchlist.includes(selectedStock.symbol)
-                    ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 hover:bg-amber-500/25 shadow-lg shadow-amber-500/10'
-                    : 'bg-[#101520] border-slate-700 hover:bg-slate-800 text-slate-300'
-                }`}
-              >
-                <Bookmark className={`w-4 h-4 ${savedWatchlist.includes(selectedStock.symbol) ? 'fill-amber-400 text-amber-400' : 'text-slate-400'}`} />
-                <span>{savedWatchlist.includes(selectedStock.symbol) ? 'Saved in Watchlist' : 'Add to Watchlist'}</span>
-              </button>
-
-              <button
-                onClick={handleCopySetup}
-                className="w-full sm:flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-98 text-white font-bold text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer"
-              >
-                {copiedNotification ? (
-                  <>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-                    <span>Copied Trade Setup!</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-4 h-4" />
-                    <span>Copy Setup Parameters</span>
-                  </>
-                )}
-              </button>
-
-              <button
-                onClick={() => setSelectedStock(null)}
-                className="w-full sm:w-auto px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 };
