@@ -3,7 +3,7 @@ import {
   Search, BrainCircuit, Zap, Crosshair, TrendingUp, TrendingDown, 
   ExternalLink, ArrowUpRight, Filter, ShieldCheck, CheckCircle2, 
   ChevronRight, RefreshCw, Layers, Calculator, Sparkles, X,
-  Lightbulb, Clock, ArrowRight
+  ArrowDownRight, ArrowUp
 } from 'lucide-react';
 import { fetchHistoricalPrices, fetchMultipleStockPrices, isMarketOpen } from '../utils/priceApi';
 import StockLogo from './StockLogo';
@@ -29,11 +29,15 @@ export interface SwingData {
   price: number;
   date: string;
   isBull: boolean;
+  tradeType: 'BUY' | 'SELL';
   bo10?: boolean;
   bo50?: boolean;
+  bd10?: boolean;
+  bd50?: boolean;
   reversal?: boolean;
   channel?: boolean;
-  setupCategory: '10_DAY_BO' | '50_DAY_BO' | 'REVERSAL' | 'CHANNEL_BO';
+  setupCategory: '10_DAY_BO' | '10_DAY_BD' | '50_DAY_BO' | '50_DAY_BD' | 'REVERSAL' | 'CHANNEL_BO';
+  setupTitle: string;
   
   // High Value Metrics
   aiScore: number;
@@ -52,7 +56,7 @@ const SwingPlayer: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeCategoryFilter, setActiveCategoryFilter] = useState<'ALL' | '10_DAY_BO' | '50_DAY_BO' | 'REVERSAL' | 'CHANNEL_BO'>('ALL');
+  const [activeCategoryFilter, setActiveCategoryFilter] = useState<'ALL' | 'BREAKOUTS' | 'BREAKDOWNS' | '10_DAY_BO' | '10_DAY_BD' | '50_DAY_BO' | '50_DAY_BD'>('ALL');
   const [highConvictionOnly, setHighConvictionOnly] = useState(false);
   const [highVolumeOnly, setHighVolumeOnly] = useState(false);
 
@@ -88,8 +92,8 @@ const SwingPlayer: React.FC = () => {
       // Sort candidates by absolute movement to prioritize high momentum for historical deep scanning
       intermediateList.sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
 
-      // 2. Scan historical prices with parallel concurrency (batches of 15)
-      const scanSubset = intermediateList.slice(0, 48); // Top liquid candidates
+      // 2. Scan historical prices with parallel concurrency (batches of 12)
+      const scanSubset = intermediateList.slice(0, 48);
       const batchChunk = 12;
 
       for (let i = 0; i < scanSubset.length; i += batchChunk) {
@@ -110,6 +114,7 @@ const SwingPlayer: React.FC = () => {
                 const high10 = Math.max(...last10);
                 const low10 = Math.min(...last10);
                 const high50 = Math.max(...last50);
+                const low50 = Math.min(...last50);
                 
                 // EMA calculation
                 const k = 2 / (Math.min(50, last50.length) + 1);
@@ -129,38 +134,66 @@ const SwingPlayer: React.FC = () => {
                 const avgDailyMove = dailyDeltas.length ? (dailyDeltas.reduce((a, b) => a + b, 0) / dailyDeltas.length) : 2.0;
                 const volMultiplier = Number(Math.min(4.8, Math.max(1.1, (Math.abs(candidate.change) / Math.max(0.6, avgDailyMove)) * 1.5)).toFixed(1));
 
-                // Breakout Identifications
-                const is10DayBreakout = currentPrice >= (high10 * 0.992);
-                const is50DayBreakout = (currentPrice > ema50 && low10 <= ema50 * 1.01) || (currentPrice >= high50 * 0.99);
-                const isReversalSetup = candidate.isBull && currentPrice > ema10 && currentPrice < ema50 && (last10[0] > last10[last10.length - 1]);
-                const rangePct = ((high10 - low10) / low10) * 100;
-                const isChannelBreakout = rangePct < 4.2 && is10DayBreakout;
+                let setupCat: '10_DAY_BO' | '10_DAY_BD' | '50_DAY_BO' | '50_DAY_BD' | 'REVERSAL' | 'CHANNEL_BO' = '10_DAY_BO';
+                let setupTitle = '10-Day BO';
+                let rationale = '';
 
-                let setupCat: '10_DAY_BO' | '50_DAY_BO' | 'REVERSAL' | 'CHANNEL_BO' = '10_DAY_BO';
-                let rationale = 'Price breaking above 10-day high with expanding volume momentum.';
-                
-                if (is50DayBreakout) {
-                  setupCat = '50_DAY_BO';
-                  rationale = 'Major trendline breakout above 50-EMA with institutional accumulation.';
-                } else if (isChannelBreakout) {
-                  setupCat = 'CHANNEL_BO';
-                  rationale = 'Volatility compression breakout from tight consolidation channel.';
-                } else if (isReversalSetup) {
-                  setupCat = 'REVERSAL';
-                  rationale = 'Oversold mean-reversion bounce confirming reversal above short-term EMA.';
+                if (candidate.isBull) {
+                  // ── BULLISH BREAKOUT LOGIC (BUY) ──
+                  const is50DayBreakout = (currentPrice > ema50 && low10 <= ema50 * 1.01) || (currentPrice >= high50 * 0.99);
+                  const rangePct = ((high10 - low10) / low10) * 100;
+                  const isChannelBreakout = rangePct < 4.2 && currentPrice >= (high10 * 0.992);
+                  const isReversalSetup = currentPrice > ema10 && currentPrice < ema50 && (last10[0] > last10[last10.length - 1]);
+
+                  if (is50DayBreakout) {
+                    setupCat = '50_DAY_BO';
+                    setupTitle = '50-EMA BO';
+                    rationale = 'Major trendline breakout above 50-EMA with institutional accumulation.';
+                  } else if (isChannelBreakout) {
+                    setupCat = 'CHANNEL_BO';
+                    setupTitle = 'Channel BO';
+                    rationale = 'Volatility compression breakout from tight consolidation channel.';
+                  } else if (isReversalSetup) {
+                    setupCat = 'REVERSAL';
+                    setupTitle = 'Reversal Buy';
+                    rationale = 'Oversold mean-reversion bounce confirming reversal above short-term EMA.';
+                  } else {
+                    setupCat = '10_DAY_BO';
+                    setupTitle = '10-Day BO';
+                    rationale = 'Price breaking above 10-day resistance high with expanding volume momentum.';
+                  }
+                } else {
+                  // ── BEARISH BREAKDOWN LOGIC (SELL / SHORT) ──
+                  const is50DayBreakdown = (currentPrice < ema50 && high10 >= ema50 * 0.99) || (currentPrice <= low50 * 1.02);
+
+                  if (is50DayBreakdown) {
+                    setupCat = '50_DAY_BD';
+                    setupTitle = '50-EMA BD';
+                    rationale = 'Major breakdown below 50-EMA support with heavy institutional selling.';
+                  } else {
+                    setupCat = '10_DAY_BD';
+                    setupTitle = '10-Day BD';
+                    rationale = 'Price breaking below 10-day support low with expanding downside momentum.';
+                  }
                 }
 
                 // AI Score Formulation
                 const changePwr = Math.min(30, Math.abs(candidate.change) * 7);
-                const trendBonus = currentPrice > ema50 ? 25 : 12;
+                const trendBonus = (candidate.isBull && currentPrice > ema50) || (!candidate.isBull && currentPrice < ema50) ? 25 : 14;
                 const volBonus = Math.min(25, volMultiplier * 6);
                 const aiScore = Math.min(98, Math.max(55, Math.round(35 + changePwr + trendBonus + volBonus)));
 
                 // Target & Stop Loss Calculation (Dynamic 1:2 to 1:3.2 RR)
                 const riskPercent = Math.max(1.5, Math.min(4.0, avgDailyMove * 1.3));
-                const stopLoss = candidate.isBull ? Number((currentPrice * (1 - riskPercent / 100)).toFixed(1)) : Number((currentPrice * (1 + riskPercent / 100)).toFixed(1));
-                const target1 = candidate.isBull ? Number((currentPrice * (1 + (riskPercent * 2) / 100)).toFixed(1)) : Number((currentPrice * (1 - (riskPercent * 2) / 100)).toFixed(1));
-                const target2 = candidate.isBull ? Number((currentPrice * (1 + (riskPercent * 3.2) / 100)).toFixed(1)) : Number((currentPrice * (1 - (riskPercent * 3.2) / 100)).toFixed(1));
+                const stopLoss = candidate.isBull 
+                  ? Number((currentPrice * (1 - riskPercent / 100)).toFixed(1)) 
+                  : Number((currentPrice * (1 + riskPercent / 100)).toFixed(1));
+                const target1 = candidate.isBull 
+                  ? Number((currentPrice * (1 + (riskPercent * 2) / 100)).toFixed(1)) 
+                  : Number((currentPrice * (1 - (riskPercent * 2) / 100)).toFixed(1));
+                const target2 = candidate.isBull 
+                  ? Number((currentPrice * (1 + (riskPercent * 3.2) / 100)).toFixed(1)) 
+                  : Number((currentPrice * (1 - (riskPercent * 3.2) / 100)).toFixed(1));
                 
                 candidates.push({
                   symbol: candidate.symbol,
@@ -168,11 +201,15 @@ const SwingPlayer: React.FC = () => {
                   price: currentPrice,
                   date: dateStr,
                   isBull: candidate.isBull,
+                  tradeType: candidate.isBull ? 'BUY' : 'SELL',
                   bo10: setupCat === '10_DAY_BO',
                   bo50: setupCat === '50_DAY_BO',
+                  bd10: setupCat === '10_DAY_BD',
+                  bd50: setupCat === '50_DAY_BD',
                   reversal: setupCat === 'REVERSAL',
                   channel: setupCat === 'CHANNEL_BO',
                   setupCategory: setupCat,
+                  setupTitle,
                   aiScore,
                   volMultiplier,
                   entryPrice: currentPrice,
@@ -180,7 +217,7 @@ const SwingPlayer: React.FC = () => {
                   target1,
                   target2,
                   riskReward: '1:2.8',
-                  expectedHolding: setupCat === '10_DAY_BO' ? '3–7 Days' : setupCat === '50_DAY_BO' ? '1–3 Weeks' : '4–10 Days',
+                  expectedHolding: candidate.isBull ? '3–7 Days' : '2–5 Days',
                   strategyRationale: rationale
                 });
               }
@@ -207,10 +244,14 @@ const SwingPlayer: React.FC = () => {
   // Filtered & Sorted Setups
   const filteredSetups = useMemo(() => {
     return marketData.filter(item => {
-      // Category Filter
-      if (activeCategoryFilter !== 'ALL' && item.setupCategory !== activeCategoryFilter) {
-        return false;
-      }
+      // Category / Type Filter
+      if (activeCategoryFilter === 'BREAKOUTS' && !item.isBull) return false;
+      if (activeCategoryFilter === 'BREAKDOWNS' && item.isBull) return false;
+      if (activeCategoryFilter === '10_DAY_BO' && item.setupCategory !== '10_DAY_BO') return false;
+      if (activeCategoryFilter === '10_DAY_BD' && item.setupCategory !== '10_DAY_BD') return false;
+      if (activeCategoryFilter === '50_DAY_BO' && item.setupCategory !== '50_DAY_BO') return false;
+      if (activeCategoryFilter === '50_DAY_BD' && item.setupCategory !== '50_DAY_BD') return false;
+      
       // Conviction filter
       if (highConvictionOnly && item.aiScore < 80) return false;
       // Volume filter
@@ -221,37 +262,37 @@ const SwingPlayer: React.FC = () => {
         return item.symbol.toLowerCase().includes(query);
       }
       return true;
-    }).sort((a, b) => b.aiScore - a.aiScore);
+    });
   }, [marketData, activeCategoryFilter, highConvictionOnly, highVolumeOnly, searchQuery]);
 
-  // Grouped Categories for Summary
-  const bo10Count = marketData.filter(d => d.setupCategory === '10_DAY_BO').length;
-  const bo50Count = marketData.filter(d => d.setupCategory === '50_DAY_BO').length;
-  const reversalCount = marketData.filter(d => d.setupCategory === 'REVERSAL').length;
-  const channelCount = marketData.filter(d => d.setupCategory === 'CHANNEL_BO').length;
-  const highConvictionCount = marketData.filter(d => d.aiScore >= 80).length;
+  // Statistics Counts
+  const breakoutCount = useMemo(() => marketData.filter(d => d.isBull).length, [marketData]);
+  const breakdownCount = useMemo(() => marketData.filter(d => !d.isBull).length, [marketData]);
+  const bo10Count = useMemo(() => marketData.filter(d => d.setupCategory === '10_DAY_BO').length, [marketData]);
+  const bd10Count = useMemo(() => marketData.filter(d => d.setupCategory === '10_DAY_BD').length, [marketData]);
+  const bo50Count = useMemo(() => marketData.filter(d => d.setupCategory === '50_DAY_BO').length, [marketData]);
+  const bd50Count = useMemo(() => marketData.filter(d => d.setupCategory === '50_DAY_BD').length, [marketData]);
+  const highConvictionCount = useMemo(() => marketData.filter(d => d.aiScore >= 80).length, [marketData]);
 
-  // Position Sizing Calculator in Modal
-  const calculatedQty = useMemo(() => {
-    if (!selectedStock || selectedStock.price <= 0) return 0;
+  // Position Sizing Calculation
+  const positionSizing = useMemo(() => {
+    if (!selectedStock) return { shares: 0, totalCapital: 0, maxLoss: 0, targetProfit: 0 };
     const perShareRisk = Math.abs(selectedStock.entryPrice - selectedStock.stopLoss);
-    if (perShareRisk <= 0) return 0;
-    return Math.max(1, Math.floor(capitalRisk / perShareRisk));
+    if (perShareRisk <= 0) return { shares: 0, totalCapital: 0, maxLoss: 0, targetProfit: 0 };
+    
+    const shares = Math.max(1, Math.floor(capitalRisk / perShareRisk));
+    const totalCapital = shares * selectedStock.entryPrice;
+    const maxLoss = shares * perShareRisk;
+    const perShareReward = Math.abs(selectedStock.target1 - selectedStock.entryPrice);
+    const targetProfit = shares * perShareReward;
+
+    return { shares, totalCapital, maxLoss, targetProfit };
   }, [selectedStock, capitalRisk]);
-
-  const totalPositionValue = useMemo(() => {
-    if (!selectedStock) return 0;
-    return calculatedQty * selectedStock.entryPrice;
-  }, [selectedStock, calculatedQty]);
-
-  const potentialProfitTgt1 = useMemo(() => {
-    if (!selectedStock) return 0;
-    return calculatedQty * Math.abs(selectedStock.target1 - selectedStock.entryPrice);
-  }, [selectedStock, calculatedQty]);
 
   const handleCopySetup = () => {
     if (!selectedStock) return;
-    const text = `🎯 SWING TRADE SETUP: ${selectedStock.symbol}
+    const text = `🎯 SWING ${selectedStock.tradeType} SETUP: ${selectedStock.symbol}
+• Action: ${selectedStock.tradeType === 'BUY' ? 'BUY (Breakout)' : 'SELL / SHORT (Breakdown)'}
 • Entry: ₹${selectedStock.entryPrice.toFixed(2)}
 • Stop Loss: ₹${selectedStock.stopLoss.toFixed(2)}
 • Target 1: ₹${selectedStock.target1.toFixed(2)}
@@ -281,24 +322,28 @@ const SwingPlayer: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-1 font-medium">
-              Multi-day breakout scanner, volatility compression &amp; auto-calculated risk/reward trade setups
+              Multi-day breakout (BUY) &amp; breakdown (SELL) scanner with auto-calculated stop-loss and profit targets
             </p>
           </div>
         </div>
 
         {/* Global Summary KPI Tiles */}
         <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-          <div className="bg-[#101520] border border-slate-800 rounded-xl px-3.5 py-2 min-w-[110px]">
+          <div className="bg-[#101520] border border-slate-800 rounded-xl px-3.5 py-2 min-w-[100px]">
             <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Scanned</div>
             <div className="text-base font-black text-white font-mono mt-0.5">{WATCHLIST_SYMBOLS.length} Stocks</div>
           </div>
-          <div className="bg-[#101520] border border-slate-800 rounded-xl px-3.5 py-2 min-w-[110px]">
-            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Active Setups</div>
-            <div className="text-base font-black text-sky-400 font-mono mt-0.5">{marketData.length} Found</div>
+          <div className="bg-[#101520] border border-emerald-500/30 rounded-xl px-3.5 py-2 min-w-[110px] bg-emerald-500/5">
+            <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">🟢 Breakouts (Buy)</div>
+            <div className="text-base font-black text-emerald-400 font-mono mt-0.5">{breakoutCount} Found</div>
           </div>
-          <div className="bg-[#101520] border border-emerald-500/20 rounded-xl px-3.5 py-2 min-w-[125px] bg-emerald-500/5">
-            <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">High Conviction</div>
-            <div className="text-base font-black text-emerald-400 font-mono mt-0.5">{highConvictionCount} Setups</div>
+          <div className="bg-[#101520] border border-rose-500/30 rounded-xl px-3.5 py-2 min-w-[110px] bg-rose-500/5">
+            <div className="text-[10px] text-rose-400 font-bold uppercase tracking-wider">🔴 Breakdowns (Sell)</div>
+            <div className="text-base font-black text-rose-400 font-mono mt-0.5">{breakdownCount} Found</div>
+          </div>
+          <div className="bg-[#101520] border border-purple-500/20 rounded-xl px-3.5 py-2 min-w-[110px]">
+            <div className="text-[10px] text-purple-400 font-bold uppercase tracking-wider">High Conviction</div>
+            <div className="text-base font-black text-purple-300 font-mono mt-0.5">{highConvictionCount} Setups</div>
           </div>
           <button
             onClick={() => loadData(true)}
@@ -315,21 +360,27 @@ const SwingPlayer: React.FC = () => {
       {/* ── 2. Interactive Filter Bar & Search ───────────────────────────── */}
       <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 shadow-xl">
         
-        {/* Category Tabs */}
+        {/* Category Tabs: Breakouts vs Breakdowns */}
         <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar pb-1 md:pb-0">
           {[
             { id: 'ALL', label: `All Setups (${marketData.length})` },
+            { id: 'BREAKOUTS', label: `🟢 Breakouts (Buy) (${breakoutCount})` },
+            { id: 'BREAKDOWNS', label: `🔴 Breakdowns (Sell) (${breakdownCount})` },
             { id: '10_DAY_BO', label: `🚀 10-Day BO (${bo10Count})` },
+            { id: '10_DAY_BD', label: `📉 10-Day BD (${bd10Count})` },
             { id: '50_DAY_BO', label: `📈 50-EMA BO (${bo50Count})` },
-            { id: 'REVERSAL', label: `🔄 Reversal (${reversalCount})` },
-            { id: 'CHANNEL_BO', label: `⚡ Channel BO (${channelCount})` },
+            { id: '50_DAY_BD', label: `📉 50-EMA BD (${bd50Count})` },
           ].map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveCategoryFilter(tab.id as any)}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer select-none ${
                 activeCategoryFilter === tab.id
-                  ? 'bg-blue-600 text-white shadow-sm'
+                  ? tab.id === 'BREAKOUTS' || tab.id === '10_DAY_BO' || tab.id === '50_DAY_BO'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : tab.id === 'BREAKDOWNS' || tab.id === '10_DAY_BD' || tab.id === '50_DAY_BD'
+                    ? 'bg-rose-600 text-white shadow-sm'
+                    : 'bg-blue-600 text-white shadow-sm'
                   : 'bg-[#101520] border border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
               }`}
             >
@@ -378,97 +429,18 @@ const SwingPlayer: React.FC = () => {
         </div>
       </div>
 
-      {/* ── 2.5 Breakout Strategy Mentor Instructions (For Busy Professionals) ─ */}
-      <div className="bg-gradient-to-r from-[#0c1322] via-[#091120] to-[#050b16] border border-emerald-500/35 rounded-2xl p-5 md:p-6 shadow-2xl relative overflow-hidden">
-        {/* Ambient Glows */}
-        <div className="absolute top-0 right-1/4 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 grid lg:grid-cols-12 gap-6 items-center">
-          {/* Left Column: Instructions for Busy Professionals */}
-          <div className="lg:col-span-8 text-left space-y-3.5">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[11px] font-bold uppercase tracking-wider">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-              <span>Breakout Strategy Guide · For Busy Working Traders</span>
-            </div>
-
-            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-snug">
-              Agar aap busy rehte hain ya market se disturb hote hain,{' '}
-              <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-green-400 bg-clip-text text-transparent">
-                to Swing Breakouts kariye!
-              </span>
-            </h2>
-
-            <p className="text-slate-300 text-xs sm:text-sm leading-relaxed">
-              Full-time intraday screen monitor karne ki koi zaroorat nahi hai. Humara Pro Radar automatically 10-Day aur 50-EMA breakouts scan karke auto-calculated Target aur Stop Loss set karta hai.
-            </p>
-
-            {/* 3 Step Instruction Rules */}
-            <div className="grid sm:grid-cols-3 gap-3 pt-1">
-              <div className="bg-[#101520] border border-slate-800 rounded-xl p-3">
-                <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs mb-1">
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>1. Sirf 3:15 PM Check</span>
-                </div>
-                <p className="text-[11px] text-slate-400 leading-snug">
-                  Din bhar disturbance nahi. Sirf market closing time par 5 minute scan karein.
-                </p>
-              </div>
-
-              <div className="bg-[#101520] border border-slate-800 rounded-xl p-3">
-                <div className="flex items-center gap-2 text-sky-400 font-bold text-xs mb-1">
-                  <Crosshair className="w-3.5 h-3.5" />
-                  <span>2. 1:2.8+ Auto R:R</span>
-                </div>
-                <p className="text-[11px] text-slate-400 leading-snug">
-                  Har trade mein pre-calculated Stop Loss aur 2 Targets pehle se set hote hain.
-                </p>
-              </div>
-
-              <div className="bg-[#101520] border border-slate-800 rounded-xl p-3">
-                <div className="flex items-center gap-2 text-amber-400 font-bold text-xs mb-1">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>3. Zero Panic Holding</span>
-                </div>
-                <p className="text-[11px] text-slate-400 leading-snug">
-                  3 se 10 din ka smooth holding horizon — no intraday stop-loss hunting!
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Column: Attractive Female Mentor Pointing with Glasses */}
-          <div className="lg:col-span-4 relative flex justify-center lg:justify-end">
-            <div className="relative rounded-2xl p-1 bg-gradient-to-b from-emerald-500/40 via-teal-500/20 to-transparent shadow-[0_10px_35px_rgba(16,185,129,0.2)] group">
-              <div className="relative rounded-xl overflow-hidden bg-slate-950 max-w-[240px] sm:max-w-[260px]">
-                <img 
-                  src="/mentor_lady.jpg" 
-                  alt="Trading Mentor Instruction" 
-                  className="w-full h-auto object-cover transform group-hover:scale-105 transition-transform duration-500"
-                />
-
-                {/* Floating Speech Instruction */}
-                <div className="absolute bottom-2.5 left-2.5 right-2.5 bg-slate-950/90 backdrop-blur-md border border-emerald-500/40 rounded-lg p-2 text-left shadow-lg">
-                  <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Trading Instructor</div>
-                  <div className="text-[11px] font-semibold text-slate-200">"Busy schedule? Trade Breakouts with strict SL!"</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── 3. Main Setups Grid (Solid Dark Fintech Cards) ────────────────── */}
+      {/* ── 3. Main Setups Grid (Distinct Green Borders for Buy vs Red Borders for Sell) ── */}
       {loading ? (
         <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-12 text-center flex flex-col items-center justify-center">
           <div className="w-12 h-12 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin mb-4" />
-          <h3 className="text-base font-bold text-white mb-1">AI Scanning High-Beta Universe...</h3>
+          <h3 className="text-base font-bold text-white mb-1">Scanning Breakouts & Breakdowns...</h3>
           <p className="text-xs text-slate-400 max-w-md">
-            Scanning 50-day moving averages, 10-day volume breakouts, and auto-calculating optimal Risk:Reward ratios.
+            Scanning 50-day moving averages, 10-day volume momentum, classifying Long Buy breakouts and Short Sell breakdowns.
           </p>
         </div>
       ) : filteredSetups.length === 0 ? (
         <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-12 text-center text-slate-400 text-sm">
-          No swing setups found matching current filters. Click "Rescan" or reset filters.
+          No setups found matching current filters. Click "Rescan" or reset filters.
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -481,16 +453,22 @@ const SwingPlayer: React.FC = () => {
               <div
                 key={stock.symbol}
                 onClick={() => setSelectedStock(stock)}
-                className="bg-[#0c1017] border border-slate-800 hover:border-slate-700 rounded-2xl p-4.5 flex flex-col justify-between transition-all duration-200 cursor-pointer group shadow-lg hover:-translate-y-0.5"
+                className={`bg-[#0c1017] rounded-2xl p-4.5 flex flex-col justify-between transition-all duration-200 cursor-pointer group shadow-lg hover:-translate-y-0.5 border ${
+                  isBull 
+                    ? 'border-emerald-500/40 hover:border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.12)]' 
+                    : 'border-rose-500/40 hover:border-rose-400 shadow-[0_0_15px_rgba(244,63,94,0.12)]'
+                }`}
               >
                 <div>
-                  {/* Top Row: Logo + Symbol + Setup Badge */}
+                  {/* Top Row: Logo + Symbol + Trade Action Badge */}
                   <div className="flex items-start justify-between gap-2 mb-3">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <StockLogo symbol={stock.symbol} className="w-9 h-9 rounded-xl shrink-0 border border-slate-800 bg-[#101520]" />
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <h3 className="text-sm font-black text-white group-hover:text-sky-400 transition-colors truncate">
+                          <h3 className={`text-sm font-black transition-colors truncate ${
+                            isBull ? 'text-white group-hover:text-emerald-400' : 'text-white group-hover:text-rose-400'
+                          }`}>
                             {stock.symbol}
                           </h3>
                         </div>
@@ -499,7 +477,7 @@ const SwingPlayer: React.FC = () => {
                             ₹{stock.price.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                           </span>
                           <span className={`text-[10px] font-mono font-black px-1 rounded ${
-                            stock.change >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                            isBull ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
                           }`}>
                             {stock.change >= 0 ? '+' : ''}{stock.change.toFixed(2)}%
                           </span>
@@ -507,16 +485,23 @@ const SwingPlayer: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Setup Category Badge */}
-                    <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border shrink-0 ${
-                      stock.setupCategory === '10_DAY_BO' ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' :
-                      stock.setupCategory === '50_DAY_BO' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                      stock.setupCategory === 'REVERSAL' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                      'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                    {/* Trade Type Badge (BUY vs SELL) */}
+                    <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border shrink-0 flex items-center gap-1 ${
+                      isBull
+                        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                        : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
                     }`}>
-                      {stock.setupCategory === '10_DAY_BO' ? '10-Day BO' :
-                       stock.setupCategory === '50_DAY_BO' ? '50-EMA BO' :
-                       stock.setupCategory === 'REVERSAL' ? 'Reversal' : 'Channel'}
+                      {isBull ? (
+                        <>
+                          <ArrowUp className="w-2.5 h-2.5 stroke-[3]" />
+                          <span>BUY · {stock.setupTitle}</span>
+                        </>
+                      ) : (
+                        <>
+                          <ArrowDownRight className="w-2.5 h-2.5 stroke-[3]" />
+                          <span>SELL · {stock.setupTitle}</span>
+                        </>
+                      )}
                     </span>
                   </div>
 
@@ -545,12 +530,16 @@ const SwingPlayer: React.FC = () => {
                   {/* Auto Risk:Reward Strategy Strip */}
                   <div className="space-y-1 my-2">
                     <div className="flex items-center justify-between text-xs font-mono">
-                      <span className="text-slate-400 text-[11px]">🎯 Target 1:</span>
-                      <span className="text-emerald-400 font-black">₹{stock.target1.toFixed(1)}</span>
+                      <span className="text-slate-400 text-[11px] flex items-center gap-1">
+                        {isBull ? '🎯 Target 1:' : '📉 Target 1:'}
+                      </span>
+                      <span className={`font-black ${isBull ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        ₹{stock.target1.toFixed(1)}
+                      </span>
                     </div>
                     <div className="flex items-center justify-between text-xs font-mono">
                       <span className="text-slate-400 text-[11px]">🛑 Stop Loss:</span>
-                      <span className="text-rose-400 font-black">₹{stock.stopLoss.toFixed(1)}</span>
+                      <span className="text-slate-300 font-black">₹{stock.stopLoss.toFixed(1)}</span>
                     </div>
                   </div>
                 </div>
@@ -562,7 +551,9 @@ const SwingPlayer: React.FC = () => {
                   </span>
                   <button
                     type="button"
-                    className="flex items-center gap-1 text-xs font-black text-sky-400 hover:text-sky-300 group-hover:translate-x-0.5 transition-transform"
+                    className={`flex items-center gap-1 text-xs font-black transition-transform group-hover:translate-x-0.5 ${
+                      isBull ? 'text-emerald-400 hover:text-emerald-300' : 'text-rose-400 hover:text-rose-300'
+                    }`}
                   >
                     <span>View Setup</span>
                     <ChevronRight className="w-3.5 h-3.5" />
@@ -571,34 +562,6 @@ const SwingPlayer: React.FC = () => {
               </div>
             );
           })}
-
-          {/* ── Final Card in Setups Grid: Mentor Breakout Advice Card ──── */}
-          <div className="col-span-1 md:col-span-2 bg-gradient-to-br from-[#0c1424] to-[#060b14] border border-emerald-500/40 rounded-2xl p-5 shadow-xl relative overflow-hidden flex flex-col sm:flex-row items-center justify-between gap-5 group">
-            <div className="text-left space-y-2 flex-1">
-              <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                ⚡ Mentor Breakout Advice
-              </span>
-              <h4 className="text-base font-black text-white leading-snug">
-                "Agar aap busy hain ya market se disturb hote hain, to in Breakouts ko 1:2.8 R:R ke saath trade karein!"
-              </h4>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                Din bhar charts dekhne ki zaroorat nahi hai. Pre-calculated target aur stop loss set karein, aur bina tension ke 3-10 din position hold karein.
-              </p>
-              <div className="flex items-center gap-2 pt-1 text-[11px] font-mono text-emerald-400 font-bold">
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Zero Disturbance · Auto-Calculated Risk:Reward</span>
-              </div>
-            </div>
-
-            {/* Mentor Thumbnail pointing with glasses */}
-            <div className="relative rounded-2xl overflow-hidden border border-emerald-500/40 bg-slate-950 w-32 h-32 shrink-0 shadow-lg p-0.5 bg-gradient-to-b from-emerald-500/30 to-transparent">
-              <img 
-                src="/mentor_lady.jpg" 
-                alt="Mentor Advice" 
-                className="w-full h-full object-cover rounded-xl group-hover:scale-105 transition-transform duration-500" 
-              />
-            </div>
-          </div>
         </div>
       )}
 
@@ -615,9 +578,9 @@ const SwingPlayer: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <h2 className="text-xl font-black text-white">{selectedStock.symbol}</h2>
                     <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
-                      selectedStock.change >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                      selectedStock.isBull ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
                     }`}>
-                      {selectedStock.change >= 0 ? '+' : ''}{selectedStock.change.toFixed(2)}%
+                      {selectedStock.tradeType === 'BUY' ? '🟢 BUY BREAKOUT' : '🔴 SELL BREAKDOWN'}
                     </span>
                   </div>
                   <p className="text-xs text-slate-400 font-mono mt-0.5">
@@ -628,100 +591,114 @@ const SwingPlayer: React.FC = () => {
               
               <button
                 onClick={() => setSelectedStock(null)}
-                className="w-8 h-8 rounded-full bg-[#101520] border border-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition"
+                className="w-8 h-8 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Strategy Rationale */}
-            <div className="bg-[#101520] border border-slate-800 rounded-xl p-3.5">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-sky-400 mb-1">
-                <Sparkles className="w-3.5 h-3.5" /> Strategy Analysis
-              </div>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                {selectedStock.strategyRationale}
-              </p>
+            {/* Rationale Callout */}
+            <div className={`border rounded-xl p-3 text-xs leading-relaxed ${
+              selectedStock.isBull 
+                ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-200/90' 
+                : 'bg-rose-500/5 border-rose-500/20 text-rose-200/90'
+            }`}>
+              <span className="font-bold">Strategy Trigger: </span>
+              {selectedStock.strategyRationale}
             </div>
 
-            {/* Target, SL, & Entry Grid */}
-            <div className="grid grid-cols-3 gap-2.5 text-center">
-              <div className="bg-[#101520] border border-slate-800 rounded-xl p-3">
-                <div className="text-[10px] uppercase font-bold text-slate-400">Entry Price</div>
-                <div className="text-base font-black text-white font-mono mt-0.5">₹{selectedStock.entryPrice.toFixed(1)}</div>
+            {/* Trade Levels Matrix */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-[#101520] border border-slate-800 rounded-xl p-3 text-center">
+                <div className="text-[10px] uppercase font-bold text-slate-400">Entry Trigger</div>
+                <div className="text-base font-black text-white font-mono mt-0.5">
+                  ₹{selectedStock.entryPrice.toFixed(2)}
+                </div>
+                <div className="text-[9px] text-slate-500 mt-0.5">Market / Limit</div>
               </div>
-              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3">
-                <div className="text-[10px] uppercase font-bold text-emerald-400">Target 1 (1:2)</div>
-                <div className="text-base font-black text-emerald-400 font-mono mt-0.5">₹{selectedStock.target1.toFixed(1)}</div>
-              </div>
-              <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-3">
+
+              <div className="bg-[#101520] border border-rose-500/20 rounded-xl p-3 text-center bg-rose-500/5">
                 <div className="text-[10px] uppercase font-bold text-rose-400">Stop Loss</div>
-                <div className="text-base font-black text-rose-400 font-mono mt-0.5">₹{selectedStock.stopLoss.toFixed(1)}</div>
+                <div className="text-base font-black text-rose-400 font-mono mt-0.5">
+                  ₹{selectedStock.stopLoss.toFixed(2)}
+                </div>
+                <div className="text-[9px] text-rose-500/80 mt-0.5">Strict Exit</div>
+              </div>
+
+              <div className="bg-[#101520] border border-emerald-500/20 rounded-xl p-3 text-center bg-emerald-500/5">
+                <div className="text-[10px] uppercase font-bold text-emerald-400">Target 1 (1:2)</div>
+                <div className="text-base font-black text-emerald-400 font-mono mt-0.5">
+                  ₹{selectedStock.target1.toFixed(2)}
+                </div>
+                <div className="text-[9px] text-emerald-500/80 mt-0.5">Primary Target</div>
               </div>
             </div>
 
-            {/* Interactive Capital Risk Position Sizer */}
+            {/* Position Sizing Calculator */}
             <div className="bg-[#101520] border border-slate-800 rounded-2xl p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-white">
-                  <Calculator className="w-4 h-4 text-amber-400" />
-                  <span>Position Sizing Calculator</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400 font-bold">Max Risk:</span>
-                  <div className="flex items-center gap-1 bg-[#0c1017] border border-slate-700 rounded-lg px-2 py-1">
-                    <span className="text-xs text-slate-400">₹</span>
-                    <input
-                      type="number"
-                      value={capitalRisk}
-                      onChange={(e) => setCapitalRisk(Math.max(500, Number(e.target.value)))}
-                      className="w-16 bg-transparent text-xs font-black text-white font-mono focus:outline-none"
-                    />
-                  </div>
-                </div>
+                <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <Calculator className="w-3.5 h-3.5 text-sky-400" />
+                  Auto Position Size (Capital Risk)
+                </span>
+                <span className="text-xs font-mono font-bold text-sky-400">₹{capitalRisk}</span>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 text-center pt-2 border-t border-slate-800 text-xs">
+              <input
+                type="range"
+                min="500"
+                max="25000"
+                step="500"
+                value={capitalRisk}
+                onChange={(e) => setCapitalRisk(Number(e.target.value))}
+                className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+              />
+
+              <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-800/80 text-center">
                 <div>
-                  <div className="text-[10px] text-slate-400 font-medium">Recommended Qty</div>
-                  <div className="text-sm font-black text-white font-mono mt-0.5">{calculatedQty} Shares</div>
+                  <div className="text-[10px] text-slate-500">Rec. Quantity</div>
+                  <div className="text-xs font-black text-white font-mono">{positionSizing.shares} Shares</div>
                 </div>
                 <div>
-                  <div className="text-[10px] text-slate-400 font-medium">Position Capital</div>
-                  <div className="text-sm font-black text-sky-400 font-mono mt-0.5">₹{Math.round(totalPositionValue).toLocaleString('en-IN')}</div>
+                  <div className="text-[10px] text-slate-500">Max Loss</div>
+                  <div className="text-xs font-black text-rose-400 font-mono">₹{positionSizing.maxLoss.toFixed(0)}</div>
                 </div>
                 <div>
-                  <div className="text-[10px] text-emerald-400 font-medium">Potential Gain (TGT1)</div>
-                  <div className="text-sm font-black text-emerald-400 font-mono mt-0.5">+₹{Math.round(potentialProfitTgt1).toLocaleString('en-IN')}</div>
+                  <div className="text-[10px] text-slate-500">Target 1 Profit</div>
+                  <div className="text-xs font-black text-emerald-400 font-mono">+₹{positionSizing.targetProfit.toFixed(0)}</div>
                 </div>
               </div>
             </div>
 
-            {/* Actions Bar */}
+            {/* Modal Actions */}
             <div className="flex items-center gap-3 pt-2">
               <button
                 onClick={handleCopySetup}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#101520] border border-slate-700 hover:bg-slate-800 text-white text-xs font-bold transition select-none"
+                className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-98 text-white font-bold text-xs transition flex items-center justify-center gap-2 shadow-lg"
               >
-                {copiedNotification ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Layers className="w-4 h-4" />}
-                <span>{copiedNotification ? 'Setup Copied!' : 'Copy Setup'}</span>
+                {copiedNotification ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+                    <span>Setup Copied to Clipboard!</span>
+                  </>
+                ) : (
+                  <>
+                    <Layers className="w-4 h-4" />
+                    <span>Copy Setup Parameters</span>
+                  </>
+                )}
               </button>
 
-              <a
-                href={`https://in.tradingview.com/chart/?symbol=NSE:${selectedStock.symbol}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition select-none shadow-lg shadow-blue-600/20"
+              <button
+                onClick={() => setSelectedStock(null)}
+                className="px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition"
               >
-                <span>Open TradingView</span>
-                <ArrowUpRight className="w-4 h-4" />
-              </a>
+                Close
+              </button>
             </div>
-
           </div>
         </div>
       )}
-
     </div>
   );
 };
