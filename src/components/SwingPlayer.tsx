@@ -45,6 +45,11 @@ export interface SwingData {
   expectedHolding: string;
   holdingDaysHorizon: number;
   strategyRationale: string;
+  sector: string;
+  sectorRank: number;
+  sectorChange: number;
+  sectorTrend: 'UP' | 'DOWN';
+  tradeReason: string;
 }
 
 export interface TrackedSwingSetup {
@@ -57,6 +62,70 @@ export interface TrackedSwingSetup {
   setupTitle: string;
   holdingDaysHorizon: number;
 }
+
+export const STOCK_SECTOR_MAP: Record<string, string> = {
+  // IT
+  TCS: 'IT',
+  INFY: 'IT',
+  HCLTECH: 'IT',
+  WIPRO: 'IT',
+  PERSISTENT: 'IT',
+  COFORGE: 'IT',
+
+  // DEFENCE
+  HAL: 'DEFENCE',
+  BEL: 'DEFENCE',
+
+  // AUTO
+  TATAMOTORS: 'AUTO',
+  MARUTI: 'AUTO',
+  'M&M': 'AUTO',
+
+  // BANKING & FINANCIALS
+  HDFCBANK: 'BANKING',
+  ICICIBANK: 'BANKING',
+  SBIN: 'BANKING',
+  AXISBANK: 'BANKING',
+  KOTAKBANK: 'BANKING',
+  BAJFINANCE: 'FINANCIALS',
+  BAJAJFINSV: 'FINANCIALS',
+  LICI: 'FINANCIALS',
+
+  // REALTY
+  DLF: 'REALTY',
+  LODHA: 'REALTY',
+
+  // METALS
+  JSWSTEEL: 'METALS',
+  COALINDIA: 'METALS',
+
+  // ENERGY & POWER
+  RELIANCE: 'ENERGY',
+  NTPC: 'POWER',
+  POWERGRID: 'POWER',
+  ONGC: 'ENERGY',
+
+  // PHARMA
+  SUNPHARMA: 'PHARMA',
+
+  // FMCG
+  ITC: 'FMCG',
+  HINDUNILVR: 'FMCG',
+
+  // CONSUMER & RETAIL
+  TITAN: 'CONSUMER',
+  ASIANPAINT: 'CONSUMER',
+  TRENT: 'RETAIL',
+  ZOMATO: 'CONSUMER TECH',
+
+  // INFRA & MANUFACTURING
+  LT: 'INFRA',
+  ULTRACEMCO: 'INFRA',
+  BHARTIARTL: 'TELECOM',
+  ADANIENT: 'INFRA',
+  POLYCAB: 'CAPITAL GOODS',
+  DIXON: 'MANUFACTURING',
+};
 
 const SWING_WATCHLIST_SYMBOLS = [
   'RELIANCE', 'TCS', 'HDFCBANK', 'ICICIBANK', 'INFY',
@@ -75,8 +144,8 @@ const SwingPlayer: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<
-    'ALL' | 'WATCHLIST' | '10_DAY_BO' | '50_DAY_BO' | 'TARGET_HIT'
-  >('ALL');
+    'TOP_10' | 'ALL' | 'WATCHLIST' | '10_DAY_BO' | '50_DAY_BO' | 'TARGET_HIT'
+  >('TOP_10');
   const [highConvictionOnly, setHighConvictionOnly] = useState(false);
   const [highVolumeOnly, setHighVolumeOnly] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>(() => {
@@ -87,15 +156,15 @@ const SwingPlayer: React.FC = () => {
       return 'grid';
     }
   });
-  const [sortField, setSortField] = useState<'default' | 'symbol' | 'price' | 'change' | 'aiScore' | 'vol'>('default');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [sortField, setSortField] = useState<'default' | 'sectorRank' | 'symbol' | 'price' | 'change' | 'aiScore' | 'vol'>('default');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
-  const handleSort = (field: 'symbol' | 'price' | 'change' | 'aiScore' | 'vol') => {
+  const handleSort = (field: 'sectorRank' | 'symbol' | 'price' | 'change' | 'aiScore' | 'vol') => {
     if (sortField === field) {
       setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
     } else {
       setSortField(field);
-      setSortOrder(field === 'symbol' ? 'asc' : 'desc');
+      setSortOrder(field === 'symbol' || field === 'sectorRank' ? 'asc' : 'desc');
     }
   };
 
@@ -264,6 +333,42 @@ const SwingPlayer: React.FC = () => {
       // 1. Fetch current live prices in one fast batch
       const batchData = await fetchMultipleStockPrices(scanSymbols);
       
+      // 2. Compute live sector performance by aggregating constituent stock changes
+      const sectorStats: Record<string, { totalChange: number; count: number; symbols: string[] }> = {};
+      for (const sym of SWING_WATCHLIST_SYMBOLS) {
+        const fullKey = `${sym}.NS`;
+        const data = batchData[fullKey] || batchData[sym];
+        const price = (data && data.price > 0) ? data.price : 0;
+        if (price <= 0) continue;
+        const change = data.change || 0;
+        const sector = STOCK_SECTOR_MAP[sym] || 'DIVERSIFIED';
+
+        if (!sectorStats[sector]) {
+          sectorStats[sector] = { totalChange: 0, count: 0, symbols: [] };
+        }
+        sectorStats[sector].totalChange += change;
+        sectorStats[sector].count += 1;
+        sectorStats[sector].symbols.push(sym);
+      }
+
+      // Rank sectors from #1 (strongest) downwards by average % change
+      const rankedSectors = Object.entries(sectorStats)
+        .map(([sector, s]) => ({
+          sector,
+          avgChange: Number((s.totalChange / Math.max(1, s.count)).toFixed(2)),
+          symbols: s.symbols,
+        }))
+        .sort((a, b) => b.avgChange - a.avgChange);
+
+      const sectorRankMap: Record<string, { rank: number; avgChange: number; trend: 'UP' | 'DOWN' }> = {};
+      rankedSectors.forEach((sec, idx) => {
+        sectorRankMap[sec.sector] = {
+          rank: idx + 1,
+          avgChange: sec.avgChange,
+          trend: sec.avgChange >= 0 ? 'UP' : 'DOWN',
+        };
+      });
+
       const candidates: SwingData[] = [];
 
       for (const sym of SWING_WATCHLIST_SYMBOLS) {
@@ -280,43 +385,55 @@ const SwingPlayer: React.FC = () => {
         // Volatility multiplier
         const volMultiplier = Number(Math.min(4.5, Math.max(1.1, (Math.abs(change) / 1.1) * 1.5)).toFixed(1));
 
-        // ── PURE SWING BUY SETUPS (DELIVERY CNC · 2 TO 10 DAYS) ──
+        const sector = STOCK_SECTOR_MAP[sym] || 'DIVERSIFIED';
+        const sInfo = sectorRankMap[sector] || { rank: 99, avgChange: 0, trend: 'UP' };
+        const sectorRank = sInfo.rank;
+        const sectorChange = sInfo.avgChange;
+        const sectorTrend = sInfo.trend;
+
+        // ── PURE SWING BUY SETUPS (DELIVERY CNC) ──
         let setupCat: '10_DAY_BO' | '50_DAY_BO' | 'CHANNEL_BO' | 'REVERSAL' = '10_DAY_BO';
         let setupTitle = '10-Day Breakout';
-        let rationale = 'Price breaking above 10-day base with expanding institutional volume.';
         let holdingDays = 3;
         let expectedHolding = '2–3 Days (Quick Swing)';
 
         if (change >= 2.0) {
           setupCat = '10_DAY_BO';
           setupTitle = '10-Day Breakout';
-          rationale = 'Strong multi-day momentum breakout clearing upper base resistance with expanding volume.';
           holdingDays = 3;
           expectedHolding = '2–3 Days (Quick Swing)';
         } else if (change >= 0.5) {
           setupCat = '50_DAY_BO';
-          setupTitle = '50-EMA Trend Bounce';
-          rationale = 'Institutional accumulation bouncing off 50-EMA support trendline with bullish structure.';
+          setupTitle = '50-EMA Bounce';
           holdingDays = 7;
           expectedHolding = '5–10 Days (Trend Swing)';
         } else if (change >= -1.0) {
           setupCat = 'CHANNEL_BO';
           setupTitle = 'Channel Breakout';
-          rationale = 'Volatility compression breakout from a multi-day tight consolidation range.';
           holdingDays = 5;
           expectedHolding = '3–5 Days (Base Swing)';
         } else {
           setupCat = 'REVERSAL';
-          setupTitle = 'Oversold Swing Bounce';
-          rationale = 'Mean-reversion bounce confirming reversal above short-term 10-day EMA support.';
+          setupTitle = 'Oversold Bounce';
           holdingDays = 3;
           expectedHolding = '2–4 Days (Pullback Swing)';
         }
 
-        // Technical Setup Strength formulation
+        // Technical Setup Strength formulation (with Sector bonus for leading sectors)
         const changePwr = Math.max(-15, Math.min(25, change * 5));
         const volBonus = volMultiplier >= 2.0 ? 25 : volMultiplier >= 1.5 ? 18 : 10;
-        const aiScore = Math.min(98, Math.max(60, Math.round(55 + changePwr + volBonus)));
+        const sectorBonus = sectorRank <= 3 ? 15 : sectorRank <= 6 ? 8 : 0;
+        const aiScore = Math.min(99, Math.max(60, Math.round(52 + changePwr + volBonus + sectorBonus)));
+
+        // Clear, human-readable trade reason explaining why this stock was chosen
+        let tradeReason = '';
+        if (sectorRank <= 3) {
+          tradeReason = `Rank #${sectorRank} ${sector} Leader (${sectorChange >= 0 ? '+' : ''}${sectorChange}% ${sectorTrend}) • ${setupTitle} with strong ${volMultiplier}x volume surge`;
+        } else if (sectorRank <= 7) {
+          tradeReason = `Top pick in ${sector} (Rank #${sectorRank}, ${sectorTrend}) • ${setupTitle} coiling with favorable 1:2.5 Risk:Reward`;
+        } else {
+          tradeReason = `${sector} Sector Play • ${setupTitle} bouncing with high-probability reversal structure`;
+        }
 
         // Swing Trade Levels (SL: 2.2% - 3.8%, T1: 5.5% - 8%, T2: 10% - 15%)
         const slPct = Math.min(4.0, Math.max(2.2, dailyRangePct * 1.1));
@@ -345,12 +462,24 @@ const SwingPlayer: React.FC = () => {
           riskReward: '1:2.5',
           expectedHolding,
           holdingDaysHorizon: holdingDays,
-          strategyRationale: rationale
+          strategyRationale: tradeReason,
+          sector,
+          sectorRank,
+          sectorChange,
+          sectorTrend,
+          tradeReason
         });
       }
 
-      // Sort candidates by technical score & positive price momentum
-      candidates.sort((a, b) => (b.aiScore + b.change * 2) - (a.aiScore + a.change * 2));
+      // Sort candidates primarily by Sector Rank (Rank 1 sectors first),
+      // and within each sector by technical setup conviction score
+      candidates.sort((a, b) => {
+        if (a.sectorRank !== b.sectorRank) {
+          return a.sectorRank - b.sectorRank;
+        }
+        return (b.aiScore + b.change * 2) - (a.aiScore + a.change * 2);
+      });
+
       setMarketData(candidates);
     } catch (err) {
       console.error('Error in swing player scanner:', err);
@@ -366,7 +495,11 @@ const SwingPlayer: React.FC = () => {
 
   // Filtered setups
   const filteredSetups = useMemo(() => {
+    // Determine top 10 stocks by sector-ranked order
+    const top10Symbols = marketData.slice(0, 10).map(s => s.symbol);
+
     return marketData.filter(item => {
+      if (activeCategoryFilter === 'TOP_10' && !top10Symbols.includes(item.symbol)) return false;
       if (activeCategoryFilter === 'WATCHLIST' && !savedWatchlist.includes(item.symbol)) return false;
       if (activeCategoryFilter === '10_DAY_BO' && item.setupCategory !== '10_DAY_BO') return false;
       if (activeCategoryFilter === '50_DAY_BO' && item.setupCategory !== '50_DAY_BO') return false;
@@ -380,7 +513,11 @@ const SwingPlayer: React.FC = () => {
 
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        return item.symbol.toLowerCase().includes(q);
+        return (
+          item.symbol.toLowerCase().includes(q) ||
+          item.sector.toLowerCase().includes(q) ||
+          item.tradeReason.toLowerCase().includes(q)
+        );
       }
       return true;
     });
@@ -391,7 +528,8 @@ const SwingPlayer: React.FC = () => {
     if (sortField === 'default') return filteredSetups;
     return [...filteredSetups].sort((a, b) => {
       let cmp = 0;
-      if (sortField === 'symbol') cmp = a.symbol.localeCompare(b.symbol);
+      if (sortField === 'sectorRank') cmp = a.sectorRank - b.sectorRank;
+      else if (sortField === 'symbol') cmp = a.symbol.localeCompare(b.symbol);
       else if (sortField === 'price') cmp = a.price - b.price;
       else if (sortField === 'change') cmp = a.change - b.change;
       else if (sortField === 'aiScore') cmp = a.aiScore - b.aiScore;
@@ -524,6 +662,7 @@ const SwingPlayer: React.FC = () => {
       <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-4 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 shadow-xl">
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {[
+            { id: 'TOP_10', label: `Top 10 Sector Picks (10)` },
             { id: 'ALL', label: `All Swing Buys (${marketData.length})` },
             { id: 'WATCHLIST', label: `Tracked Positions (${savedWatchlist.length})` },
             { id: '10_DAY_BO', label: `10-Day Breakout (${bo10Count})` },
@@ -728,18 +867,35 @@ const SwingPlayer: React.FC = () => {
                     </span>
                   </div>
 
-                  {/* Horizon & Meta Strip */}
+                  {/* Sector Rank & Meta Strip */}
                   <div className="flex items-center gap-1.5 flex-wrap my-2 font-mono text-[10px]">
-                    <span className="px-2 py-0.5 rounded border border-slate-800 bg-[#101520] text-slate-300 font-medium flex items-center gap-1">
-                      <Calendar className="w-3 h-3 text-emerald-400" />
-                      {stock.expectedHolding}
+                    <span className={`px-2 py-0.5 rounded border font-bold ${
+                      stock.sectorRank === 1
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
+                        : stock.sectorRank === 2
+                        ? 'bg-slate-300/20 text-slate-200 border-slate-400/40'
+                        : stock.sectorRank === 3
+                        ? 'bg-amber-700/20 text-amber-400 border-amber-600/40'
+                        : 'bg-[#101520] text-slate-300 border-slate-800'
+                    }`}>
+                      Rank #{stock.sectorRank} {stock.sector}
                     </span>
-                    <span className="px-2 py-0.5 rounded border border-slate-800 bg-[#101520] text-slate-300 font-medium">
-                      Vol {stock.volMultiplier}x
+                    <span className={`px-1.5 py-0.5 rounded border font-bold ${
+                      stock.sectorTrend === 'UP'
+                        ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
+                        : 'text-rose-400 bg-rose-500/10 border-rose-500/30'
+                    }`}>
+                      {stock.sectorTrend === 'UP' ? '▲' : '▼'} {stock.sectorChange >= 0 ? '+' : ''}{stock.sectorChange.toFixed(1)}% {stock.sectorTrend}
                     </span>
                     <span className="px-2 py-0.5 rounded border border-purple-500/30 bg-purple-500/10 text-purple-300 font-medium ml-auto">
                       Score {stock.aiScore}/100
                     </span>
+                  </div>
+
+                  {/* Why Chosen Reason Box */}
+                  <div className="my-2 p-2 bg-[#101520] border border-slate-800/90 rounded-lg">
+                    <div className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider mb-0.5">Why Chosen (Reason)</div>
+                    <div className="text-[11px] text-slate-300 line-clamp-2 leading-relaxed font-sans font-medium">{stock.tradeReason}</div>
                   </div>
 
                   {/* Single Clean Execution Status Pill */}
@@ -828,8 +984,21 @@ const SwingPlayer: React.FC = () => {
                     className="py-3.5 px-4 cursor-pointer hover:text-white transition-colors"
                   >
                     <div className="flex items-center gap-1.5">
-                      <span>Stock / Setup</span>
+                      <span>Stock</span>
                       {sortField === 'symbol' ? (
+                        <span className="text-emerald-400 font-bold">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleSort('sectorRank')}
+                    className="py-3.5 px-3 cursor-pointer hover:text-white transition-colors whitespace-nowrap"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>Sector &amp; Rank</span>
+                      {sortField === 'sectorRank' ? (
                         <span className="text-emerald-400 font-bold">{sortOrder === 'asc' ? '↑' : '↓'}</span>
                       ) : (
                         <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
@@ -841,7 +1010,7 @@ const SwingPlayer: React.FC = () => {
                     className="py-3.5 px-3 text-right cursor-pointer hover:text-white transition-colors"
                   >
                     <div className="flex items-center justify-end gap-1.5">
-                      <span>LTP & Chg</span>
+                      <span>LTP &amp; Chg</span>
                       {sortField === 'price' ? (
                         <span className="text-emerald-400 font-bold">{sortOrder === 'asc' ? '↑' : '↓'}</span>
                       ) : (
@@ -849,6 +1018,7 @@ const SwingPlayer: React.FC = () => {
                       )}
                     </div>
                   </th>
+                  <th className="py-3.5 px-3 min-w-[240px]">Why Chosen (Trade Reason)</th>
                   <th 
                     onClick={() => handleSort('aiScore')}
                     className="py-3.5 px-3 text-center cursor-pointer hover:text-white transition-colors"
@@ -875,12 +1045,11 @@ const SwingPlayer: React.FC = () => {
                       )}
                     </div>
                   </th>
-                  <th className="py-3.5 px-3">Horizon</th>
                   <th className="py-3.5 px-3 text-right">Trigger (Buy)</th>
                   <th className="py-3.5 px-3 text-right">Stop Loss</th>
                   <th className="py-3.5 px-3 text-right">Targets (T1 / T2)</th>
                   <th className="py-3.5 px-3 text-center">R:R</th>
-                  <th className="py-3.5 px-4 min-w-[150px]">Swing Status</th>
+                  <th className="py-3.5 px-4 min-w-[140px]">Swing Status</th>
                   <th className="py-3.5 px-4 text-right">Action</th>
                 </tr>
               </thead>
@@ -898,7 +1067,7 @@ const SwingPlayer: React.FC = () => {
                       onClick={() => setSelectedStock(stock)}
                       className="hover:bg-[#121926]/75 transition-colors cursor-pointer group"
                     >
-                      {/* Stock & Setup */}
+                      {/* Stock */}
                       <td className="py-3.5 px-4 font-sans">
                         <div className="flex items-center gap-3">
                           <StockLogo symbol={stock.symbol} className="w-8 h-8 rounded-lg shrink-0 border border-slate-800 bg-[#101520]" />
@@ -908,13 +1077,40 @@ const SwingPlayer: React.FC = () => {
                                 {stock.symbol}
                               </span>
                               <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold uppercase tracking-wider border bg-emerald-500/10 text-emerald-400 border-emerald-500/25">
-                                BUY · CNC
+                                CNC
                               </span>
                             </div>
-                            <div className="text-[11px] text-slate-400 truncate max-w-[170px]" title={stock.setupTitle}>
+                            <div className="text-[11px] text-slate-400 truncate max-w-[130px]" title={stock.setupTitle}>
                               {stock.setupTitle}
                             </div>
                           </div>
+                        </div>
+                      </td>
+
+                      {/* Sector & Rank */}
+                      <td className="py-3.5 px-3 whitespace-nowrap font-sans">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono border ${
+                            stock.sectorRank === 1
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
+                              : stock.sectorRank === 2
+                              ? 'bg-slate-300/20 text-slate-200 border-slate-400/40'
+                              : stock.sectorRank === 3
+                              ? 'bg-amber-700/20 text-amber-400 border-amber-600/40'
+                              : 'bg-[#101520] text-slate-300 border-slate-800'
+                          }`}>
+                            Rank #{stock.sectorRank}
+                          </span>
+                          <span className="font-bold text-white text-xs">{stock.sector}</span>
+                        </div>
+                        <div className={`text-[10px] font-bold mt-1 flex items-center gap-1 ${
+                          stock.sectorTrend === 'UP' ? 'text-emerald-400' : 'text-rose-400'
+                        }`}>
+                          <span>{stock.sectorTrend === 'UP' ? '▲' : '▼'}</span>
+                          <span>{stock.sectorChange >= 0 ? '+' : ''}{stock.sectorChange.toFixed(1)}%</span>
+                          <span className="text-[9px] uppercase font-mono px-1 py-0.2 rounded bg-slate-800/80 text-slate-300">
+                            {stock.sectorTrend}
+                          </span>
                         </div>
                       </td>
 
@@ -930,6 +1126,13 @@ const SwingPlayer: React.FC = () => {
                         </div>
                       </td>
 
+                      {/* Why Chosen (Trade Reason) */}
+                      <td className="py-3.5 px-3 font-sans">
+                        <div className="text-[11px] text-slate-300 font-medium leading-relaxed max-w-[280px]" title={stock.tradeReason}>
+                          {stock.tradeReason}
+                        </div>
+                      </td>
+
                       {/* AI Score */}
                       <td className="py-3.5 px-3 text-center whitespace-nowrap">
                         <span className="inline-block px-2.5 py-0.5 rounded-full border border-purple-500/30 bg-purple-500/10 text-purple-300 font-bold text-[11px]">
@@ -941,14 +1144,6 @@ const SwingPlayer: React.FC = () => {
                       <td className="py-3.5 px-3 text-center whitespace-nowrap">
                         <span className="inline-block px-2 py-0.5 rounded border border-slate-800 bg-[#101520] text-slate-300 font-bold text-[10px]">
                           {stock.volMultiplier}x
-                        </span>
-                      </td>
-
-                      {/* Expected Holding */}
-                      <td className="py-3.5 px-3 whitespace-nowrap font-sans">
-                        <span className="px-2 py-0.5 rounded border border-slate-800 bg-[#101520] text-slate-300 font-medium text-[10px] inline-flex items-center gap-1">
-                          <Calendar className="w-3 h-3 text-emerald-400 shrink-0" />
-                          {stock.expectedHolding}
                         </span>
                       </td>
 
