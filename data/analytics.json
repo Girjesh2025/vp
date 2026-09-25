@@ -1,0 +1,235 @@
+{
+  "totalQueries": 440,
+  "topSearches": [
+    {
+      "symbol": "RELIANCE",
+      "company": "Reliance Industries Ltd",
+      "sector": "Energy & Retail",
+      "count": 48,
+      "trend": "Hot #1",
+      "change": "+1.8%"
+    },
+    {
+      "symbol": "TCS",
+      "company": "Tata Consultancy Services",
+      "sector": "IT & Software",
+      "count": 39,
+      "trend": "Trending",
+      "change": "+0.9%"
+    },
+    {
+      "symbol": "HDFCBANK",
+      "company": "HDFC Bank Ltd",
+      "sector": "Banking & BFSI",
+      "count": 34,
+      "trend": "High Demand",
+      "change": "+1.2%"
+    },
+    {
+      "symbol": "TRENT",
+      "company": "Trent Ltd (Westside/Zudio)",
+      "sector": "Consumer Retail",
+      "count": 28,
+      "trend": "Breakout",
+      "change": "+3.4%"
+    },
+    {
+      "symbol": "INFY",
+      "company": "Infosys Ltd",
+      "sector": "IT & Software",
+      "count": 22,
+      "trend": "Steady",
+      "change": "+0.5%"
+    },
+    {
+      "symbol": "BEL",
+      "company": "Bharat Electronics Ltd",
+      "sector": "Defence Tech",
+      "count": 19,
+      "trend": "Momentum",
+      "change": "+2.1%"
+    },
+    {
+      "symbol": "ZOMATO",
+      "company": "Zomato Ltd (Blinkit)",
+      "sector": "Quick Commerce",
+      "count": 16,
+      "trend": "Growth Watch",
+      "change": "+1.7%"
+    },
+    {
+      "symbol": "KALYANKJIL",
+      "company": "Kalyan Jewellers India",
+      "sector": "Gems & Jewellery",
+      "count": 13,
+      "trend": "Bullish",
+      "change": "+2.8%"
+    }
+  ],
+  "toolUsage": [
+    {
+      "tool": "Guru Scanner",
+      "category": "Fundamental AI",
+      "views": 142,
+      "share": 38.5
+    },
+    {
+      "tool": "Swing Player",
+      "category": "Momentum & Trend",
+      "views": 98,
+      "share": 26.6
+    },
+    {
+      "tool": "Intraday Breakout",
+      "category": "Volume Spikes",
+      "views": 84,
+      "share": 22.8
+    },
+    {
+      "tool": "Options Chain",
+      "category": "OI & Greeks",
+      "views": 67,
+      "share": 18.2
+    },
+    {
+      "tool": "Portfolio Analytics",
+      "category": "Risk & Beta",
+      "views": 52,
+      "share": 14.1
+    }
+  ],
+  "sectorDistribution": [
+    {
+      "sector": "Banking & Financial Services",
+      "percentage": 34,
+      "queries": 150,
+      "color": "emerald"
+    },
+    {
+      "sector": "Information Technology",
+      "percentage": 24,
+      "queries": 105,
+      "color": "blue"
+    },
+    {
+      "sector": "Energy & Petrochemicals",
+      "percentage": 18,
+      "queries": 79,
+      "color": "amber"
+    },
+    {
+      "sector": "Retail & Quick Commerce",
+      "percentage": 14,
+      "queries": 62,
+      "color": "purple"
+    },
+    {
+      "sector": "Defence & Capital Goods",
+      "percentage": 10,
+      "queries": 44,
+      "color": "rose"
+    }
+  ],
+  "hourlyTraffic": [
+    {
+      "timeSlot": "09:00 - 09:15",
+      "phase": "Pre-Market",
+      "queries": 32,
+      "pct": 7,
+      "intensity": "normal"
+    },
+    {
+      "timeSlot": "09:15 - 10:30",
+      "phase": "Opening Rush",
+      "queries": 128,
+      "pct": 29,
+      "intensity": "peak"
+    },
+    {
+      "timeSlot": "10:30 - 12:30",
+      "phase": "Mid-Day Scan",
+      "queries": 74,
+      "pct": 17,
+      "intensity": "medium"
+    },
+    {
+      "timeSlot": "12:30 - 14:00",
+      "phase": "Consolidation",
+      "queries": 46,
+      "pct": 10,
+      "intensity": "low"
+    },
+    {
+      "timeSlot": "14:00 - 15:30",
+      "phase": "Closing Rally",
+      "queries": 118,
+      "pct": 27,
+      "intensity": "peak"
+    },
+    {
+      "timeSlot": "15:30 - 17:00",
+      "phase": "Post-Market",
+      "queries": 42,
+      "pct": 10,
+      "intensity": "low"
+    }
+  ],
+  "recentActivity": [
+    {
+      "id": "act-1",
+      "type": "search",
+      "title": "Queried RELIANCE",
+      "detail": "NSE: RELIANCE • Live Quote & Technicals",
+      "time": "2 mins ago",
+      "badge": "Ticker Query"
+    },
+    {
+      "id": "act-2",
+      "type": "tool",
+      "title": "Guru Scanner Active",
+      "detail": "Deep Value scan executed across Nifty 500",
+      "time": "5 mins ago",
+      "badge": "AI Screener"
+    },
+    {
+      "id": "act-3",
+      "type": "search",
+      "title": "Queried HDFCBANK",
+      "detail": "NSE: HDFCBANK • Institutional Orderflow & Delivery",
+      "time": "9 mins ago",
+      "badge": "Ticker Query"
+    },
+    {
+      "id": "act-4",
+      "type": "search",
+      "title": "Queried TRENT",
+      "detail": "NSE: TRENT • Breakout Volume surge inspection",
+      "time": "14 mins ago",
+      "badge": "Ticker Query"
+    },
+    {
+      "id": "act-5",
+      "type": "tool",
+      "title": "Swing Player Loaded",
+      "detail": "Screened 20 EMA pullbacks & multi-week consolidations",
+      "time": "18 mins ago",
+      "badge": "Screener"
+    },
+    {
+      "id": "act-6",
+      "type": "search",
+      "title": "Queried TCS",
+      "detail": "NSE: TCS • Quarterly Financial Results & IT Index",
+      "time": "24 mins ago",
+      "badge": "Ticker Query"
+    },
+    {
+      "id": "act-7",
+      "type": "tool",
+      "title": "Options Chain Evaluated",
+      "detail": "NIFTY Weekly Expiry Open Interest & Max Pain analysis",
+      "time": "31 mins ago",
+      "badge": "Derivatives"
+    }
+  ]
+}

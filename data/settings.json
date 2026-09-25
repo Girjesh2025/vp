@@ -1,0 +1,11 @@
+{
+  "maintenanceMode": false,
+  "marketDataProvider": "Yahoo Finance Gateway (Live Primary)",
+  "refreshIntervalSeconds": 15,
+  "sessionTimeoutHours": 4,
+  "currency": "INR",
+  "auditLogging": true,
+  "masterAdminPin": "Rahul@123",
+  "lastUpdated": "2026-09-25T21:40:00.000Z",
+  "updatedBy": "girjesh.ai25@gmail.com"
+}

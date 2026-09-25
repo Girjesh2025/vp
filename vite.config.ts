@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     watch: {
-      ignored: ['**/.dbg/**', '**/dist/**'],
+      ignored: ['**/.dbg/**', '**/dist/**', '**/data/**', '**/data/users.json'],
     },
     proxy: {
       '/api/yahoo/spark': {

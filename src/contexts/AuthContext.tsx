@@ -59,6 +59,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
+    const syncUserToBackend = async (u: any) => {
+      if (!u || !u.email) return;
+      const syncKey = `pp_synced_${u.email}`;
+      if (typeof window !== 'undefined' && sessionStorage.getItem(syncKey)) return;
+      try {
+        if (typeof window !== 'undefined') sessionStorage.setItem(syncKey, 'true');
+        await fetch('/api/users/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: u.id,
+            email: u.email,
+            name: u.user_metadata?.full_name || u.email.split('@')[0],
+          })
+        });
+      } catch (err) {
+        // Non-blocking sync
+      }
+    };
+
     sb.auth.getSession().then(async ({ data: { session }, error }: any) => {
       if (error && /refresh token/i.test(error.message || '')) {
         await clearBrokenSupabaseSession();
@@ -67,6 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setSession(session);
         setUser(session?.user ?? null);
+        if (session?.user) syncUserToBackend(session.user);
       }
       setLoading(false);
     }).catch(async (error: any) => {
@@ -82,6 +103,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!session) clearLegacyBrokerState();
       setSession(session);
       setUser(session?.user ?? null);
+      if (session?.user) syncUserToBackend(session.user);
       setLoading(false);
     });
 

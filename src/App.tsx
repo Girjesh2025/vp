@@ -13,6 +13,7 @@ import GlobalMarket from './components/tools/GlobalMarket'
 import SectoralFlow from './components/tools/SectoralFlow'
 import ReturnsCalculator from './components/tools/ReturnsCalculator'
 import PositionCalculator from './components/PositionCalculator'
+import AdminRoute from './components/admin/AdminRoute'
 import './App.css'
 
 function AppRoutes() {
@@ -42,6 +43,8 @@ function AppRoutes() {
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/admin" element={<AdminRoute />} />
+      <Route path="/admin/*" element={<AdminRoute />} />
       <Route
         path="/app"
         element={

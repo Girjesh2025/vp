@@ -1,0 +1,32 @@
+[
+  {
+    "id": "75935584-830b-4c23-aa16-9e440e28c4ad",
+    "email": "sartaj2475@gmail.com",
+    "name": "sartaj",
+    "role": "user",
+    "plan": "pro",
+    "joinedDate": "2026-06-24",
+    "lastActive": "24/09/2026",
+    "portfoliosCount": 1
+  },
+  {
+    "id": "ea02f2e2-30f3-4f1f-bed6-95602b5adc7c",
+    "email": "shamimmofamily@gmil.com",
+    "name": "BEST MO",
+    "role": "user",
+    "plan": "pro",
+    "joinedDate": "2026-09-14",
+    "lastActive": "Active",
+    "portfoliosCount": 1
+  },
+  {
+    "id": "6f916821-3265-4f6a-ae7d-626ce90c5603",
+    "email": "girjesh.ai25@gmail.com",
+    "name": "ram ",
+    "role": "admin",
+    "plan": "pro",
+    "joinedDate": "2026-03-19",
+    "lastActive": "25/09/2026",
+    "portfoliosCount": 1
+  }
+]
