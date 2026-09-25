@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Plus, TrendingUp, TrendingDown, DollarSign, PieChart, BarChart3, Settings, User, Wallet, Activity, Trash2, Edit, Briefcase } from 'lucide-react';
+import { Plus, TrendingUp, TrendingDown, DollarSign, PieChart, BarChart3, Settings, User, Wallet, Activity, Trash2, Edit, Briefcase, ArrowUpRight, ArrowDownRight, Layers, ChevronRight, Compass, Sparkles } from 'lucide-react';
+import StockLogo from './components/StockLogo';
 import AddStockModal from './components/AddStockModal';
 import TransactionModal from './components/TransactionModal';
 import PortfolioChart from './components/PortfolioChart';
@@ -25,6 +26,7 @@ import OptionsDecode from './components/OptionsDecode';
 import StockRecommendations from './components/StockRecommendations';
 import HelpAndSupport from './components/HelpAndSupport';
 import TradingPsychology from './components/TradingPsychology';
+import PortfolioPage from './components/PortfolioPage';
 import { MarketTicker } from './components/MarketTicker';
 import { fetchStockPrice } from './utils/priceApi';
 import { useAuth } from './contexts/AuthContext';
@@ -578,54 +580,350 @@ const StockPortfolioApp: React.FC = () => {
 
 
 
-  const renderDashboard = () => (
-    <div className="space-y-6">
-      {/* Top Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-gradient-to-br from-green-400 to-green-600 rounded-2xl p-6 text-white relative overflow-hidden">
-          <div className="relative z-10">
-            <div className="text-green-100 text-sm font-medium">Total Value</div>
-            <div className="text-2xl font-bold mt-1">₹{stats.totalCurrent.toLocaleString()}</div>
+  const formatINR = (val: number) => {
+    return '₹' + Number(val || 0).toLocaleString('en-IN', {
+      maximumFractionDigits: 2,
+      minimumFractionDigits: 2,
+    });
+  };
+
+  const formatPct = (val: number) => {
+    const sign = val > 0 ? '+' : '';
+    return `${sign}${Number(val || 0).toFixed(2)}%`;
+  };
+
+  const renderDashboard = () => {
+    const marketLive = isMarketOpen();
+
+    // Calculate movers & holding data for quick pulse
+    const holdingsPulse = enrichedStocks.map(stock => {
+      const priceObj = stockPrices[stock.symbol];
+      const currentPrice = priceObj?.price || stock.avgPrice || 0;
+      const prevClose = priceObj?.previousClose || currentPrice;
+      const dayChange = priceObj?.change !== undefined ? priceObj.change : (currentPrice - prevClose);
+      const dayChangePercent = prevClose > 0 ? ((currentPrice - prevClose) / prevClose) * 100 : 0;
+      const marketVal = currentPrice * stock.quantity;
+      const investedVal = stock.avgPrice * stock.quantity;
+      const pnl = marketVal - investedVal;
+      const pnlPct = investedVal > 0 ? (pnl / investedVal) * 100 : 0;
+
+      return {
+        ...stock,
+        currentPrice,
+        dayChange,
+        dayChangePercent,
+        marketVal,
+        investedVal,
+        pnl,
+        pnlPct
+      };
+    });
+
+    const gainersCount = holdingsPulse.filter(h => h.pnl >= 0).length;
+    const losersCount = holdingsPulse.filter(h => h.pnl < 0).length;
+    const totalCount = holdingsPulse.length;
+    const gainersPct = totalCount > 0 ? (gainersCount / totalCount) * 100 : 50;
+
+    // Top performers sorted by today's performance
+    const topMovers = [...holdingsPulse]
+      .sort((a, b) => Math.abs(b.dayChangePercent) - Math.abs(a.dayChangePercent))
+      .slice(0, 4);
+
+    return (
+      <div className="space-y-6 max-w-7xl mx-auto pb-12">
+        {/* ──────────────────────────────────────────────────────────────────────────
+            1. EXECUTIVE SUBHEADER & QUICK ACTIONS
+            ────────────────────────────────────────────────────────────────────────── */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 shrink-0">
+              <Compass className="w-4 h-4 text-sky-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h1 className="text-lg md:text-xl font-bold text-white tracking-tight font-sans">
+                  Market & Portfolio Intelligence
+                </h1>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-white/[0.04] border border-white/10 text-slate-300">
+                  {currentPortfolio?.name || 'Primary Portfolio'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className={`w-1.5 h-1.5 rounded-full ${marketLive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+                <span className="text-[11px] font-mono text-slate-400">
+                  {marketLive ? 'NSE/BSE Live Market Session (09:15 - 15:30 IST)' : 'NSE/BSE Market Closed • Showing Last Traded Prices'}
+                </span>
+              </div>
+            </div>
           </div>
-          <DollarSign className="absolute top-4 right-4 w-8 h-8 text-green-200" />
+
+          {/* Action Controls */}
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <button
+              onClick={() => setActiveTab('portfolio')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[#0c121e] hover:bg-[#131b26] border border-slate-800 text-slate-300 hover:text-white transition-all cursor-pointer shadow-sm group"
+            >
+              <Briefcase className="w-3.5 h-3.5 text-slate-400 group-hover:text-sky-400 transition-colors" />
+              <span>View Holdings</span>
+              <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-white transition-colors" />
+            </button>
+
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all cursor-pointer shadow-sm hover:shadow-emerald-500/20"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Stock</span>
+            </button>
+          </div>
         </div>
 
-        <div className="bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl p-6 text-white relative overflow-hidden">
-          <div className="relative z-10">
-            <div className="text-blue-100 text-sm font-medium">Invested</div>
-            <div className="text-2xl font-bold mt-1">₹{stats.totalInvested.toLocaleString()}</div>
+        {/* ──────────────────────────────────────────────────────────────────────────
+            2. INSTITUTIONAL BENTO KPI CARDS (Matching Portfolio Benchmark)
+            ────────────────────────────────────────────────────────────────────────── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+          {/* Card 1: Total Portfolio Value */}
+          <div 
+            onClick={() => setActiveTab('portfolio')}
+            className="group relative rounded-xl border border-slate-700/80 hover:border-sky-400/60 bg-gradient-to-b from-[#111827] via-[#0c121e] to-[#090d16] p-4 shadow-md hover:shadow-[0_12px_28px_rgba(56,189,248,0.15)] hover:-translate-y-1.5 transition-all duration-300 ease-out flex flex-col justify-between overflow-hidden cursor-pointer"
+          >
+            {/* Top Accent Hairline */}
+            <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-sky-400 to-transparent opacity-60 group-hover:opacity-100 transition-opacity" />
+
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-semibold flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.8)]" />
+                Portfolio Value
+              </span>
+              <span className="text-[10px] font-mono text-slate-500 bg-white/[0.03] px-1.5 py-0.5 rounded border border-white/5">
+                Live
+              </span>
+            </div>
+
+            <div className="text-xl sm:text-2xl font-mono font-bold text-white tracking-tight my-2 group-hover:text-sky-100 transition-colors">
+              {formatINR(stats.totalCurrent)}
+            </div>
+
+            <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 pt-2 border-t border-slate-800">
+              <span>Invested Base</span>
+              <span className="text-slate-200 font-semibold">{formatINR(stats.totalInvested)}</span>
+            </div>
           </div>
-          <Wallet className="absolute top-4 right-4 w-8 h-8 text-blue-200" />
+
+          {/* Card 2: Total Net P&L */}
+          <div 
+            onClick={() => setActiveTab('portfolio')}
+            className={`group relative rounded-xl border ${
+              stats.totalPnL >= 0 ? 'border-slate-700/80 hover:border-emerald-400/60 hover:shadow-[0_12px_28px_rgba(16,185,129,0.15)]' : 'border-slate-700/80 hover:border-rose-400/60 hover:shadow-[0_12px_28px_rgba(244,63,94,0.15)]'
+            } bg-gradient-to-b from-[#111827] via-[#0c121e] to-[#090d16] p-4 shadow-md hover:-translate-y-1.5 transition-all duration-300 ease-out flex flex-col justify-between overflow-hidden cursor-pointer`}
+          >
+            {/* Top Accent Hairline */}
+            <div className={`absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent ${
+              stats.totalPnL >= 0 ? 'via-emerald-400' : 'via-rose-400'
+            } to-transparent opacity-60 group-hover:opacity-100 transition-opacity`} />
+
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-semibold flex items-center gap-1.5">
+                <span className={`w-1.5 h-1.5 rounded-full ${stats.totalPnL >= 0 ? 'bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'bg-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.8)]'}`} />
+                Total Returns
+              </span>
+              <span
+                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                  stats.totalPnL >= 0
+                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                    : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                }`}
+              >
+                {formatPct(stats.totalPnLPercent)}
+              </span>
+            </div>
+
+            <div
+              className={`text-xl sm:text-2xl font-mono font-bold tracking-tight my-2 ${
+                stats.totalPnL >= 0 ? 'text-emerald-400 group-hover:text-emerald-300' : 'text-rose-400 group-hover:text-rose-300'
+              } transition-colors`}
+            >
+              {stats.totalPnL >= 0 ? '+' : ''}
+              {formatINR(stats.totalPnL)}
+            </div>
+
+            <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 pt-2 border-t border-slate-800">
+              <span>Net Return</span>
+              <span className={stats.totalPnL >= 0 ? 'text-emerald-400 font-semibold' : 'text-rose-400 font-semibold'}>
+                {stats.totalPnL >= 0 ? '▲ In Profit' : '▼ Drawdown'}
+              </span>
+            </div>
+          </div>
+
+          {/* Card 3: Today's Movement */}
+          <div 
+            onClick={() => setActiveTab('portfolio')}
+            className={`group relative rounded-xl border ${
+              stats.todaysPnL >= 0 ? 'border-slate-700/80 hover:border-emerald-400/60 hover:shadow-[0_12px_28px_rgba(16,185,129,0.15)]' : 'border-slate-700/80 hover:border-rose-400/60 hover:shadow-[0_12px_28px_rgba(244,63,94,0.15)]'
+            } bg-gradient-to-b from-[#111827] via-[#0c121e] to-[#090d16] p-4 shadow-md hover:-translate-y-1.5 transition-all duration-300 ease-out flex flex-col justify-between overflow-hidden cursor-pointer`}
+          >
+            {/* Top Accent Hairline */}
+            <div className={`absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent ${
+              stats.todaysPnL >= 0 ? 'via-emerald-400' : 'via-rose-400'
+            } to-transparent opacity-60 group-hover:opacity-100 transition-opacity`} />
+
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-semibold flex items-center gap-1.5">
+                <span className={`w-1.5 h-1.5 rounded-full ${stats.todaysPnL >= 0 ? 'bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.8)]' : 'bg-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.8)]'}`} />
+                Today's P&L
+              </span>
+              <span
+                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                  stats.todaysPnL >= 0
+                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                    : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                }`}
+              >
+                {formatPct(stats.todaysPnLPercent)}
+              </span>
+            </div>
+
+            <div
+              className={`text-xl sm:text-2xl font-mono font-bold tracking-tight my-2 ${
+                stats.todaysPnL >= 0 ? 'text-emerald-400 group-hover:text-emerald-300' : 'text-rose-400 group-hover:text-rose-300'
+              } transition-colors`}
+            >
+              {stats.todaysPnL >= 0 ? '+' : ''}
+              {formatINR(stats.todaysPnL)}
+            </div>
+
+            <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 pt-2 border-t border-slate-800">
+              <span>Day Session</span>
+              <span className="text-slate-300 font-medium">vs Prev Close</span>
+            </div>
+          </div>
+
+          {/* Card 4: Positions & Breadth */}
+          <div 
+            onClick={() => setActiveTab('portfolio')}
+            className="group relative rounded-xl border border-slate-700/80 hover:border-amber-400/60 bg-gradient-to-b from-[#111827] via-[#0c121e] to-[#090d16] p-4 shadow-md hover:shadow-[0_12px_28px_rgba(245,158,11,0.15)] hover:-translate-y-1.5 transition-all duration-300 ease-out flex flex-col justify-between overflow-hidden cursor-pointer"
+          >
+            {/* Top Accent Hairline */}
+            <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-amber-400 to-transparent opacity-60 group-hover:opacity-100 transition-opacity" />
+
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-semibold flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.8)]" />
+                Portfolio Breadth
+              </span>
+              <span className="text-[10px] font-mono font-bold text-amber-300 bg-amber-500/10 border border-amber-500/25 px-2 py-0.5 rounded">
+                {totalCount} Stocks
+              </span>
+            </div>
+
+            <div className="text-xl sm:text-2xl font-mono font-bold tracking-tight my-2 flex items-center gap-2">
+              <span className="text-emerald-400 font-bold">{gainersCount}▲</span>
+              <span className="text-slate-600 text-sm">/</span>
+              <span className="text-rose-400 font-bold">{losersCount}▼</span>
+            </div>
+
+            <div className="pt-2 border-t border-slate-800">
+              <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden flex">
+                <div
+                  className="bg-emerald-400 h-full transition-all duration-500"
+                  style={{ width: `${gainersPct}%` }}
+                />
+                <div
+                  className="bg-rose-400 h-full transition-all duration-500"
+                  style={{ width: `${100 - gainersPct}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 mt-1">
+                <span>{Math.round(gainersPct)}% Profitable</span>
+                <span>{100 - Math.round(gainersPct)}% Drawdown</span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className={`bg-gradient-to-br ${stats.totalPnL >= 0 ? 'from-emerald-400 to-emerald-600' : 'from-red-400 to-red-600'} rounded-2xl p-6 text-white relative overflow-hidden`}>
-          <div className="relative z-10">
-            <div className="text-white/80 text-sm font-medium">P&L</div>
-            <div className="text-2xl font-bold mt-1">{stats.totalPnL >= 0 ? '+' : '-'}₹{Math.abs(stats.totalPnL).toLocaleString()}</div>
-            <div className="text-sm text-white/80">{stats.totalPnLPercent.toFixed(2)}%</div>
-          </div>
-          {stats.totalPnL >= 0 ? 
-            <TrendingUp className="absolute top-4 right-4 w-8 h-8 text-white/60" /> :
-            <TrendingDown className="absolute top-4 right-4 w-8 h-8 text-white/60" />
-          }
-        </div>
+        {/* ──────────────────────────────────────────────────────────────────────────
+            3. TOP MOVERS & LIVE PULSE
+            ────────────────────────────────────────────────────────────────────────── */}
+        {topMovers.length > 0 && (
+          <div className="rounded-xl border border-slate-800 bg-[#0b101b]/60 p-4 sm:p-5">
+            <div className="flex items-center justify-between mb-3.5">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                <h3 className="text-xs font-mono uppercase tracking-wider text-slate-300 font-semibold">
+                  Portfolio Top Movers & Quick Pulse
+                </h3>
+              </div>
+              <button 
+                onClick={() => setActiveTab('portfolio')}
+                className="text-[11px] font-mono text-sky-400 hover:text-sky-300 flex items-center gap-1 transition-colors cursor-pointer"
+              >
+                <span>All {totalCount} Holdings</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
 
-        <div className="bg-gradient-to-br from-purple-400 to-purple-600 rounded-2xl p-6 text-white relative overflow-hidden">
-          <div className="relative z-10">
-            <div className="text-purple-100 text-sm font-medium">Total Stocks</div>
-            <div className="text-2xl font-bold mt-1">{stats.totalStocks}</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {topMovers.map((m) => (
+                <div
+                  key={m.symbol}
+                  onClick={() => {
+                    setSelectedStock(m);
+                    setIsTransactionModalOpen(true);
+                  }}
+                  className="group rounded-lg border border-slate-700/70 hover:border-sky-400/50 bg-gradient-to-b from-[#131b26] to-[#0c121e] p-3 shadow-sm hover:shadow-[0_8px_20px_rgba(56,189,248,0.12)] hover:-translate-y-1 transition-all duration-200 cursor-pointer flex flex-col justify-between"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <StockLogo symbol={m.symbol} size="sm" />
+                      <div className="min-w-0">
+                        <div className="text-xs font-mono font-bold text-white group-hover:text-sky-300 transition-colors truncate">
+                          {m.symbol}
+                        </div>
+                        <div className="text-[10px] text-slate-400 truncate">
+                          {m.name || m.symbol}
+                        </div>
+                      </div>
+                    </div>
+                    <div className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold shrink-0 flex items-center gap-0.5 ${
+                      m.dayChangePercent >= 0 
+                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                        : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                    }`}>
+                      {m.dayChangePercent >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                      <span>{formatPct(m.dayChangePercent)}</span>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-end justify-between">
+                    <div>
+                      <div className="text-[10px] font-mono text-slate-500">LTP</div>
+                      <div className="text-xs font-mono font-semibold text-slate-200">
+                        {formatINR(m.currentPrice)}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] font-mono text-slate-500">{m.quantity} Qty</div>
+                      <div className={`text-xs font-mono font-bold ${m.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {m.pnl >= 0 ? '+' : ''}{formatINR(m.pnl)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-          <PieChart className="absolute top-4 right-4 w-8 h-8 text-purple-200" />
+        )}
+
+        {/* ──────────────────────────────────────────────────────────────────────────
+            4. CHARTS: ALLOCATION & PERFORMANCE
+            ────────────────────────────────────────────────────────────────────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <PortfolioChart stocks={enrichedStocks} priceData={stockPrices} />
+          <PerformanceChart stocks={enrichedStocks} priceData={stockPrices} />
         </div>
       </div>
-
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <PortfolioChart stocks={enrichedStocks} priceData={stockPrices} />
-        <PerformanceChart stocks={enrichedStocks} priceData={stockPrices} />
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <>
@@ -726,281 +1024,44 @@ const StockPortfolioApp: React.FC = () => {
           
           {activeTab === 'dashboard' && renderDashboard()}
           {activeTab === 'portfolio' && (
-            <div className="space-y-6">
-              <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-slate-200">Portfolio Overview</h2>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      const name = window.prompt('Enter new portfolio name');
-                      if (!name) return;
-                      createPortfolio(name)
-                        .then((p) => switchPortfolio(p))
-                        .catch(() => alert('Failed to create portfolio.'));
-                    }}
-                    className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
-                  >
-                    <Briefcase className="w-4 h-4" />
-                    New Portfolio
-                  </button>
-                  <button
-                    onClick={() => setIsAddModalOpen(true)}
-                    className="bg-indigo-900/200 hover:bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Stock
-                  </button>
-                </div>
-              </div>
-
-              {/* Market Status Indicator */}
-              <div className={`p-4 rounded-lg border ${isMarketOpen() 
-                ? 'bg-emerald-900/200 border-emerald-800/30' 
-                : 'bg-[#0f1520] border-[#1e293b]'
-              }`}>
-                <div className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${isMarketOpen() 
-                    ? 'bg-emerald-900/200 animate-pulse' 
-                    : 'bg-gray-400'
-                  }`}></div>
-                  <span className={`text-sm font-medium ${isMarketOpen() 
-                    ? 'text-emerald-400' 
-                    : 'text-slate-400'
-                  }`}>
-                    {isMarketOpen() 
-                      ? 'Market Open - Live Prices' 
-                      : 'Market Closed - Showing Last Close Prices'
-                    }
-                  </span>
-                </div>
-                {!isMarketOpen() && (
-                  <p className="text-xs text-slate-500 mt-1">
-                    Indian stock market is closed. P&L shows last trading day values.
-                  </p>
-                )}
-              </div>
-
-              {/* Portfolio Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl p-6 text-white">
-                  <div className="text-blue-100 text-sm font-medium">Total Portfolio Value</div>
-                  <div className="text-3xl font-bold mt-1">₹{stats.totalCurrent.toLocaleString()}</div>
-                  <div className="text-sm text-blue-100 mt-2">Current market value</div>
-                </div>
-
-                <div className="bg-gradient-to-br from-green-400 to-green-600 rounded-2xl p-6 text-white">
-                  <div className="text-green-100 text-sm font-medium">Total Invested</div>
-                  <div className="text-3xl font-bold mt-1">₹{stats.totalInvested.toLocaleString()}</div>
-                  <div className="text-sm text-green-100 mt-2">Across {stats.totalStocks} stocks</div>
-                </div>
-
-                <div className={`bg-gradient-to-br ${stats.todaysPnL >= 0 ? 'from-emerald-400 to-emerald-600' : 'from-red-400 to-red-600'} rounded-2xl p-6 text-white`}>
-                  <div className="text-white/80 text-sm font-medium">Today's P&L</div>
-                  <div className="text-3xl font-bold mt-1">
-                    {stats.todaysPnL >= 0 ? '+' : '-'}₹{Math.abs(stats.todaysPnL).toLocaleString()}
-                  </div>
-                  <div className="text-sm text-white/80 mt-2">{stats.todaysPnLPercent.toFixed(2)}%</div>
-                </div>
-
-                <div className={`bg-gradient-to-br ${stats.totalPnL >= 0 ? 'from-purple-400 to-purple-600' : 'from-orange-400 to-orange-600'} rounded-2xl p-6 text-white`}>
-                  <div className="text-white/80 text-sm font-medium">Total P&L</div>
-                  <div className="text-3xl font-bold mt-1">
-                    {stats.totalPnL >= 0 ? '+' : '-'}₹{Math.abs(stats.totalPnL).toLocaleString()}
-                  </div>
-                  <div className="text-sm text-white/80 mt-2">{stats.totalPnLPercent.toFixed(2)}%</div>
-                </div>
-              </div>
-
-              {/* Detailed Holdings Table */}
-        <div className="bg-[#172030] backdrop-blur rounded-2xl p-6 shadow-xl">
-                <h3 className="text-xl font-bold text-slate-200 mb-6">All Holdings</h3>
-                
-                {(!portfolioStocks || portfolioStocks.length === 0) && popularStocks.length > 0 ? (
-                  // Show popular stocks when portfolio is empty
-                  <div>
-                    <div className="mb-4 p-4 bg-indigo-900/20 rounded-lg border border-indigo-800/30">
-                      <div className="flex items-center gap-2 text-indigo-400 mb-2">
-                        <TrendingUp className="w-5 h-5" />
-                        <span className="font-semibold">Popular Indian Stocks</span>
-                      </div>
-                      <p className="text-indigo-400 text-sm">
-                        Your portfolio is empty. Here are some popular Indian stocks to get you started. Click the + button to add them to your portfolio.
-                      </p>
-                    </div>
-                    
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead>
-                          <tr className="border-b border-[#1e293b]">
-                            <th className="text-left py-3 px-4 font-semibold text-slate-400">Stock</th>
-                            <th className="text-left py-3 px-4 font-semibold text-slate-400">Exchange</th>
-                            <th className="text-left py-3 px-4 font-semibold text-slate-400">Current Price</th>
-                            <th className="text-left py-3 px-4 font-semibold text-slate-400">Change</th>
-                            <th className="text-left py-3 px-4 font-semibold text-slate-400">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {popularStocks.map((stock) => {
-                            const priceData = popularStockPrices[stock.symbol];
-                            const currentPrice = priceData?.price || 0;
-                            const change = priceData?.change || 0;
-                            const changePercent = priceData?.previousClose ? 
-                              ((currentPrice - priceData.previousClose) / priceData.previousClose) * 100 : 0;
-
-                            return (
-                              <tr key={stock.symbol} className="border-b border-slate-800/60 hover:bg-[#0f1520]">
-                                <td className="py-4 px-4">
-                                  <div>
-                                    <div className="font-semibold text-slate-200">{stock.symbol}</div>
-                                    <div className="text-sm text-slate-500">{stock.name}</div>
-                                  </div>
-                                </td>
-                                <td className="py-4 px-4 text-slate-300">{(stock.displaySymbol.split('-')[1] || 'NSE')}</td>
-                                <td className="py-4 px-4 text-slate-300">
-                                  {currentPrice > 0 ? `₹${currentPrice.toFixed(2)}` : 'Loading...'}
-                                </td>
-                                <td className="py-4 px-4">
-                                  {priceData ? (
-                                    <div className={`${change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                      {change >= 0 ? '+' : '-'}₹{Math.abs(change).toFixed(2)}
-                                      <div className="text-sm">({changePercent >= 0 ? '+' : ''}{changePercent.toFixed(2)}%)</div>
-                                    </div>
-                                  ) : (
-                                    <span className="text-slate-600">Loading...</span>
-                                  )}
-                                </td>
-                                <td className="py-4 px-4">
-                                  <button
-                                    onClick={async () => {
-                                      const stockForModal = {
-                                        symbol: stock.symbol,
-                                        name: stock.name,
-                                        displaySymbol: stock.displaySymbol,
-                                        quantity: 0,
-                                        avgPrice: 0
-                                      };
-                                      await addStock(stockForModal);
-                                    }}
-                                    className="p-2 text-emerald-400 hover:bg-emerald-900/40 rounded-lg transition-colors"
-                                    title="Add to portfolio"
-                                  >
-                                    <Plus className="w-4 h-4" />
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ) : (
-                   // Show regular portfolio holdings
-                   <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-[#1e293b]">
-                          <th className="text-left py-3 px-4 font-semibold text-slate-400">Stock</th>
-                          <th className="text-left py-3 px-4 font-semibold text-slate-400">Quantity</th>
-                          <th className="text-left py-3 px-4 font-semibold text-slate-400">Avg Price</th>
-                          <th className="text-left py-3 px-4 font-semibold text-slate-400">Current Price</th>
-                          <th className="text-left py-3 px-4 font-semibold text-slate-400">Market Value</th>
-                          <th className="text-left py-3 px-4 font-semibold text-slate-400">Unrealized P&L</th>
-                          <th className="text-left py-3 px-4 font-semibold text-slate-400">Booked P&L</th>
-                          <th className="text-left py-3 px-4 font-semibold text-slate-400">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {stocks.map((stock) => {
-                          const stockTransactions = transactions.filter(t => t.symbol === stock.symbol);
-                          const totalShares = stockTransactions.reduce((sum, t) => 
-                            t.type === 'buy' ? sum + t.quantity : sum - t.quantity, 0
-                          );
-                          
-                          // Calculate average buy price
-                          const avgPrice = stockTransactions.reduce((sum, t) => 
-                            t.type === 'buy' ? sum + (t.price * t.quantity) : sum, 0
-                          ) / (stockTransactions.reduce((sum, t) => 
-                            t.type === 'buy' ? sum + t.quantity : sum, 0
-                          ) || 1);
-
-                          // Calculate realized P&L from sell transactions
-                          const realizedPnl = stockTransactions.reduce((sum, t) => 
-                            t.type === 'sell' ? sum + ((t.price - avgPrice) * t.quantity) : sum, 0
-                          );
-
-                          const currentPrice = stockPrices[stock.symbol]?.price || 0;
-                          const marketValue = currentPrice * totalShares;
-                          const investedValue = avgPrice * totalShares;
-                          const pnl = marketValue - investedValue;
-                          const pnlPercent = avgPrice > 0 ? ((currentPrice - avgPrice) / avgPrice) * 100 : 0;
-
-                          return (
-                            <tr key={stock.symbol} className="border-b border-slate-800/60 hover:bg-[#0f1520]">
-                              <td className="py-4 px-4">
-                                <div>
-                                  <div className="font-semibold text-slate-200">{stock.symbol}</div>
-                                  <div className="text-sm text-slate-500">{stock.name}</div>
-                                </div>
-                              </td>
-                              <td className="py-4 px-4 text-slate-300">{totalShares}</td>
-                              <td className="py-4 px-4 text-slate-300">₹{avgPrice.toFixed(2)}</td>
-                              <td className="py-4 px-4 text-slate-300">₹{currentPrice.toFixed(2)}</td>
-                              <td className="py-4 px-4 text-slate-300">₹{marketValue.toLocaleString()}</td>
-                              <td className="py-4 px-4">
-                                <div className={`${pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                  {pnl >= 0 ? '+' : '-'}₹{Math.abs(pnl).toFixed(2)}
-                                  <div className="text-sm">({pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%)</div>
-                                </div>
-                              </td>
-                              <td className="py-4 px-4">
-                                <div className={`${realizedPnl >= 0 ? 'text-emerald-400' : 'text-red-400'} font-semibold`}>
-                                  {realizedPnl >= 0 ? '+' : '-'}₹{Math.abs(realizedPnl).toFixed(2)}
-                                </div>
-                              </td>
-                              <td className="py-4 px-4">
-                                <div className="flex gap-2">
-                                  <button
-                                    onClick={() => {
-                                      setSelectedStock(stock);
-                                      setTransactionModalType('buy');
-                                      setIsTransactionModalOpen(true);
-                                    }}
-                                    className="px-3 py-1.5 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded font-semibold text-xs transition-colors"
-                                    title="Buy more shares"
-                                  >
-                                    Buy
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setSelectedStock(stock);
-                                      setTransactionModalType('sell');
-                                      setIsTransactionModalOpen(true);
-                                    }}
-                                    disabled={totalShares === 0}
-                                    className="px-3 py-1.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded font-semibold text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                    title={totalShares === 0 ? "No shares to sell" : "Sell shares & book profit"}
-                                  >
-                                    Sell
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteClick(stock)}
-                                    className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-900/40 rounded transition-colors group"
-                                    title="Delete stock from portfolio"
-                                  >
-                                    <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </div>
+            <PortfolioPage
+              stocks={portfolioStocks}
+              transactions={portfolioTransactions}
+              stockPrices={stockPrices}
+              stats={stats}
+              isMarketOpen={isMarketOpen()}
+              onAddStock={() => setIsAddModalOpen(true)}
+              onCreatePortfolio={() => {
+                const name = window.prompt('Enter new portfolio name');
+                if (!name) return;
+                createPortfolio(name)
+                  .then((p) => switchPortfolio(p))
+                  .catch(() => alert('Failed to create portfolio.'));
+              }}
+              onBuyStock={(stock) => {
+                setSelectedStock(stock);
+                setTransactionModalType('buy');
+                setIsTransactionModalOpen(true);
+              }}
+              onSellStock={(stock) => {
+                setSelectedStock(stock);
+                setTransactionModalType('sell');
+                setIsTransactionModalOpen(true);
+              }}
+              onDeleteStock={(stock) => handleDeleteClick(stock)}
+              popularStocks={popularStocks}
+              popularStockPrices={popularStockPrices}
+              onAddPopularStock={async (stock) => {
+                const stockForModal = {
+                  symbol: stock.symbol,
+                  name: stock.name,
+                  displaySymbol: stock.displaySymbol,
+                  quantity: 0,
+                  avgPrice: 0,
+                };
+                await addStock(stockForModal);
+              }}
+            />
           )}
 
           {activeTab === 'holdings' && (
