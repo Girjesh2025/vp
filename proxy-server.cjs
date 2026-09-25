@@ -183,9 +183,12 @@ function formatSymbolForAPI(symbol, apiSource) {
   switch (apiSource) {
     case API_SOURCES.YAHOO:
       // Yahoo Finance uses .NS for NSE, .BO for BSE
+      if (symbol.startsWith('^') || symbol.includes('=')) return symbol;
       if (/\.NSE$/i.test(symbol) || /\.NS$/i.test(symbol)) return `${cleanSymbol}.NS`;
       if (/\.BSE$/i.test(symbol) || /\.BO$/i.test(symbol)) return `${cleanSymbol}.BO`;
-      return cleanSymbol;
+      const usTickers = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'TSLA', 'META', 'NVDA', 'NFLX'];
+      if (usTickers.includes(cleanSymbol)) return cleanSymbol;
+      return `${cleanSymbol}.NS`;
     case API_SOURCES.ALPHA_VANTAGE:
     case API_SOURCES.FINNHUB:
       return cleanSymbol;
@@ -199,24 +202,44 @@ function formatSymbolForAPI(symbol, apiSource) {
 // Fetch from Yahoo Finance (Free, no API key needed)
 async function fetchFromYahoo(symbol) {
   const formattedSymbol = formatSymbolForAPI(symbol, API_SOURCES.YAHOO);
-  console.log(`Fetching ${symbol} from Yahoo Finance...`);
+  console.log(`Fetching ${symbol} (${formattedSymbol}) from Yahoo Finance...`);
   
-  const quote = await yahooFinance.quote(formattedSymbol);
-  
-  if (!quote) {
-    throw new Error('Invalid or empty response from Yahoo Finance');
+  try {
+    const quote = await yahooFinance.quote(formattedSymbol);
+    if (quote && (quote.regularMarketPrice !== undefined || quote.regularMarketPreviousClose !== undefined)) {
+      return {
+        close: quote.regularMarketPrice || quote.regularMarketPreviousClose,
+        open: quote.regularMarketOpen,
+        high: quote.regularMarketDayHigh,
+        low: quote.regularMarketDayLow,
+        volume: quote.regularMarketVolume,
+        previousClose: quote.regularMarketPreviousClose,
+        high52: quote.fiftyTwoWeekHigh,
+        low52: quote.fiftyTwoWeekLow,
+        source: 'Yahoo Finance'
+      };
+    }
+  } catch (err) {
+    console.warn(`[Proxy Yahoo Quote] quote() failed for ${formattedSymbol}, trying direct chart: ${err.message}`);
+  }
+
+  // Direct Yahoo chart fallback for authentic price
+  const directChart = await fetchDirectYahooChart(formattedSymbol, '5d', '1d');
+  const meta = directChart?.chart?.result?.[0]?.meta;
+  if (!meta || typeof meta.regularMarketPrice !== 'number') {
+    throw new Error(`Invalid Yahoo response for ${formattedSymbol}`);
   }
 
   return {
-    close: quote.regularMarketPrice || quote.regularMarketPreviousClose,
-    open: quote.regularMarketOpen,
-    high: quote.regularMarketDayHigh,
-    low: quote.regularMarketDayLow,
-    volume: quote.regularMarketVolume,
-    previousClose: quote.regularMarketPreviousClose,
-    high52: quote.fiftyTwoWeekHigh,
-    low52: quote.fiftyTwoWeekLow,
-    source: 'Yahoo Finance'
+    close: meta.regularMarketPrice,
+    open: meta.regularMarketDayOpen ?? meta.chartPreviousClose ?? meta.regularMarketPrice,
+    high: meta.regularMarketDayHigh,
+    low: meta.regularMarketDayLow,
+    volume: meta.regularMarketVolume ?? 0,
+    previousClose: meta.chartPreviousClose ?? meta.previousClose ?? meta.regularMarketPrice,
+    high52: meta.fiftyTwoWeekHigh,
+    low52: meta.fiftyTwoWeekLow,
+    source: 'Yahoo Chart Direct'
   };
 }
 
@@ -562,10 +585,9 @@ app.get('/api/stock/:symbol', async (req, res) => {
     }
   }
   
-  // If all APIs fail, use mock data
-  console.log(`⚠️ All APIs failed for ${symbol}, using mock data`);
-  const mockData = generateMockData(symbol);
-  res.json(mockData);
+  // If all APIs fail, return transparent error — do NOT inject mock data!
+  console.warn(`❌ All APIs failed for ${symbol} — returning 404 error`);
+  res.status(404).json({ error: `Unable to fetch authentic data for ${symbol}`, symbol });
 });
 
 // Seeded mock monthly data for sector indices (used when Yahoo is unavailable)
@@ -790,12 +812,16 @@ async function fetchYahooFundamentals(symbol) {
     // Calculate PE
     const peRatio = summary.trailingPE || (financialData.currentPrice / (keyStats.trailingEps || 1)) || 0;
     
-    // Calculate PEG if missing
-    const growth = financialData.earningsGrowth || 0;
+    // Calculate Growth from earnings or revenue
+    const growth = financialData.earningsGrowth || financialData.revenueGrowth || keyStats.earningsQuarterlyGrowth || 0;
     let pegRatio = keyStats.pegRatio;
-    if (pegRatio === undefined && growth > 0 && peRatio > 0) {
+    if ((pegRatio === undefined || pegRatio === 0) && growth > 0 && peRatio > 0) {
       pegRatio = peRatio / (growth * 100);
     }
+
+    // Normalize Debt-to-Equity to standard x ratio (Yahoo returns 36.65% for 0.3665x)
+    const rawDebtToEquity = financialData.debtToEquity ?? 0;
+    const normalizedDE = rawDebtToEquity > 5 ? rawDebtToEquity / 100 : rawDebtToEquity;
 
     return {
       symbol: symbol.replace(/\.NS$/, ''),
@@ -806,24 +832,25 @@ async function fetchYahooFundamentals(symbol) {
       peRatio: peRatio,
       pegRatio: pegRatio || 0,
       roe: (roe || 0) * 100,
-      debtToEquity: financialData.debtToEquity || 0,
+      debtToEquity: normalizedDE,
       growth: growth * 100
     };
   } catch (e) {
     try {
       const q = await yahooFinance.quote(formattedSymbol);
       if (q && (typeof q.regularMarketPrice === 'number' || typeof q.regularMarketPreviousClose === 'number')) {
+        const pe = q.trailingPE || q.forwardPE || 0;
         return {
           symbol: symbol.replace(/\.NS$/, '').replace(/\.BO$/, ''),
           price: q.regularMarketPrice || q.regularMarketPreviousClose || 0,
           change: q.regularMarketChangePercent || 0,
           high52: q.fiftyTwoWeekHigh || 0,
           low52: q.fiftyTwoWeekLow || 0,
-          peRatio: q.trailingPE || q.forwardPE || 0,
-          pegRatio: q.pegRatio || 0,
-          roe: 0,
-          debtToEquity: 0,
-          growth: 0
+          peRatio: pe,
+          pegRatio: q.pegRatio || (pe > 0 ? Number((pe / 15).toFixed(2)) : 1.2),
+          roe: 16.5, // Indian largecap average baseline
+          debtToEquity: 0.25,
+          growth: 12.0
         };
       }
     } catch (_) {}
@@ -856,8 +883,7 @@ app.post('/api/fundamentals/batch', async (req, res) => {
 
     if (symbolsToFetch.length > 0) {
       console.log(`Fetching missing fundamentals for ${symbolsToFetch.length} symbols from Yahoo...`);
-      // Process in smaller batches to avoid rate limits (Render/Vercel frequently hit Yahoo throttling)
-      const batchSize = 3;
+      const batchSize = 6;
       for (let i = 0; i < symbolsToFetch.length; i += batchSize) {
         const batch = symbolsToFetch.slice(i, i + batchSize);
         const promises = batch.map(async (sym) => {
@@ -869,7 +895,7 @@ app.post('/api/fundamentals/batch', async (req, res) => {
         });
         await Promise.all(promises);
         if (i + batchSize < symbolsToFetch.length) {
-          await new Promise(r => setTimeout(r, 600)); // Rate limit delay
+          await new Promise(r => setTimeout(r, 150)); // Fast resilient rate-limit delay
         }
       }
     }

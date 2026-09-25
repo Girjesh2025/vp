@@ -2,10 +2,14 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Target, Search, TrendingUp, Shield, Activity, Star, DollarSign, 
   Sparkles, CheckCircle2, XCircle, ArrowUpRight, Check, X,
-  Layers, RefreshCw, BarChart2, Award, Zap, ChevronRight
+  Layers, RefreshCw, BarChart2, Award, Zap, ChevronRight,
+  LayoutGrid, Table as TableIcon, ArrowUpDown, ExternalLink
 } from 'lucide-react';
 import { fetchGuruFundamentals, StockFundamentals } from '../utils/priceApi';
 import StockLogo from './StockLogo';
+
+export type GuruSortField = 'symbol' | 'price' | 'change' | 'score' | 'peRatio' | 'roe' | 'debtToEquity' | 'high52' | 'moatRating' | 'guruVerdict';
+export type GuruSortOrder = 'asc' | 'desc';
 
 export interface GuruStock extends StockFundamentals {
   score: number;
@@ -53,8 +57,8 @@ const GURUS: GuruProfile[] = [
     title: 'Indian Bull Compounding',
     philosophy: 'High domestic market tailwinds, operating leverage, and aggressive earnings growth.',
     quote: 'Anticipate trend and benefit from it. Traders should go against human nature.',
-    accentColor: '#f59e0b',
-    icon: <Zap className="w-5 h-5 text-amber-400" />,
+    accentColor: '#10b981',
+    icon: <Zap className="w-5 h-5 text-emerald-400" />,
     imageUrl: '/gurus/jhunjhunwala.jpg'
   },
   {
@@ -100,7 +104,8 @@ const WATCHLIST_SYMBOLS = [
   'COALINDIA', 'TATACONSUM', 'BRITANNIA', 'HEROMOTOCO', 'BPCL', 'ADANIENT',
   'ZYDUSLIFE', 'UNIONBANK', 'TITAGARH', 'TATATECH', 'TATAELXSI', 'TATACOMM',
   'TATACHEM', 'SUPREMEIND', 'OBEROIRLTY', 'MARICO', 'SJVN', 'LUPIN', 'LTF',
-  'LODHA', 'LICHSGFIN', 'IRFC', 'BSOFT', 'DELHIVERY', 'DIXON', 'POLYCAB'
+  'LODHA', 'LICHSGFIN', 'IRFC', 'BSOFT', 'DELHIVERY', 'DIXON', 'POLYCAB',
+  'BEL', 'HAL', 'TRENT', 'BSE', 'ZOMATO', 'CDSL', 'KALYANKJIL', 'MAXHEALTH'
 ];
 
 export default function GuruScan() {
@@ -110,6 +115,36 @@ export default function GuruScan() {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [minScoreFilter, setMinScoreFilter] = useState<number>(65);
+
+  // View Mode: 'grid' or 'table'
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>(() => {
+    try {
+      const saved = localStorage.getItem('guru_scan_view_mode');
+      return (saved === 'table' || saved === 'grid') ? saved : 'grid';
+    } catch {
+      return 'grid';
+    }
+  });
+
+  const handleViewModeChange = (mode: 'grid' | 'table') => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('guru_scan_view_mode', mode);
+    } catch {}
+  };
+
+  // Sorting for Tabular View
+  const [sortField, setSortField] = useState<GuruSortField>('score');
+  const [sortOrder, setSortOrder] = useState<GuruSortOrder>('desc');
+
+  const handleSort = (field: GuruSortField) => {
+    if (sortField === field) {
+      setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortOrder('desc');
+    }
+  };
 
   // Interactive Stock Detail Modal
   const [selectedStock, setSelectedStock] = useState<GuruStock | null>(null);
@@ -151,172 +186,230 @@ export default function GuruScan() {
     return GURUS.find(g => g.id === activeGuruId) || GURUS[0];
   }, [activeGuruId]);
 
-  // Dynamic Guru Scoring Engine
+  // Helper to ensure clean, normalized Debt-to-Equity multiple (e.g. 0.35x instead of 35.0%)
+  const getNormDE = (val: number | undefined | null): number => {
+    if (!val || val <= 0) return 0;
+    return val > 5 ? Number((val / 100).toFixed(2)) : Number(val.toFixed(2));
+  };
+
+  // Helper to ensure clean PEG ratio
+  const getNormPEG = (peg: number | undefined | null, pe: number, growth: number): number => {
+    if (peg && peg > 0) return Number(peg.toFixed(2));
+    if (pe > 0 && growth > 0) return Number((pe / growth).toFixed(2));
+    return pe > 0 ? Number((pe / 15).toFixed(2)) : 1.2;
+  };
+
+  // Dynamic Guru Scoring Engine (Updated for Modern Indian Market Scenario)
   const guruStocks = useMemo<GuruStock[]>(() => {
     if (!marketData || marketData.length === 0) return [];
     const candidates = [...marketData];
 
     if (activeGuruId === 'minervini') {
       return candidates
-        .filter(d => d.high52 > 0 && d.price > d.high52 * 0.78)
+        .filter(d => {
+          if (!d.high52 || d.high52 <= 0) return false;
+          const proximity = d.price / d.high52;
+          const isOffLow = d.low52 > 0 ? d.price >= d.low52 * 1.15 : true;
+          return proximity >= 0.78 && isOffLow;
+        })
         .map(d => {
           const proximity = d.price / d.high52;
-          const isNear52W = proximity >= 0.90;
-          const isPositiveChange = d.change > 0;
-          const isAboveAvg = proximity >= 0.85;
+          const lowOffset = d.low52 > 0 ? ((d.price - d.low52) / d.low52) * 100 : 25;
+          const rangePosition = d.high52 > d.low52 ? (d.price - d.low52) / (d.high52 - d.low52) : 0.8;
+          const isNear52W = proximity >= 0.85;
+          const isStage2 = lowOffset >= 25;
+          const isPositiveMove = d.change >= 0;
+          const hasGrowth = (d.growth || 0) >= 8;
 
           const checklist = [
-            { label: 'Within 15% of 52-Week High', passed: proximity >= 0.85, valueStr: `${((1 - proximity) * 100).toFixed(1)}% below high` },
-            { label: 'Stage 2 Momentum Action', passed: isPositiveChange, valueStr: `${d.change >= 0 ? '+' : ''}${d.change.toFixed(2)}% move` },
-            { label: 'Relative Strength Leader', passed: proximity >= 0.92, valueStr: `90+ RS Percentile` },
-            { label: 'Earnings Growth Stability', passed: (d.growth || 0) > 8, valueStr: `${d.growth?.toFixed(1) || '12'}% CAGR` }
+            { label: 'Within 15% of 52-Week High (Base Consolidation)', passed: isNear52W, valueStr: `${((1 - proximity) * 100).toFixed(1)}% from high` },
+            { label: 'Confirmed Stage 2 Uptrend (> 25% off 52W Low)', passed: isStage2, valueStr: `+${lowOffset.toFixed(1)}% off low` },
+            { label: 'Relative Strength (RS) Leader (Top Tier Range)', passed: rangePosition >= 0.75, valueStr: `${Math.round(rangePosition * 100)}th RS Percentile` },
+            { label: 'Quarterly Earnings Stability (> 8% YoY)', passed: hasGrowth, valueStr: `${(d.growth || 12).toFixed(1)}% Growth` }
           ];
 
           const passedCount = checklist.filter(c => c.passed).length;
-          const score = Math.min(99, Math.max(65, Math.floor((proximity * 55) + (d.change * 4) + (passedCount * 8))));
+          const score = Math.min(99, Math.max(65, Math.floor((rangePosition * 45) + (proximity * 35) + (passedCount * 5))));
 
           return {
             ...d,
             score,
-            reason: `Price is within ${((1 - proximity) * 100).toFixed(1)}% of 52W High (${d.high52.toFixed(1)}). Stage 2 momentum candidate.`,
+            reason: `Stage 2 Superperformance candidate trading ${((1 - proximity) * 100).toFixed(1)}% from 52W High and +${lowOffset.toFixed(1)}% above 52W Low with solid relative strength.`,
             checklist,
-            guruVerdict: score >= 85 ? 'HIGH CONVICTION BREAKOUT' : 'MOMENTUM WATCHLIST',
-            moatRating: proximity >= 0.92 ? 'Wide' : 'Moderate'
+            guruVerdict: score >= 85 ? 'STAGE 2 SUPERPERFORMANCE' : score >= 75 ? 'HIGH CONVICTION BREAKOUT' : 'MOMENTUM WATCHLIST',
+            moatRating: rangePosition >= 0.85 ? 'Wide' : 'Moderate'
           };
         })
         .sort((a, b) => b.score - a.score);
     } 
     else if (activeGuruId === 'buffett') {
       return candidates
-        .filter(d => d.roe > 11 && (d.debtToEquity / 100) < 1.1 && d.peRatio > 0)
+        .filter(d => {
+          const de = getNormDE(d.debtToEquity);
+          return d.roe >= 11 && de <= 1.0 && d.peRatio > 0 && d.peRatio < 60;
+        })
         .map(d => {
-          const debtRatio = d.debtToEquity / 100;
+          const de = getNormDE(d.debtToEquity);
           const highRoe = d.roe >= 15;
-          const lowDebt = debtRatio < 0.6;
-          const reasonableValuation = d.peRatio < 40;
+          const ultraRoe = d.roe >= 22;
+          const lowDebt = de <= 0.6;
+          const fairValuation = d.peRatio <= 38;
 
           const checklist = [
             { label: 'Return on Equity (ROE) > 15%', passed: highRoe, valueStr: `${d.roe.toFixed(1)}% ROE` },
-            { label: 'Conservative Debt to Equity (< 0.6)', passed: lowDebt, valueStr: `${debtRatio.toFixed(2)}x D/E` },
-            { label: 'Sustainable Pricing Power', passed: true, valueStr: 'Established Brand Moat' },
-            { label: 'Reasonable P/E Valuation', passed: reasonableValuation, valueStr: `${d.peRatio.toFixed(1)}x P/E` }
+            { label: 'Conservative Balance Sheet (D/E < 0.6x)', passed: lowDebt, valueStr: `${de.toFixed(2)}x D/E` },
+            { label: 'Durable Competitive Moat & Pricing Power', passed: true, valueStr: ultraRoe ? 'Wide Moat Champion' : 'Established Franchise' },
+            { label: 'Fair Valuation Multiple (P/E < 38x)', passed: fairValuation, valueStr: `${d.peRatio.toFixed(1)}x P/E` }
           ];
 
-          const score = Math.min(99, Math.max(68, Math.floor(65 + (d.roe / 2) - (debtRatio * 15))));
+          const passedCount = checklist.filter(c => c.passed).length;
+          const score = Math.min(99, Math.max(68, Math.floor(62 + Math.min(22, d.roe * 0.5) - (de * 12) + (fairValuation ? 5 : 0) + (passedCount * 3))));
 
           return {
             ...d,
             score,
-            reason: `Excellent Capital Efficiency with ${d.roe.toFixed(1)}% ROE and manageable ${debtRatio.toFixed(2)}x D/E ratio.`,
+            reason: `High capital compounding efficiency with ${d.roe.toFixed(1)}% ROE, sound ${de.toFixed(2)}x D/E leverage, and durable competitive franchise.`,
             checklist,
-            guruVerdict: score >= 85 ? 'COMPOUNDING MOAT' : 'QUALITY COMPOUNDER',
-            moatRating: d.roe >= 20 && lowDebt ? 'Wide' : 'Moderate'
+            guruVerdict: score >= 85 ? 'COMPOUNDING WIDE MOAT' : 'QUALITY COMPOUNDER',
+            moatRating: ultraRoe && lowDebt ? 'Wide' : 'Moderate'
           };
         })
         .sort((a, b) => b.score - a.score);
     }
     else if (activeGuruId === 'jhunjhunwala') {
       return candidates
-        .filter(d => (d.growth || 0) > 10 && d.roe > 12)
+        .filter(d => {
+          const growth = d.growth || 12;
+          return (growth >= 8 || d.roe >= 13) && d.peRatio > 0 && d.peRatio < 65;
+        })
         .map(d => {
-          const growth = d.growth || 15;
+          const growth = d.growth || 14;
+          const de = getNormDE(d.debtToEquity);
+          const highGrowth = growth >= 12;
+          const highRoe = d.roe >= 14;
+          const reasonableDebt = de <= 0.8;
+
           const checklist = [
-            { label: 'Aggressive Revenue/EPS Growth (>12%)', passed: growth >= 12, valueStr: `${growth.toFixed(1)}% Growth` },
-            { label: 'Domestic Consumption / Capex Wave', passed: true, valueStr: 'India Growth Proxy' },
-            { label: 'Healthy Operating Margins', passed: d.roe >= 14, valueStr: `${d.roe.toFixed(1)}% ROE` },
-            { label: 'Institutional Sponsorship', passed: true, valueStr: 'High DII/FII Holding' }
+            { label: 'Secular Revenue / EPS Expansion (> 10% YoY)', passed: highGrowth, valueStr: `${growth.toFixed(1)}% Growth` },
+            { label: 'India Domestic Capex & Consumption Wave', passed: true, valueStr: 'High Macro Tailwinds' },
+            { label: 'Superior Operating Returns (ROE > 14%)', passed: highRoe, valueStr: `${d.roe.toFixed(1)}% ROE` },
+            { label: 'Prudent Solvency & Institutional Holding', passed: reasonableDebt, valueStr: `${de.toFixed(2)}x D/E` }
           ];
 
-          const score = Math.min(99, Math.max(70, Math.floor(68 + (growth / 2) + (d.change * 2))));
+          const passedCount = checklist.filter(c => c.passed).length;
+          const score = Math.min(99, Math.max(70, Math.floor(64 + Math.min(18, growth * 0.7) + (d.roe * 0.4) - (de * 8) + (passedCount * 3))));
 
           return {
             ...d,
             score,
-            reason: `High beta Indian growth compounder benefiting from secular economic expansion & ${growth.toFixed(1)}% earnings growth.`,
+            reason: `High beta Indian growth compounder positioned directly in domestic capex & consumption expansion with ${growth.toFixed(1)}% growth and ${d.roe.toFixed(1)}% ROE.`,
             checklist,
             guruVerdict: score >= 85 ? 'HIGH GROWTH COMPOUNDER' : 'STRONG CYCLE PLAY',
-            moatRating: growth >= 18 ? 'Wide' : 'Moderate'
+            moatRating: growth >= 16 && highRoe ? 'Wide' : 'Moderate'
           };
         })
         .sort((a, b) => b.score - a.score);
     }
     else if (activeGuruId === 'graham') {
       return candidates
-        .filter(d => d.peRatio > 0 && d.peRatio < 28)
+        .filter(d => {
+          const de = getNormDE(d.debtToEquity);
+          return d.peRatio > 0 && d.peRatio <= 25 && de <= 0.85;
+        })
         .map(d => {
-          const lowPe = d.peRatio <= 18;
-          const lowDebt = (d.debtToEquity / 100) < 0.8;
-          const positivePrice = d.price > 0;
+          const de = getNormDE(d.debtToEquity);
+          const deepPe = d.peRatio <= 16;
+          const fairPe = d.peRatio <= 22;
+          const lowDebt = de <= 0.5;
 
           const checklist = [
-            { label: 'P/E Multiple < 20x', passed: lowPe, valueStr: `${d.peRatio.toFixed(1)}x P/E` },
-            { label: 'Solvent Balance Sheet (D/E < 0.8)', passed: lowDebt, valueStr: `${(d.debtToEquity / 100).toFixed(2)}x D/E` },
-            { label: 'High Margin of Safety', passed: d.peRatio < 15, valueStr: 'Substantial Discount' },
-            { label: 'Positive Net Profitability', passed: true, valueStr: 'Consistently Profitable' }
+            { label: 'Deep Value P/E Multiple (< 20x)', passed: fairPe, valueStr: `${d.peRatio.toFixed(1)}x P/E` },
+            { label: 'Solvent Balance Sheet (D/E < 0.6x)', passed: lowDebt, valueStr: `${de.toFixed(2)}x D/E` },
+            { label: 'Substantial Margin of Safety to Market', passed: deepPe, valueStr: deepPe ? 'High Safety Buffer' : 'Modest Discount' },
+            { label: 'Resilient Earnings & Cash Generation', passed: true, valueStr: 'Consistently Profitable' }
           ];
 
-          const score = Math.min(99, Math.max(65, Math.floor(100 - (d.peRatio * 1.4))));
+          const passedCount = checklist.filter(c => c.passed).length;
+          const score = Math.min(99, Math.max(65, Math.floor(98 - (d.peRatio * 1.5) - (de * 10) + (passedCount * 3))));
 
           return {
             ...d,
             score,
-            reason: `Attractive Deep Value: P/E is ${d.peRatio.toFixed(1)}x with comfortable margin of safety against market averages.`,
+            reason: `Deep value margin of safety: P/E at ${d.peRatio.toFixed(1)}x with conservative ${de.toFixed(2)}x D/E, providing downside protection in market volatility.`,
             checklist,
-            guruVerdict: score >= 85 ? 'DEEP MARGIN OF SAFETY' : 'UNDERVALUED ASSET',
-            moatRating: 'Moderate'
+            guruVerdict: score >= 85 ? 'DEEP MARGIN OF SAFETY' : 'UNDERVALUED BLUECHIP',
+            moatRating: deepPe && lowDebt ? 'Wide' : 'Moderate'
           };
         })
         .sort((a, b) => b.score - a.score);
     }
     else if (activeGuruId === 'lynch') {
       return candidates
-        .filter(d => d.pegRatio > 0 && d.pegRatio < 2.2 && (d.growth || 0) > 0)
+        .filter(d => {
+          const growth = d.growth || 12;
+          const peg = getNormPEG(d.pegRatio, d.peRatio, growth);
+          return peg > 0 && peg <= 2.2 && d.peRatio > 0 && d.peRatio <= 50;
+        })
         .map(d => {
-          const peg = d.pegRatio || 1.1;
           const growth = d.growth || 14;
+          const peg = getNormPEG(d.pegRatio, d.peRatio, growth);
+          const elitePeg = peg <= 1.1;
+          const goodPeg = peg <= 1.5;
+          const doubleDigitGrowth = growth >= 10;
+          const fairPe = d.peRatio <= 36;
+
           const checklist = [
-            { label: 'PEG Ratio < 1.2x (GARP Standard)', passed: peg <= 1.2, valueStr: `${peg.toFixed(2)} PEG` },
-            { label: 'Double-Digit Growth (>10%)', passed: growth >= 10, valueStr: `${growth.toFixed(1)}% Growth` },
-            { label: 'Reasonable P/E Relative to Peers', passed: d.peRatio < 35, valueStr: `${d.peRatio.toFixed(1)}x P/E` },
-            { label: 'Simple & Understandable Business', passed: true, valueStr: 'Everyday Consumer/Tech' }
+            { label: 'Favorable PEG Ratio (< 1.2x GARP Standard)', passed: goodPeg, valueStr: `${peg.toFixed(2)} PEG` },
+            { label: 'Double-Digit Annual Growth (> 10% YoY)', passed: doubleDigitGrowth, valueStr: `${growth.toFixed(1)}% Growth` },
+            { label: 'Reasonable P/E Relative to Peers (< 36x)', passed: fairPe, valueStr: `${d.peRatio.toFixed(1)}x P/E` },
+            { label: 'Understandable Franchise & Scalable Model', passed: true, valueStr: 'High Free Cash Flow' }
           ];
 
-          const score = Math.min(99, Math.max(68, Math.floor(100 - (peg * 18))));
+          const passedCount = checklist.filter(c => c.passed).length;
+          const score = Math.min(99, Math.max(68, Math.floor(96 - (peg * 16) + (passedCount * 3))));
 
           return {
             ...d,
             score,
-            reason: `GARP Winner: Fast grower with ${growth.toFixed(1)}% EPS growth trading at an attractive PEG of ${peg.toFixed(2)}.`,
+            reason: `GARP Leader: Expanding at ${growth.toFixed(1)}% YoY with an attractive PEG of ${peg.toFixed(2)}x, balancing growth with valuation discipline.`,
             checklist,
-            guruVerdict: score >= 85 ? 'PRIME GARP OPPORTUNITY' : 'GROWTH AT FAIR PRICE',
-            moatRating: peg < 1.0 ? 'Wide' : 'Moderate'
+            guruVerdict: score >= 85 ? 'PRIME GARP WINNER' : 'GROWTH AT FAIR PRICE',
+            moatRating: elitePeg ? 'Wide' : 'Moderate'
           };
         })
         .sort((a, b) => b.score - a.score);
     }
     else if (activeGuruId === 'oneil') {
       return candidates
-        .filter(d => d.high52 > 0 && d.price > d.high52 * 0.82 && (d.growth || 0) > 6)
+        .filter(d => {
+          if (!d.high52 || d.high52 <= 0) return false;
+          const proximity = d.price / d.high52;
+          const isOffLow = d.low52 > 0 ? d.price >= d.low52 * 1.15 : true;
+          return proximity >= 0.80 && isOffLow;
+        })
         .map(d => {
           const proximity = d.price / d.high52;
           const growth = d.growth || 12;
+          const lowOffset = d.low52 > 0 ? ((d.price - d.low52) / d.low52) * 100 : 25;
+          const rangePos = d.high52 > d.low52 ? (d.price - d.low52) / (d.high52 - d.low52) : 0.85;
 
           const checklist = [
-            { label: 'Current Earnings Acceleration (C)', passed: growth >= 12, valueStr: `${growth.toFixed(1)}% YoY` },
-            { label: 'Annual Earnings Growth (A)', passed: growth >= 10, valueStr: 'Consistent 3-Yr EPS' },
-            { label: 'New Highs / Products (N)', passed: proximity >= 0.88, valueStr: `${((1 - proximity) * 100).toFixed(1)}% from 52W High` },
-            { label: 'Market Direction Tailwinds (M)', passed: d.change >= 0, valueStr: `${d.change >= 0 ? '+' : ''}${d.change.toFixed(2)}% Trend` }
+            { label: 'Current Earnings Acceleration (C > 10% YoY)', passed: growth >= 10, valueStr: `${growth.toFixed(1)}% YoY` },
+            { label: 'Annual Earnings Growth Consistency (A)', passed: growth >= 8, valueStr: 'Multi-Year Expansion' },
+            { label: 'New Highs Proximity (N within 15%)', passed: proximity >= 0.85, valueStr: `${((1 - proximity) * 100).toFixed(1)}% from high` },
+            { label: 'Leading Stock in Leading Industry (L)', passed: rangePos >= 0.75, valueStr: `${Math.round(rangePos * 100)}th RS Rank` }
           ];
 
-          const score = Math.min(99, Math.max(65, Math.floor(70 + (growth / 2) + (proximity * 15))));
+          const passedCount = checklist.filter(c => c.passed).length;
+          const score = Math.min(99, Math.max(65, Math.floor(66 + (rangePos * 25) + ((growth || 10) * 0.5) + (passedCount * 4))));
 
           return {
             ...d,
             score,
-            reason: `CAN SLIM Formula match: Near 52W High (${d.high52.toFixed(1)}) with ${growth.toFixed(1)}% annual earnings expansion.`,
+            reason: `CAN SLIM Leader: High relative strength trading within ${((1 - proximity) * 100).toFixed(1)}% of 52W High with ${growth.toFixed(1)}% earnings momentum.`,
             checklist,
-            guruVerdict: score >= 85 ? 'SUPERPERFORMANCE LEADER' : 'CAN SLIM CANDIDATE',
-            moatRating: growth > 15 ? 'Wide' : 'Moderate'
+            guruVerdict: score >= 85 ? 'CAN SLIM SUPERPERFORMER' : 'CAN SLIM CANDIDATE',
+            moatRating: growth > 15 && rangePos >= 0.80 ? 'Wide' : 'Moderate'
           };
         })
         .sort((a, b) => b.score - a.score);
@@ -334,6 +427,30 @@ export default function GuruScan() {
       return s.score >= minScoreFilter;
     });
   }, [guruStocks, search, minScoreFilter]);
+
+  // Sorted Stocks (supports both Grid and Tabular sorting)
+  const sortedStocks = useMemo(() => {
+    return [...filteredStocks].sort((a, b) => {
+      let aVal: any = a[sortField];
+      let bVal: any = b[sortField];
+
+      if (sortField === 'high52') {
+        aVal = a.high52 > 0 ? (a.price / a.high52) : 0;
+        bVal = b.high52 > 0 ? (b.price / b.high52) : 0;
+      }
+
+      if (aVal === undefined || aVal === null) aVal = 0;
+      if (bVal === undefined || bVal === null) bVal = 0;
+
+      if (typeof aVal === 'string') {
+        return sortOrder === 'asc' 
+          ? aVal.localeCompare(bVal) 
+          : bVal.localeCompare(aVal);
+      }
+
+      return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+    });
+  }, [filteredStocks, sortField, sortOrder]);
 
   const handleCopyThesis = () => {
     if (!selectedStock) return;
@@ -361,7 +478,7 @@ export default function GuruScan() {
           <div>
             <div className="flex items-center gap-2.5">
               <h1 className="text-xl md:text-2xl font-black text-white tracking-tight">Guru Scan</h1>
-              <span className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/40 text-[10px] font-black text-amber-400 uppercase tracking-widest flex items-center gap-1">
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1">
                 <Sparkles className="w-3 h-3" /> PRO INSTITUTIONAL
               </span>
             </div>
@@ -379,12 +496,12 @@ export default function GuruScan() {
           </div>
           <div className="bg-[#101520] border border-slate-800 rounded-xl px-3.5 py-2 min-w-[110px]">
             <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Guru Matches</div>
-            <div className="text-base font-black text-sky-400 font-mono mt-0.5">{guruStocks.length} Stocks</div>
+            <div className="text-base font-black text-emerald-400 font-mono mt-0.5">{guruStocks.length} Stocks</div>
           </div>
           <button
             onClick={() => loadData(true)}
             disabled={isRefreshing || loading}
-            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-xs font-bold transition select-none disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-bold transition select-none disabled:opacity-50"
             title="Scan Again"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -464,8 +581,8 @@ export default function GuruScan() {
           </div>
         </div>
 
-        {/* Filter & Search Bar */}
-        <div className="flex items-center gap-2.5 w-full md:w-auto shrink-0">
+        {/* Filter, Search & View Toggle */}
+        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto shrink-0">
           <div className="flex items-center gap-1.5 bg-[#101520] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-400">
             <span className="text-[10px] uppercase font-bold text-slate-500">Min Score:</span>
             <select
@@ -481,37 +598,68 @@ export default function GuruScan() {
             </select>
           </div>
 
-          <div className="relative flex-1 md:w-48">
+          <div className="relative flex-1 md:w-44">
             <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="Search stock..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-[#101520] border border-slate-800 text-xs text-white rounded-lg pl-8 pr-3 py-1.5 focus:outline-none focus:border-blue-500 transition placeholder-slate-500"
+              className="w-full bg-[#101520] border border-slate-800 text-xs text-white rounded-lg pl-8 pr-3 py-1.5 focus:outline-none focus:border-emerald-500 transition placeholder-slate-500"
             />
+          </div>
+
+          {/* View Mode Toggle: Cards vs Tabular */}
+          <div className="flex items-center bg-[#101520] border border-slate-700/80 rounded-lg p-0.5 shadow-sm shrink-0">
+            <button
+              type="button"
+              onClick={() => handleViewModeChange('grid')}
+              className={`px-2.5 py-1.5 rounded-md text-xs font-bold transition cursor-pointer flex items-center gap-1.5 select-none ${
+                viewMode === 'grid'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+              }`}
+              title="Cards Grid View"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span className="text-[11px]">Cards</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleViewModeChange('table')}
+              className={`px-2.5 py-1.5 rounded-md text-xs font-bold transition cursor-pointer flex items-center gap-1.5 select-none ${
+                viewMode === 'table'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+              }`}
+              title="Tabular / Table View"
+            >
+              <TableIcon className="w-3.5 h-3.5" />
+              <span className="text-[11px]">Table</span>
+            </button>
           </div>
         </div>
       </div>
 
-      {/* ── 4. Main Matches Grid ─────────────────────────────────────────── */}
+      {/* ── 4. Main Matches Content (Grid or Tabular) ─────────────────────── */}
       {loading ? (
         <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-12 text-center flex flex-col items-center justify-center">
-          <div className="w-10 h-10 rounded-full border-2 border-sky-500 border-t-transparent animate-spin mb-4" />
+          <div className="w-10 h-10 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin mb-4" />
           <h3 className="text-base font-bold text-white mb-1">Running {activeGuru.name} Screening Model...</h3>
           <p className="text-xs text-slate-400 max-w-md">
             Analyzing ROE, debt-to-equity ratios, P/E multiples, and 52-week price momentum.
           </p>
         </div>
-      ) : filteredStocks.length === 0 ? (
+      ) : sortedStocks.length === 0 ? (
         <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-12 text-center text-slate-400 text-sm">
           No stocks currently match {activeGuru.name}'s strict {minScoreFilter}+ score threshold. Try lowering the score filter or click "Rescan".
         </div>
-      ) : (
+      ) : viewMode === 'grid' ? (
+        /* ── Cards Grid View ─────────────────────────────────────────────── */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredStocks.map((stock) => {
-            const scoreColor = stock.score >= 85 ? 'text-purple-400' : stock.score >= 75 ? 'text-sky-400' : 'text-slate-300';
-            const scoreBarColor = stock.score >= 85 ? 'bg-gradient-to-r from-purple-500 to-fuchsia-500' : stock.score >= 75 ? 'bg-sky-500' : 'bg-slate-500';
+          {sortedStocks.map((stock) => {
+            const scoreColor = stock.score >= 85 ? 'text-purple-400' : stock.score >= 75 ? 'text-sky-400' : 'text-emerald-400';
+            const scoreBarColor = stock.score >= 85 ? 'bg-gradient-to-r from-purple-500 to-fuchsia-500' : stock.score >= 75 ? 'bg-sky-500' : 'bg-emerald-500';
 
             return (
               <div
@@ -525,7 +673,7 @@ export default function GuruScan() {
                     <div className="flex items-center gap-2.5 min-w-0">
                       <StockLogo symbol={stock.symbol} className="w-9 h-9 rounded-xl shrink-0 border border-slate-800 bg-[#101520]" />
                       <div className="min-w-0">
-                        <h3 className="text-sm font-black text-white group-hover:text-sky-400 transition-colors truncate">
+                        <h3 className="text-sm font-black text-white group-hover:text-emerald-400 transition-colors truncate">
                           {stock.symbol}
                         </h3>
                         <div className="flex items-center gap-1 mt-0.5">
@@ -591,9 +739,9 @@ export default function GuruScan() {
                 {/* Bottom Footer */}
                 <div className="mt-2 pt-2.5 border-t border-slate-800 flex items-center justify-between text-xs">
                   <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1">
-                    <Award className="w-3 h-3 text-amber-400" /> Moat: {stock.moatRating}
+                    <Award className="w-3 h-3 text-emerald-400" /> Moat: {stock.moatRating}
                   </span>
-                  <span className="flex items-center gap-1 text-xs font-black text-sky-400 group-hover:translate-x-0.5 transition-transform">
+                  <span className="flex items-center gap-1 text-xs font-black text-emerald-400 group-hover:translate-x-0.5 transition-transform">
                     <span>View Thesis</span>
                     <ChevronRight className="w-3.5 h-3.5" />
                   </span>
@@ -601,6 +749,312 @@ export default function GuruScan() {
               </div>
             );
           })}
+        </div>
+      ) : (
+        /* ── Tabular Mode View ────────────────────────────────────────────── */
+        <div className="bg-[#0c1017] border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left border-collapse font-sans text-xs min-w-[1100px]">
+              <thead>
+                <tr className="bg-[#101520] border-b border-slate-800 text-[11px] font-bold text-slate-400 uppercase tracking-wider select-none">
+                  {/* Stock Symbol */}
+                  <th 
+                    onClick={() => handleSort('symbol')}
+                    className="py-3.5 px-4 cursor-pointer hover:text-white transition-colors"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>Stock</span>
+                      {sortField === 'symbol' ? (
+                        <span className="text-emerald-400 font-bold">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  {/* LTP & Change */}
+                  <th 
+                    onClick={() => handleSort('price')}
+                    className="py-3.5 px-3 text-right cursor-pointer hover:text-white transition-colors"
+                  >
+                    <div className="flex items-center justify-end gap-1.5">
+                      <span>LTP &amp; Chg</span>
+                      {sortField === 'price' ? (
+                        <span className="text-emerald-400 font-bold">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  {/* Guru Score */}
+                  <th 
+                    onClick={() => handleSort('score')}
+                    className="py-3.5 px-3 text-center cursor-pointer hover:text-white transition-colors"
+                  >
+                    <div className="flex items-center justify-center gap-1.5">
+                      <span>Guru Score</span>
+                      {sortField === 'score' ? (
+                        <span className="text-emerald-400 font-bold">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  {/* Verdict */}
+                  <th 
+                    onClick={() => handleSort('guruVerdict')}
+                    className="py-3.5 px-3 cursor-pointer hover:text-white transition-colors whitespace-nowrap"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span>Verdict</span>
+                      {sortField === 'guruVerdict' ? (
+                        <span className="text-emerald-400 font-bold">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  {/* Key Rationale */}
+                  <th className="py-3.5 px-3 min-w-[240px]">
+                    Screening Thesis &amp; Rationale
+                  </th>
+
+                  {/* P/E Ratio */}
+                  <th 
+                    onClick={() => handleSort('peRatio')}
+                    className="py-3.5 px-3 text-right cursor-pointer hover:text-white transition-colors whitespace-nowrap"
+                  >
+                    <div className="flex items-center justify-end gap-1.5">
+                      <span>P/E</span>
+                      {sortField === 'peRatio' ? (
+                        <span className="text-emerald-400 font-bold">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  {/* ROE */}
+                  <th 
+                    onClick={() => handleSort('roe')}
+                    className="py-3.5 px-3 text-right cursor-pointer hover:text-white transition-colors whitespace-nowrap"
+                  >
+                    <div className="flex items-center justify-end gap-1.5">
+                      <span>ROE</span>
+                      {sortField === 'roe' ? (
+                        <span className="text-emerald-400 font-bold">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  {/* Debt to Equity */}
+                  <th 
+                    onClick={() => handleSort('debtToEquity')}
+                    className="py-3.5 px-3 text-right cursor-pointer hover:text-white transition-colors whitespace-nowrap"
+                  >
+                    <div className="flex items-center justify-end gap-1.5">
+                      <span>D/E</span>
+                      {sortField === 'debtToEquity' ? (
+                        <span className="text-emerald-400 font-bold">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  {/* 52W Proximity */}
+                  <th 
+                    onClick={() => handleSort('high52')}
+                    className="py-3.5 px-3 text-center cursor-pointer hover:text-white transition-colors whitespace-nowrap"
+                  >
+                    <div className="flex items-center justify-center gap-1.5">
+                      <span>52W Prox</span>
+                      {sortField === 'high52' ? (
+                        <span className="text-emerald-400 font-bold">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  {/* Moat */}
+                  <th 
+                    onClick={() => handleSort('moatRating')}
+                    className="py-3.5 px-3 text-center cursor-pointer hover:text-white transition-colors whitespace-nowrap"
+                  >
+                    <div className="flex items-center justify-center gap-1.5">
+                      <span>Moat</span>
+                      {sortField === 'moatRating' ? (
+                        <span className="text-emerald-400 font-bold">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                      ) : (
+                        <ArrowUpDown className="w-3 h-3 text-slate-500 opacity-60" />
+                      )}
+                    </div>
+                  </th>
+
+                  {/* Action */}
+                  <th className="py-3.5 px-4 text-right whitespace-nowrap">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60 font-mono">
+                {sortedStocks.map((stock) => {
+                  const scoreColor = stock.score >= 85 ? 'text-purple-400' : stock.score >= 75 ? 'text-sky-400' : 'text-emerald-400';
+                  const scoreBarColor = stock.score >= 85 ? 'bg-gradient-to-r from-purple-500 to-fuchsia-500' : stock.score >= 75 ? 'bg-sky-500' : 'bg-emerald-500';
+                  const proxPct = stock.high52 > 0 ? Math.min(100, Math.round((stock.price / stock.high52) * 100)) : null;
+
+                  return (
+                    <tr
+                      key={stock.symbol}
+                      onClick={() => setSelectedStock(stock)}
+                      className="hover:bg-[#121926]/75 transition-colors cursor-pointer group"
+                    >
+                      {/* Stock Symbol & Logo */}
+                      <td className="py-3.5 px-4 font-sans">
+                        <div className="flex items-center gap-3">
+                          <StockLogo symbol={stock.symbol} className="w-8 h-8 rounded-lg shrink-0 border border-slate-800 bg-[#101520]" />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-white group-hover:text-emerald-400 transition-colors text-sm">
+                                {stock.symbol}
+                              </span>
+                              <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold uppercase tracking-wider border bg-sky-500/10 text-sky-400 border-sky-500/25">
+                                NSE
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-400 truncate max-w-[140px]">
+                              {stock.moatRating} Moat
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* LTP & Change */}
+                      <td className="py-3.5 px-3 text-right whitespace-nowrap">
+                        <div className="text-sm font-bold text-white">
+                          ₹{stock.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <div className="flex items-center justify-end gap-1 mt-0.5">
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                            stock.change >= 0 ? 'bg-emerald-500/15 text-emerald-400' : 'bg-rose-500/15 text-rose-400'
+                          }`}>
+                            {stock.change >= 0 ? '+' : ''}{stock.change.toFixed(2)}%
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Guru Score */}
+                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
+                        <div className="inline-flex flex-col items-center">
+                          <div className="flex items-baseline gap-0.5">
+                            <span className={`text-base font-black ${scoreColor}`}>
+                              {stock.score}
+                            </span>
+                            <span className="text-[9px] text-slate-500">/100</span>
+                          </div>
+                          <div className="w-16 h-1 bg-slate-800 rounded-full overflow-hidden mt-1">
+                            <div className={`h-full ${scoreBarColor}`} style={{ width: `${stock.score}%` }} />
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Verdict */}
+                      <td className="py-3.5 px-3 whitespace-nowrap font-sans">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono border ${
+                          stock.score >= 85
+                            ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
+                            : stock.score >= 75
+                            ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'
+                            : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                        }`}>
+                          {stock.guruVerdict}
+                        </span>
+                      </td>
+
+                      {/* Screening Thesis & Rationale */}
+                      <td className="py-3.5 px-3 font-sans min-w-[240px]">
+                        <p className="text-[11px] text-slate-300 leading-snug line-clamp-2" title={stock.reason}>
+                          {stock.reason}
+                        </p>
+                      </td>
+
+                      {/* P/E */}
+                      <td className="py-3.5 px-3 text-right whitespace-nowrap">
+                        <div className="text-xs font-bold text-white">
+                          {stock.peRatio ? `${stock.peRatio.toFixed(1)}x` : '--'}
+                        </div>
+                      </td>
+
+                      {/* ROE */}
+                      <td className="py-3.5 px-3 text-right whitespace-nowrap">
+                        <div className={`text-xs font-bold ${stock.roe && stock.roe >= 15 ? 'text-emerald-400' : 'text-slate-300'}`}>
+                          {stock.roe ? `${stock.roe.toFixed(1)}%` : '--'}
+                        </div>
+                      </td>
+
+                      {/* D/E */}
+                      <td className="py-3.5 px-3 text-right whitespace-nowrap">
+                        {(() => {
+                          const de = getNormDE(stock.debtToEquity);
+                          return (
+                            <div className={`text-xs font-bold ${de <= 0.6 ? 'text-emerald-400' : 'text-slate-300'}`}>
+                              {de.toFixed(2)}x
+                            </div>
+                          );
+                        })()}
+                      </td>
+
+                      {/* 52W Proximity */}
+                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
+                        {proxPct !== null ? (
+                          <div className="inline-flex flex-col items-center">
+                            <span className="text-xs font-bold text-sky-400">{proxPct}%</span>
+                            <span className="text-[9px] text-slate-500 font-sans">of 52W High</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-500">--</span>
+                        )}
+                      </td>
+
+                      {/* Moat */}
+                      <td className="py-3.5 px-3 text-center whitespace-nowrap font-sans">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          stock.moatRating === 'Wide'
+                            ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                            : stock.moatRating === 'Moderate'
+                            ? 'bg-sky-500/15 text-sky-400 border border-sky-500/30'
+                            : 'bg-slate-800 text-slate-400 border border-slate-700'
+                        }`}>
+                          {stock.moatRating}
+                        </span>
+                      </td>
+
+                      {/* Action */}
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap font-sans">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedStock(stock);
+                            }}
+                            className="flex items-center gap-1 text-xs font-bold text-emerald-400 hover:text-emerald-300 px-2 py-1 rounded-md hover:bg-emerald-500/10 transition"
+                          >
+                            <span>Thesis</span>
+                            <ChevronRight className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

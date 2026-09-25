@@ -53,23 +53,38 @@ export default async function handler(req: any, res: any) {
   };
 
   const fetchDirectChartFromYahoo = async (formatted: string, r: string, i: string) => {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(formatted)}?range=${encodeURIComponent(r)}&interval=${encodeURIComponent(i)}`;
-    const response = await fetch(url, {
-      headers: {
-        Accept: 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      },
-    });
+    const endpoints = [
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(formatted)}?range=${encodeURIComponent(r)}&interval=${encodeURIComponent(i)}`,
+      `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(formatted)}?range=${encodeURIComponent(r)}&interval=${encodeURIComponent(i)}`
+    ];
 
-    if (!response.ok) throw new Error(`yahoo direct chart ${response.status}`);
-    const data = await response.json();
-    const result = data?.chart?.result?.[0];
-    const timestamps = result?.timestamp ?? [];
-    if (!result || !Array.isArray(timestamps) || timestamps.length === 0) {
-      throw new Error('yahoo direct chart invalid');
+    let lastError: any = null;
+    for (const url of endpoints) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        const response = await fetch(url, {
+          headers: {
+            Accept: 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          },
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) continue;
+        const data = await response.json();
+        const result = data?.chart?.result?.[0];
+        const timestamps = result?.timestamp ?? [];
+        if (result && Array.isArray(timestamps) && timestamps.length > 0) {
+          return data;
+        }
+      } catch (err) {
+        lastError = err;
+      }
     }
 
-    return data;
+    throw lastError || new Error('All Yahoo chart endpoints failed');
   };
 
   const fetchFromYahoo = async () => {
@@ -228,82 +243,6 @@ export default async function handler(req: any, res: any) {
     };
   };
 
-  const generateMockChart = (s: string, r: string, i: string) => {
-    const numBars = r === '1d' ? 75 : r === '1wk' ? 60 : r === '1mo' ? 30 : r === '1y' ? 52 : 60;
-    const intervalSecs = i === '5m' ? 300 : i === '15m' ? 900 : i === '1wk' ? 7 * 86400 : 86400;
-    const now = Math.floor(Date.now() / 1000);
-    const start = now - (numBars * intervalSecs);
-
-    let price = 1000 + Math.abs(s.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % 4000);
-    const timestamps: number[] = [];
-    const opens: number[] = [];
-    const highs: number[] = [];
-    const lows: number[] = [];
-    const closes: number[] = [];
-    const volumes: number[] = [];
-
-    for (let k = 0; k < numBars; k++) {
-      const ts = start + (k * intervalSecs);
-      const delta = (Math.sin(k / 5) * 0.005 + (Math.random() - 0.49) * 0.01) * price;
-      const open = Number(price.toFixed(2));
-      price = Math.max(1, price + delta);
-      const close = Number(price.toFixed(2));
-      const high = Number((Math.max(open, close) + Math.random() * 0.005 * price).toFixed(2));
-      const low = Number((Math.min(open, close) - Math.random() * 0.005 * price).toFixed(2));
-      const volume = Math.floor(50000 + Math.random() * 200000);
-
-      timestamps.push(ts);
-      opens.push(open);
-      highs.push(high);
-      lows.push(low);
-      closes.push(close);
-      volumes.push(volume);
-    }
-
-    return {
-      chart: {
-        result: [
-          {
-            meta: {
-              symbol: s,
-              regularMarketPrice: closes[closes.length - 1],
-              chartPreviousClose: opens[0]
-            },
-            timestamp: timestamps,
-            indicators: {
-              quote: [
-                {
-                  open: opens,
-                  high: highs,
-                  low: lows,
-                  close: closes,
-                  volume: volumes
-                }
-              ]
-            }
-          }
-        ]
-      }
-    };
-  };
-
-  const generateMock = () => {
-    const base = Math.random() * 1000 + 100;
-    const v = 0.05;
-    const closePrice = Math.round(base * (1 + (Math.random() - 0.5) * v) * 100) / 100;
-    return {
-      close: closePrice,
-      open: Math.round(base * (1 + (Math.random() - 0.5) * v) * 100) / 100,
-      high: Math.round(Math.max(base, closePrice) * (1 + Math.random() * v) * 100) / 100,
-      low: Math.round(Math.min(base, closePrice) * (1 - Math.random() * v) * 100) / 100,
-      volume: Math.floor(Math.random() * 1000000) + 10000,
-      previousClose: Math.round(base * 100) / 100,
-      high52: Math.round(base * 1.5 * 100) / 100,
-      low52: Math.round(base * 0.5 * 100) / 100,
-      source: 'Mock Data'
-    };
-  };
-
   const chain: Array<() => Promise<any>> = [];
   if (source === 'yahoo') {
     chain.push(fetchFromYahoo);
@@ -329,15 +268,16 @@ export default async function handler(req: any, res: any) {
       res.json(data);
       return;
     } catch (e) {
+      // Continue trying next API in chain
     }
   }
 
+  // If all authentic sources fail, return transparent error — NEVER inject fake/mock data!
+  res.setHeader('Cache-Control', 'no-store');
   if (isHistorical) {
-    res.setHeader('Cache-Control', 's-maxage=10');
-    res.json(generateMockChart(symbol, range || '6mo', interval || '1d'));
+    res.status(404).json({ error: `Historical chart unavailable for ${symbol}`, symbol });
     return;
   }
 
-  res.setHeader('Cache-Control', 's-maxage=10');
-  res.json(generateMock());
+  res.status(404).json({ error: `Real quote unavailable for ${symbol}`, symbol });
 }

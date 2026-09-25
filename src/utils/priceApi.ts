@@ -457,122 +457,166 @@ const toEODHDSymbols = (symbol: string): string[] => {
   return [`${cleanSymbol}.NS`, `${cleanSymbol}.BO`, `${cleanSymbol}.NSE`, `${cleanSymbol}.BSE`];
 };
 
-// Main function to fetch stock prices using local proxy server
+interface PriceCacheEntry {
+  data: PriceData;
+  timestamp: number;
+}
+
+const priceCache = new Map<string, PriceCacheEntry>();
+const inFlightRequests = new Map<string, Promise<PriceData | null>>();
+const PRICE_CACHE_TTL_MS = 15000; // 15 seconds fresh memory cache
+
+// Main function to fetch stock prices with concurrency chunking (6 at a time)
 export const fetchMultipleStockPrices = async (symbols: string[]): Promise<Record<string, PriceData>> => {
   const results: Record<string, PriceData> = {};
+  const CHUNK_SIZE = 6;
   
-  await Promise.allSettled(
-    symbols.map(async (symbol) => {
-      const data = await fetchStockPrice(symbol);
-      if (data) {
-        results[symbol] = data;
+  for (let i = 0; i < symbols.length; i += CHUNK_SIZE) {
+    const chunk = symbols.slice(i, i + CHUNK_SIZE);
+    const chunkResults = await Promise.allSettled(
+      chunk.map(async (symbol) => {
+        const data = await fetchStockPrice(symbol);
+        return { symbol, data };
+      })
+    );
+    
+    for (const res of chunkResults) {
+      if (res.status === 'fulfilled' && res.value.data) {
+        results[res.value.symbol] = res.value.data;
       }
-    })
-  );
+    }
+  }
   
   return results;
 };
 
 export const fetchStockPrice = async (symbol: string): Promise<PriceData | null> => {
-  try {
-    const baseUrl = resolveBaseUrl();
-    const requestBases = isGlobalOrIndexSymbol(symbol) ? ['', baseUrl].filter((v, i, arr) => arr.indexOf(v) === i) : [baseUrl];
+  const cached = priceCache.get(symbol);
+  if (cached && Date.now() - cached.timestamp < PRICE_CACHE_TTL_MS) {
+    return cached.data;
+  }
 
-    // For global indices / futures, send the symbol directly to the proxy (URL-encoded)
-    if (isGlobalOrIndexSymbol(symbol)) {
-      for (const requestBase of requestBases) {
+  if (inFlightRequests.has(symbol)) {
+    return inFlightRequests.get(symbol)!;
+  }
+
+  const requestPromise = (async (): Promise<PriceData | null> => {
+    try {
+      const baseUrl = resolveBaseUrl();
+      const requestBases = isGlobalOrIndexSymbol(symbol) ? ['', baseUrl].filter((v, i, arr) => arr.indexOf(v) === i) : [baseUrl];
+
+      // For global indices / futures, send the symbol directly to the proxy (URL-encoded)
+      if (isGlobalOrIndexSymbol(symbol)) {
+        for (const requestBase of requestBases) {
+          try {
+            const response = await fetch(`${requestBase}/api/stock/${encodeURIComponent(symbol)}?source=yahoo`, {
+              method: 'GET',
+              headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+              },
+              cache: 'no-store',
+              mode: 'cors'
+            });
+            if (response.ok) {
+              const ct = response.headers.get('content-type') || '';
+              if (ct.includes('application/json')) {
+                const data = await response.json();
+                if (data?.source === 'Mock Data') continue;
+                if (data && typeof data.close === 'number' && data.close > 0) {
+                  const prevClose = data.previousClose || data.open || data.close;
+                  const change = prevClose ? ((data.close - prevClose) / prevClose) * 100 : 0;
+                  const resData: PriceData = {
+                    price: Number(data.close.toFixed(2)),
+                    change: Number(change.toFixed(2)),
+                    previousClose: data.previousClose !== undefined ? data.previousClose : undefined,
+                    open: typeof data.open === 'number' ? Number(data.open.toFixed(2)) : undefined,
+                    high: typeof data.high === 'number' ? Number(data.high.toFixed(2)) : undefined,
+                    low: typeof data.low === 'number' ? Number(data.low.toFixed(2)) : undefined,
+                    volume: typeof data.volume === 'number' ? data.volume : undefined,
+                    high52: data.high52 !== undefined ? data.high52 : undefined,
+                    low52: data.low52 !== undefined ? data.low52 : undefined,
+                  };
+                  priceCache.set(symbol, { data: resData, timestamp: Date.now() });
+                  return resData;
+                }
+              }
+            }
+          } catch (err) {
+            console.warn(`⚠️ [DEBUG] Direct proxy fetch failed for ${symbol}:`, err);
+          }
+        }
+
+        // Fallback for global indices: try Yahoo via CORS proxies
+        const yahooFallback = await fetchDirectFallback(symbol);
+        if (yahooFallback) {
+          priceCache.set(symbol, { data: yahooFallback, timestamp: Date.now() });
+          return yahooFallback;
+        }
+
+        console.warn(`❌ [DEBUG] Unable to fetch authentic price for global symbol ${symbol}`);
+        return null;
+      }
+
+      // For regular Indian / US stocks, use EODHD symbol conversion
+      const candidates = toEODHDSymbols(symbol);
+      
+      for (const cand of candidates) {
         try {
-          const response = await fetch(`${requestBase}/api/stock/${encodeURIComponent(symbol)}?source=yahoo`, {
+          const response = await fetch(`${baseUrl}/api/stock/${cand}?source=yahoo`, {
             method: 'GET',
             headers: {
               'Accept': 'application/json',
               'Content-Type': 'application/json',
             },
-            cache: 'no-store',
             mode: 'cors'
           });
-          if (response.ok) {
-            const ct = response.headers.get('content-type') || '';
-            if (ct.includes('application/json')) {
-              const data = await response.json();
-              if (data?.source === 'Mock Data') continue;
-              if (data && typeof data.close === 'number' && data.close > 0) {
-                const prevClose = data.previousClose || data.open || data.close;
-                const change = prevClose ? ((data.close - prevClose) / prevClose) * 100 : 0;
-                return {
-                  price: Number(data.close.toFixed(2)),
-                  change: Number(change.toFixed(2)),
-                  previousClose: data.previousClose !== undefined ? data.previousClose : undefined,
-                  open: typeof data.open === 'number' ? Number(data.open.toFixed(2)) : undefined,
-                  high: typeof data.high === 'number' ? Number(data.high.toFixed(2)) : undefined,
-                  low: typeof data.low === 'number' ? Number(data.low.toFixed(2)) : undefined,
-                  volume: typeof data.volume === 'number' ? data.volume : undefined,
-                  high52: data.high52 !== undefined ? data.high52 : undefined,
-                  low52: data.low52 !== undefined ? data.low52 : undefined,
-                };
-              }
-            }
+          if (!response.ok) continue;
+          const ct = response.headers.get('content-type') || '';
+          if (!ct.includes('application/json')) continue;
+          const data = await response.json();
+          if (data && typeof data.close === 'number' && data.close > 0) {
+            const prevClose = data.previousClose || data.open || data.close;
+            const change = prevClose ? ((data.close - prevClose) / prevClose) * 100 : 0;
+            const resData: PriceData = {
+              price: Number(data.close.toFixed(2)),
+              change: Number(change.toFixed(2)),
+              previousClose: data.previousClose !== undefined ? data.previousClose : undefined,
+              open: typeof data.open === 'number' ? Number(data.open.toFixed(2)) : undefined,
+              high: typeof data.high === 'number' ? Number(data.high.toFixed(2)) : undefined,
+              low: typeof data.low === 'number' ? Number(data.low.toFixed(2)) : undefined,
+              volume: typeof data.volume === 'number' ? data.volume : undefined,
+              high52: data.high52 !== undefined ? data.high52 : undefined,
+              low52: data.low52 !== undefined ? data.low52 : undefined,
+            };
+            priceCache.set(symbol, { data: resData, timestamp: Date.now() });
+            return resData;
           }
-        } catch (err) {
-          console.warn(`⚠️ [DEBUG] Direct proxy fetch failed for ${symbol}:`, err);
-        }
+        } catch (_) {}
       }
 
-      // Fallback for global indices: try Yahoo via CORS proxies
+      // Local proxy loop exhausted without returning — try Yahoo proxy directly
       const yahooFallback = await fetchDirectFallback(symbol);
-      if (yahooFallback) return yahooFallback;
+      if (yahooFallback) {
+        priceCache.set(symbol, { data: yahooFallback, timestamp: Date.now() });
+        return yahooFallback;
+      }
 
-      console.warn(`❌ [DEBUG] Unable to fetch authentic price for global symbol ${symbol}`);
+      // Fail gracefully instead of showing fake numbers
       return null;
+    } catch (error) {
+      console.warn(`❌ [DEBUG] Failed to fetch real price for ${symbol}:`, error);
+      const yahooFallback = await fetchDirectFallback(symbol);
+      if (yahooFallback) {
+        priceCache.set(symbol, { data: yahooFallback, timestamp: Date.now() });
+        return yahooFallback;
+      }
+      return null;
+    } finally {
+      inFlightRequests.delete(symbol);
     }
+  })();
 
-    // For regular Indian / US stocks, use EODHD symbol conversion
-    const candidates = toEODHDSymbols(symbol);
-    
-    for (const cand of candidates) {
-      try {
-        const response = await fetch(`${baseUrl}/api/stock/${cand}?source=yahoo`, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-          },
-          mode: 'cors'
-        });
-        if (!response.ok) continue;
-        const ct = response.headers.get('content-type') || '';
-        if (!ct.includes('application/json')) continue;
-        const data = await response.json();
-        if (data && typeof data.close === 'number' && data.close > 0) {
-          const prevClose = data.previousClose || data.open || data.close;
-          const change = prevClose ? ((data.close - prevClose) / prevClose) * 100 : 0;
-          return {
-            price: Number(data.close.toFixed(2)),
-            change: Number(change.toFixed(2)),
-            previousClose: data.previousClose !== undefined ? data.previousClose : undefined,
-            open: typeof data.open === 'number' ? Number(data.open.toFixed(2)) : undefined,
-            high: typeof data.high === 'number' ? Number(data.high.toFixed(2)) : undefined,
-            low: typeof data.low === 'number' ? Number(data.low.toFixed(2)) : undefined,
-            volume: typeof data.volume === 'number' ? data.volume : undefined,
-            high52: data.high52 !== undefined ? data.high52 : undefined,
-            low52: data.low52 !== undefined ? data.low52 : undefined,
-          };
-        }
-      } catch (_) {}
-    }
-
-    // Local proxy loop exhausted without returning — try Yahoo proxy directly
-    console.warn(`⚠️ [DEBUG] All proxy candidates failed for ${symbol}, trying Yahoo fallback`);
-    const yahooFallback = await fetchDirectFallback(symbol);
-    if (yahooFallback) return yahooFallback;
-
-    // Fail gracefully instead of showing fake numbers
-    console.warn(`❌ [DEBUG] Could not fetch authentic data for ${symbol}`);
-    return null;
-  } catch (error) {
-    console.warn(`❌ [DEBUG] Failed to fetch real price for ${symbol}:`, error);
-    const yahooFallback = await fetchDirectFallback(symbol);
-    if (yahooFallback) return yahooFallback;
-    return null;
-  }
+  inFlightRequests.set(symbol, requestPromise);
+  return requestPromise;
 };

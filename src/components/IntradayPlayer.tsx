@@ -1038,10 +1038,10 @@ const IntradayPlayer: React.FC = () => {
     <div className="space-y-4 max-w-7xl mx-auto pb-16 font-sans text-slate-100">
       
       {/* ── 1. Clean Institutional Header & Status Bar with Live Clock ───── */}
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-[#090d16] border border-slate-800/80 rounded-2xl p-4 md:p-5 shadow-xl">
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-[#0c1017] border border-slate-800 rounded-2xl p-4 md:p-5 shadow-xl">
         <div className="flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-center text-amber-400 shrink-0">
-            <Crosshair className="w-5 h-5 text-amber-400" />
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+            <Crosshair className="w-5 h-5 text-emerald-400" />
           </div>
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
@@ -1063,8 +1063,8 @@ const IntradayPlayer: React.FC = () => {
             
             {/* Live Clock & Market Timing Info */}
             <div className="flex items-center gap-2 mt-1 text-xs text-slate-400 font-mono flex-wrap">
-              <span className="flex items-center gap-1 text-amber-300 font-semibold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                <Clock className="w-3 h-3 text-amber-400" />
+              <span className="flex items-center gap-1 text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                <Clock className="w-3 h-3 text-emerald-400" />
                 <span>Live Time: {liveClock}</span>
               </span>
               <span className="text-slate-600">·</span>
@@ -1079,25 +1079,25 @@ const IntradayPlayer: React.FC = () => {
 
         {/* Clean Institutional KPI Tiles */}
         <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
-          <div className="bg-[#0f1422] border border-slate-800 rounded-xl px-3 py-1.5 min-w-[90px]">
+          <div className="bg-[#101520] border border-slate-800 rounded-xl px-3 py-1.5 min-w-[90px]">
             <div className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Sniper Setups</div>
-            <div className="text-sm font-bold text-amber-300 font-mono">
+            <div className="text-sm font-bold text-emerald-400 font-mono">
               {eliteSniperCount} Curated
             </div>
           </div>
-          <div className="bg-[#0f1422] border border-slate-800 rounded-xl px-3 py-1.5 min-w-[80px]">
+          <div className="bg-[#101520] border border-slate-800 rounded-xl px-3 py-1.5 min-w-[80px]">
             <div className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Bull Longs</div>
             <div className="text-sm font-bold text-emerald-400 font-mono">
               {longCount}
             </div>
           </div>
-          <div className="bg-[#0f1422] border border-slate-800 rounded-xl px-3 py-1.5 min-w-[80px]">
+          <div className="bg-[#101520] border border-slate-800 rounded-xl px-3 py-1.5 min-w-[80px]">
             <div className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Bear Shorts</div>
             <div className="text-sm font-bold text-rose-400 font-mono">
               {shortCount}
             </div>
           </div>
-          <div className="bg-[#0f1422] border border-slate-800 rounded-xl px-3 py-1.5 min-w-[80px]">
+          <div className="bg-[#101520] border border-slate-800 rounded-xl px-3 py-1.5 min-w-[80px]">
             <div className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">Target Done</div>
             <div className="text-sm font-bold text-teal-300 font-mono">
               {targetHitCount}
@@ -1106,7 +1106,7 @@ const IntradayPlayer: React.FC = () => {
           <button
             onClick={() => loadData(true)}
             disabled={isRefreshing || loading}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 text-xs font-medium transition border border-slate-700/80 select-none disabled:opacity-50 ml-auto lg:ml-0 cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-bold transition select-none disabled:opacity-50 ml-auto lg:ml-0 cursor-pointer shadow-sm"
             title="Scan Again Now"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -1115,81 +1115,23 @@ const IntradayPlayer: React.FC = () => {
         </div>
       </div>
 
-      {/* ── 2. The 5 Institutional Gates Reference Banner ──────────────────── */}
-      <div className="bg-[#0a0e17] border border-slate-800/80 rounded-2xl p-3.5 px-4 shadow-md space-y-2.5">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 text-xs">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span className="font-semibold text-slate-200 tracking-wide font-sans">
-              The 5 Institutional Gates (Strict High-Conviction Criteria)
-            </span>
-          </div>
-          <div className="text-[11px] font-mono text-slate-400">
-            Top 2–5 Elite Snipers filter requires &ge; 4 Gates passed
-          </div>
-        </div>
-
-        {/* 5 Sleek Gate Items */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 text-xs">
-          <div className="bg-[#0f1523] p-2.5 rounded-xl border border-slate-800/80 flex items-start gap-2">
-            <span className="w-5 h-5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center text-[10px] font-bold font-mono shrink-0">1</span>
-            <div>
-              <div className="text-xs font-semibold text-slate-200">Sector Alpha</div>
-              <div className="text-[10px] text-slate-400 mt-0.5">Outperforming sector index</div>
-            </div>
-          </div>
-
-          <div className="bg-[#0f1523] p-2.5 rounded-xl border border-slate-800/80 flex items-start gap-2">
-            <span className="w-5 h-5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center text-[10px] font-bold font-mono shrink-0">2</span>
-            <div>
-              <div className="text-xs font-semibold text-slate-200">Narrow CPR / Cam</div>
-              <div className="text-[10px] text-slate-400 mt-0.5">Camarilla H4 or CPR &lt;0.35%</div>
-            </div>
-          </div>
-
-          <div className="bg-[#0f1523] p-2.5 rounded-xl border border-slate-800/80 flex items-start gap-2">
-            <span className="w-5 h-5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center text-[10px] font-bold font-mono shrink-0">3</span>
-            <div>
-              <div className="text-xs font-semibold text-slate-200">15-Min ORB</div>
-              <div className="text-[10px] text-slate-400 mt-0.5">Opening range breakout</div>
-            </div>
-          </div>
-
-          <div className="bg-[#0f1523] p-2.5 rounded-xl border border-slate-800/80 flex items-start gap-2">
-            <span className="w-5 h-5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center text-[10px] font-bold font-mono shrink-0">4</span>
-            <div>
-              <div className="text-xs font-semibold text-slate-200">RVOL &ge; 1.8x</div>
-              <div className="text-[10px] text-slate-400 mt-0.5">Institutional volume surge</div>
-            </div>
-          </div>
-
-          <div className="bg-[#0f1523] p-2.5 rounded-xl border border-slate-800/80 flex items-start gap-2 col-span-2 sm:col-span-1">
-            <span className="w-5 h-5 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center text-[10px] font-bold font-mono shrink-0">5</span>
-            <div>
-              <div className="text-xs font-semibold text-slate-200">VWAP Shield</div>
-              <div className="text-[10px] text-slate-400 mt-0.5">Holding VWAP sweet spot</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* ── 3. Clean Curation & Filtering Controls ─────────────────────────── */}
-      <div className="bg-[#090d16] border border-slate-800/80 rounded-2xl p-3.5 flex flex-col gap-3 shadow-md">
+      <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-4 flex flex-col gap-3 shadow-xl">
         
         {/* Row A: Focus Mode Selector */}
         <div className="flex flex-wrap items-center justify-between gap-2.5 pb-2.5 border-b border-slate-800/70">
           
-          <div className="flex items-center gap-1.5 bg-[#0f1422] p-1 rounded-xl border border-slate-800/90">
-            <span className="text-[11px] font-medium text-slate-400 px-2 flex items-center gap-1">
-              <Crosshair className="w-3.5 h-3.5 text-amber-400" />
+          <div className="flex items-center gap-1.5 bg-[#101520] p-1 rounded-xl border border-slate-800">
+            <span className="text-[11px] font-bold text-slate-300 px-2 flex items-center gap-1">
+              <Crosshair className="w-3.5 h-3.5 text-emerald-400" />
               Focus:
             </span>
             <button
               onClick={() => setCurationLimit('ELITE_SNIPER')}
-              className={`px-3 py-1 rounded-lg text-xs font-semibold transition select-none cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition select-none cursor-pointer flex items-center gap-1.5 ${
                 curationLimit === 'ELITE_SNIPER'
-                  ? 'bg-amber-400/15 text-amber-300 border border-amber-400/30'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
               }`}
               title="Strictly Top 2 to 5 Best High-Conviction Stocks"
             >
@@ -1197,30 +1139,30 @@ const IntradayPlayer: React.FC = () => {
             </button>
             <button
               onClick={() => setCurationLimit('TOP_10')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition select-none cursor-pointer ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition select-none cursor-pointer ${
                 curationLimit === 'TOP_10'
-                  ? 'bg-slate-800 text-white border border-slate-700'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
               }`}
             >
               Top 10 Leaders
             </button>
             <button
               onClick={() => setCurationLimit('TOP_15')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition select-none cursor-pointer ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition select-none cursor-pointer ${
                 curationLimit === 'TOP_15'
-                  ? 'bg-slate-800 text-white border border-slate-700'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
               }`}
             >
               Top 15 Setups
             </button>
             <button
               onClick={() => setCurationLimit('ALL')}
-              className={`px-2 py-1 rounded-lg text-xs font-medium transition select-none cursor-pointer ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition select-none cursor-pointer ${
                 curationLimit === 'ALL'
-                  ? 'bg-slate-800 text-white border border-slate-700'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
               }`}
             >
               All Universe ({marketData.length})
@@ -1229,11 +1171,11 @@ const IntradayPlayer: React.FC = () => {
 
           {/* Sector Selector */}
           <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-medium text-slate-400">Sector:</span>
+            <span className="text-[11px] font-bold text-slate-400">Sector:</span>
             <select
               value={selectedSector}
               onChange={(e) => setSelectedSector(e.target.value)}
-              className="bg-[#0f1422] border border-slate-800 text-xs text-slate-200 rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-slate-700 transition cursor-pointer font-medium"
+              className="bg-[#101520] border border-slate-800 text-xs text-slate-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-emerald-500 transition cursor-pointer font-medium"
             >
               <option value="ALL">All Sectors ({marketData.length})</option>
               {sectorList.map(sec => (
@@ -1243,13 +1185,13 @@ const IntradayPlayer: React.FC = () => {
           </div>
 
           {/* Table / Cards View Switcher */}
-          <div className="flex items-center gap-1 bg-[#0f1422] p-1 rounded-xl border border-slate-800/90 ml-auto">
+          <div className="flex items-center gap-1 bg-[#101520] p-1 rounded-xl border border-slate-800 ml-auto">
             <button
               onClick={() => handleSetViewMode('table')}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition cursor-pointer select-none ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer select-none ${
                 viewMode === 'table'
-                  ? 'bg-slate-800 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
               }`}
             >
               <TableIcon className="w-3.5 h-3.5" />
@@ -1257,10 +1199,10 @@ const IntradayPlayer: React.FC = () => {
             </button>
             <button
               onClick={() => handleSetViewMode('cards')}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition cursor-pointer select-none ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer select-none ${
                 viewMode === 'cards'
-                  ? 'bg-slate-800 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/40'
               }`}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
@@ -1278,16 +1220,18 @@ const IntradayPlayer: React.FC = () => {
               { id: 'SHORTS', label: `Shorts (${shortCount})` },
               { id: 'TARGET_HIT', label: `Target Done (${targetHitCount})` },
               { id: 'TRAILED', label: `Trailed to Cost (${trailedCount})` },
-              { id: 'HIGH_CONVICTION', label: `Score &ge; 85` },
+              { id: 'HIGH_CONVICTION', label: `Score ≥ 85` },
               { id: 'WATCHLIST', label: `Saved (${savedWatchlist.length})` },
             ].map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveCategoryFilter(tab.id as any)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap cursor-pointer select-none ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer select-none ${
                   activeCategoryFilter === tab.id
-                    ? 'bg-slate-200 text-slate-900 font-semibold shadow-sm'
-                    : 'bg-[#0f1422] border border-slate-800/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                    ? tab.id === 'WATCHLIST'
+                      ? 'bg-amber-600 text-white shadow-sm'
+                      : 'bg-emerald-600 text-white shadow-sm'
+                    : 'bg-[#101520] border border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
                 }`}
               >
                 {tab.label}
@@ -1298,18 +1242,18 @@ const IntradayPlayer: React.FC = () => {
           <div className="flex items-center gap-2 shrink-0">
             {/* Search Input */}
             <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search symbol, sector..."
-                className="bg-[#0f1422] border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-slate-700 transition w-44 md:w-56"
+                className="bg-[#101520] border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition w-44 md:w-56"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -1319,10 +1263,10 @@ const IntradayPlayer: React.FC = () => {
             {/* Export CSV */}
             <button
               onClick={exportToCSV}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0f1422] hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs font-medium transition cursor-pointer select-none"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#101520] hover:bg-slate-800 border border-slate-800 text-slate-300 text-xs font-bold transition cursor-pointer select-none"
               title="Download CSV report"
             >
-              <Download className="w-3.5 h-3.5" />
+              <Download className="w-3.5 h-3.5 text-emerald-400" />
               <span className="hidden sm:inline">CSV</span>
             </button>
           </div>
@@ -1457,7 +1401,7 @@ const IntradayPlayer: React.FC = () => {
                     <tr 
                       key={stock.symbol}
                       onClick={() => setSelectedStock(stock)}
-                      className="hover:bg-[#111726] transition-colors cursor-pointer group"
+                      className="hover:bg-[#0e131d] transition-colors cursor-pointer group"
                     >
                       {/* Rank & Bookmark */}
                       <td className="py-3 px-2 text-center" onClick={(e) => e.stopPropagation()}>
@@ -1465,10 +1409,10 @@ const IntradayPlayer: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => toggleWatchlist(stock)}
-                            className="p-1 rounded hover:bg-slate-800 text-slate-500 hover:text-amber-400 transition"
+                            className="p-1 rounded hover:bg-slate-800 text-slate-500 hover:text-emerald-400 transition"
                             title={isWatchlisted ? 'Remove from Saved' : 'Save to Watchlist'}
                           >
-                            <Bookmark className={`w-3.5 h-3.5 ${isWatchlisted ? 'fill-amber-400 text-amber-400' : ''}`} />
+                            <Bookmark className={`w-3.5 h-3.5 ${isWatchlisted ? 'fill-emerald-400 text-emerald-400' : ''}`} />
                           </button>
                           <span className="text-[11px] text-slate-500 font-semibold w-3">
                             {index + 1}
@@ -1482,7 +1426,7 @@ const IntradayPlayer: React.FC = () => {
                           <StockLogo symbol={stock.symbol} className="w-7 h-7 rounded-lg shrink-0 border border-slate-800 bg-[#121824]" />
                           <div>
                             <div className="flex items-center gap-1.5">
-                              <span className="font-bold text-white group-hover:text-amber-300 transition text-[13px] tracking-tight font-sans">
+                              <span className="font-bold text-white group-hover:text-emerald-400 transition text-[13px] tracking-tight font-sans">
                                 {stock.symbol}
                               </span>
                               {stock.sectorLeader && (
@@ -1691,7 +1635,7 @@ const IntradayPlayer: React.FC = () => {
               <div
                 key={stock.symbol}
                 onClick={() => setSelectedStock(stock)}
-                className="bg-[#090d16] rounded-2xl p-4 flex flex-col justify-between transition-all duration-150 cursor-pointer group border border-slate-800/80 hover:border-slate-700 shadow-lg relative overflow-hidden"
+                className="bg-[#0c1017] rounded-xl p-4 flex flex-col justify-between transition-all duration-200 cursor-pointer group border border-slate-800 hover:border-slate-700 hover:bg-[#0e131d] shadow-lg relative overflow-hidden"
               >
                 <div>
                   {/* Symbol & Price Header */}
@@ -1700,18 +1644,18 @@ const IntradayPlayer: React.FC = () => {
                       <StockLogo symbol={stock.symbol} className="w-8 h-8 rounded-lg shrink-0 border border-slate-800 bg-[#121824]" />
                       <div>
                         <div className="flex items-center gap-1.5">
-                          <h3 className="text-sm font-bold text-white group-hover:text-amber-300 transition tracking-tight">
+                          <h3 className="text-sm font-bold text-white group-hover:text-emerald-400 transition tracking-tight font-sans">
                             {stock.symbol}
                           </h3>
                           <span className="text-[9px] font-mono text-slate-400 uppercase bg-slate-800 px-1 rounded">
                             {stock.sector}
                           </span>
                         </div>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-xs font-mono font-bold text-slate-100">
+                        <div className="flex items-center gap-1.5 mt-0.5 font-mono">
+                          <span className="text-xs font-bold text-slate-100">
                             ₹{stock.price.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                           </span>
-                          <span className={`text-[10px] font-mono font-semibold px-1 rounded ${
+                          <span className={`text-[10px] font-semibold px-1 rounded ${
                             stock.change >= 0 ? 'text-emerald-400 bg-emerald-500/10' : 'text-rose-400 bg-rose-500/10'
                           }`}>
                             {stock.change >= 0 ? '+' : ''}{stock.change.toFixed(2)}%
@@ -1751,7 +1695,7 @@ const IntradayPlayer: React.FC = () => {
                     <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
                       {stock.volMultiplier}x Vol
                     </span>
-                    <span className="px-1.5 py-0.5 rounded bg-slate-800 text-amber-300 border border-slate-700 ml-auto font-semibold">
+                    <span className="px-1.5 py-0.5 rounded bg-slate-800 text-emerald-400 border border-slate-700 ml-auto font-semibold">
                       Score: {stock.technicalScore}
                     </span>
                   </div>
@@ -1802,12 +1746,12 @@ const IntradayPlayer: React.FC = () => {
                       }}
                       className={`p-1 rounded-lg border transition cursor-pointer select-none ${
                         isWatchlisted
-                          ? 'bg-amber-400/10 text-amber-400 border-amber-400/30'
-                          : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                          : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-emerald-400'
                       }`}
                       title={isWatchlisted ? 'Remove from Saved' : 'Save Intraday Trade'}
                     >
-                      <Bookmark className={`w-3 h-3 ${isWatchlisted ? 'fill-amber-400' : ''}`} />
+                      <Bookmark className={`w-3 h-3 ${isWatchlisted ? 'fill-emerald-400 text-emerald-400' : ''}`} />
                     </button>
                     <button
                       type="button"
@@ -2005,11 +1949,11 @@ const IntradayPlayer: React.FC = () => {
                   onClick={() => toggleWatchlist(selectedStock)}
                   className={`flex-1 py-2.5 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-2 cursor-pointer ${
                     savedWatchlist.includes(selectedStock.symbol)
-                      ? 'bg-amber-400/15 text-amber-300 border-amber-400/30'
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                       : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
                   }`}
                 >
-                  <Bookmark className={`w-4 h-4 ${savedWatchlist.includes(selectedStock.symbol) ? 'fill-amber-400' : ''}`} />
+                  <Bookmark className={`w-4 h-4 ${savedWatchlist.includes(selectedStock.symbol) ? 'fill-emerald-400 text-emerald-400' : ''}`} />
                   <span>{savedWatchlist.includes(selectedStock.symbol) ? 'Saved in Watchlist' : 'Add to Intraday Watchlist'}</span>
                 </button>
                 <button
