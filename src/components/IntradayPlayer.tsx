@@ -24,7 +24,6 @@ import {
   Award,
   Zap,
   CheckCheck,
-  ChevronDown,
   Layers,
   Flame,
   Info
@@ -102,7 +101,7 @@ export const INTRADAY_UNIVERSE: IntradayStockMeta[] = [
 
   // Infra, Defence & Capital Goods
   { symbol: 'LT', name: 'Larsen & Toubro', sector: 'Infra & Tech', basePrice: 3680.00 },
-  { symbol: 'BHARTIARTL', name: 'Bharti Airtel', sector: 'Infra & Tech', basePrice: 1562.00 },
+  { symbol: 'BHARTIARTL', name: 'Bharti Airtel', sector: 'Infra & Tech', basePrice: 1795.80 },
   { symbol: 'BEL', name: 'Bharat Electronics', sector: 'Infra & Tech', basePrice: 296.40 },
   { symbol: 'HAL', name: 'Hindustan Aeronautics', sector: 'Infra & Tech', basePrice: 4480.00 },
   { symbol: 'DIXON', name: 'Dixon Technologies', sector: 'Infra & Tech', basePrice: 11950.00 },
@@ -182,7 +181,6 @@ export interface IntradayData {
   riskReward: string;
   potentialGainPct: number;
   scanTime: string;
-  triggerTime: string;
 }
 
 export interface TrackedIntradaySetup {
@@ -202,7 +200,6 @@ type SortOrder = 'asc' | 'desc';
 
 /**
  * 🔒 STABLE TRADING SESSION ANCHOR
- * Solves the issue: "at me [raat me] kuch aur stock abhi kuch aur stocks"
  * Indian Market session runs 09:15 to 15:30 IST.
  * If market is closed (evening, night, or morning before 09:15 IST),
  * we anchor to the latest completed trading session date.
@@ -238,11 +235,9 @@ export const getActiveTradingSessionDate = (): string => {
  * Anchors strictly to the session key so prices/setups NEVER randomly jump between night and morning.
  */
 const getSessionStockPrice = (symbol: string, basePrice: number, sessionKey: string) => {
-  // Deterministic seed based on symbol + active session date
   const seedStr = `${symbol}_${sessionKey}`;
   const seed = seedStr.split('').reduce((acc, c, i) => acc + c.charCodeAt(0) * (i + 13), 7919);
   
-  // Custom pseudo-random generator
   const prng = (offset: number) => {
     const val = Math.sin(seed + offset) * 10000;
     return val - Math.floor(val);
@@ -256,8 +251,9 @@ const getSessionStockPrice = (symbol: string, basePrice: number, sessionKey: str
   const openOffset = (prng(2) - 0.5) * 0.9;
   const openPrice = Number((basePrice * (1 + openOffset / 100)).toFixed(2));
 
-  const highSpread = isBull ? 0.008 + prng(3) * 0.015 : 0.004 + prng(3) * 0.008;
-  const lowSpread = isBull ? 0.004 + prng(4) * 0.008 : 0.008 + prng(4) * 0.015;
+  // High & Low spreads: top momentum stocks sustain close to highs
+  const highSpread = isBull ? (prng(3) < 0.35 ? 0.002 : 0.005 + prng(3) * 0.012) : 0.004 + prng(3) * 0.008;
+  const lowSpread = isBull ? 0.004 + prng(4) * 0.008 : (prng(4) < 0.35 ? 0.002 : 0.005 + prng(4) * 0.012);
 
   const dayHigh = Number((Math.max(price, openPrice) * (1 + highSpread)).toFixed(2));
   const dayLow = Number((Math.min(price, openPrice) * (1 - lowSpread)).toFixed(2));
@@ -297,7 +293,7 @@ export const getMarketTimingPhase = () => {
       phase: 'PRE_MARKET',
       label: 'Pre-Market Session (09:00 - 09:15)',
       color: 'bg-slate-800/80 text-slate-300 border-slate-700',
-      timingAdvice: 'Review yesterday\'s breakouts and wait for 09:15 opening price discovery.'
+      timingAdvice: 'Review pre-market discovery. Live order-flow will start at 09:15 IST.'
     };
   }
   if (minutes < 9 * 60 + 30) {
@@ -355,6 +351,21 @@ const IntradayPlayer: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
+  // Live Clock & Exact Scan Timestamp
+  const [liveClock, setLiveClock] = useState<string>(() => 
+    new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })
+  );
+  const [lastScanTimestamp, setLastScanTimestamp] = useState<string>(() => 
+    new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })
+  );
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setLiveClock(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   // View Toggle: Table View (Tabular) vs Cockpit Card Grid
   const [viewMode, setViewMode] = useState<'table' | 'cards'>(() => {
     try {
@@ -471,18 +482,23 @@ const IntradayPlayer: React.FC = () => {
       ? ((currentPrice - entryPrice) / entryPrice) * 100
       : ((entryPrice - currentPrice) / entryPrice) * 100;
 
+    const formatPct = (val: number) => {
+      const formatted = Math.abs(val).toFixed(1);
+      return val >= 0 ? `+${formatted}%` : `-${formatted}%`;
+    };
+
     let status: 'TARGET_2_HIT' | 'TARGET_1_HIT' | 'SL_HIT' | 'IN_PROFIT' | 'IN_DRAWDOWN' | 'TESTING_ENTRY' = 'IN_PROFIT';
     let statusLabel = '';
     let statusBadgeColor = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
     let isSlTrailedToCost = false;
 
     if (isBull) {
-      const hitT2 = currentPrice >= target2 || dayHigh >= target2;
+      const hitT2 = currentPrice >= target2;
       const hitT1 = currentPrice >= target1 || dayHigh >= target1;
 
       if (hitT2) {
         status = 'TARGET_2_HIT';
-        statusLabel = `Target 2 Done (+${((target2 - entryPrice) / entryPrice * 100).toFixed(1)}%)`;
+        statusLabel = `Target 2 Done (${formatPct(pnlPercent)})`;
         statusBadgeColor = 'text-teal-300 bg-teal-500/10 border-teal-500/25';
         isSlTrailedToCost = true;
       } else if (hitT1) {
@@ -495,29 +511,29 @@ const IntradayPlayer: React.FC = () => {
 
         if (hitSL) {
           status = 'SL_HIT';
-          statusLabel = `Stop Loss Hit`;
+          statusLabel = `Stop Loss Hit (${formatPct(pnlPercent)})`;
           statusBadgeColor = 'text-rose-400 bg-rose-500/10 border-rose-500/25';
-        } else if (pnlPercent >= 0.8) {
+        } else if (pnlPercent >= 0.7) {
           status = 'IN_PROFIT';
-          statusLabel = `In Profit (+${pnlPercent.toFixed(1)}%)`;
+          statusLabel = `In Profit (${formatPct(pnlPercent)})`;
           statusBadgeColor = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
         } else if (pnlPercent >= 0) {
           status = 'TESTING_ENTRY';
-          statusLabel = `Active · (+${pnlPercent.toFixed(1)}%)`;
+          statusLabel = `Active (${formatPct(pnlPercent)})`;
           statusBadgeColor = 'text-slate-300 bg-slate-800/80 border-slate-700/60';
         } else {
           status = 'IN_DRAWDOWN';
-          statusLabel = `Buffer Safe (${pnlPercent.toFixed(1)}%)`;
+          statusLabel = `Buffer Safe (${formatPct(pnlPercent)})`;
           statusBadgeColor = 'text-amber-400 bg-amber-500/10 border-amber-500/20';
         }
       }
     } else {
-      const hitT2 = currentPrice <= target2 || dayLow <= target2;
+      const hitT2 = currentPrice <= target2;
       const hitT1 = currentPrice <= target1 || dayLow <= target1;
 
       if (hitT2) {
         status = 'TARGET_2_HIT';
-        statusLabel = `Target 2 Done (+${((entryPrice - target2) / entryPrice * 100).toFixed(1)}%)`;
+        statusLabel = `Target 2 Done (${formatPct(pnlPercent)})`;
         statusBadgeColor = 'text-teal-300 bg-teal-500/10 border-teal-500/25';
         isSlTrailedToCost = true;
       } else if (hitT1) {
@@ -530,19 +546,19 @@ const IntradayPlayer: React.FC = () => {
 
         if (hitSL) {
           status = 'SL_HIT';
-          statusLabel = `Stop Loss Hit`;
+          statusLabel = `Stop Loss Hit (${formatPct(pnlPercent)})`;
           statusBadgeColor = 'text-rose-400 bg-rose-500/10 border-rose-500/25';
-        } else if (pnlPercent >= 0.8) {
+        } else if (pnlPercent >= 0.7) {
           status = 'IN_PROFIT';
-          statusLabel = `In Profit (+${pnlPercent.toFixed(1)}%)`;
+          statusLabel = `In Profit (${formatPct(pnlPercent)})`;
           statusBadgeColor = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
         } else if (pnlPercent >= 0) {
           status = 'TESTING_ENTRY';
-          statusLabel = `Active · (+${pnlPercent.toFixed(1)}%)`;
+          statusLabel = `Active (${formatPct(pnlPercent)})`;
           statusBadgeColor = 'text-slate-300 bg-slate-800/80 border-slate-700/60';
         } else {
           status = 'IN_DRAWDOWN';
-          statusLabel = `Buffer Safe (${pnlPercent.toFixed(1)}%)`;
+          statusLabel = `Buffer Safe (${formatPct(pnlPercent)})`;
           statusBadgeColor = 'text-amber-400 bg-amber-500/10 border-amber-500/20';
         }
       }
@@ -584,17 +600,23 @@ const IntradayPlayer: React.FC = () => {
     const activeSessionKey = getActiveTradingSessionDate();
     const scanSymbols = INTRADAY_UNIVERSE.map(s => `${s.symbol}.NS`);
     
+    // Exact scan timestamp matching current local time
+    const scanTimeNow = new Date().toLocaleTimeString('en-IN', { 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      second: '2-digit', 
+      hour12: true 
+    });
+    setLastScanTimestamp(scanTimeNow);
+
     try {
       let batchData: Record<string, any> = {};
-      const marketIsLiveNow = isMarketOpen();
-
-      // Only attempt live API if market is open or during manual refresh
-      if (marketIsLiveNow || isManualRefresh) {
-        try {
-          batchData = await fetchMultipleStockPrices(scanSymbols);
-        } catch (e) {
-          console.warn('API batch fetch failed, falling back to locked session benchmark data:', e);
-        }
+      
+      // Always fetch real market prices (closing prices during pre/post-market, live prices during market hours)
+      try {
+        batchData = await fetchMultipleStockPrices(scanSymbols);
+      } catch (e) {
+        console.warn('API batch fetch failed, falling back to locked session benchmark data:', e);
       }
       
       // Step 1: Calculate Sector-level average momentum
@@ -603,7 +625,7 @@ const IntradayPlayer: React.FC = () => {
       INTRADAY_UNIVERSE.forEach(item => {
         const fullKey = `${item.symbol}.NS`;
         const live = batchData[fullKey] || batchData[item.symbol];
-        const data = (live && live.price > 0 && marketIsLiveNow) 
+        const data = (live && typeof live.price === 'number' && live.price > 0) 
           ? live 
           : getSessionStockPrice(item.symbol, item.basePrice, activeSessionKey);
         
@@ -622,24 +644,14 @@ const IntradayPlayer: React.FC = () => {
         sectorAverages[sec] = entry.count > 0 ? Number((entry.sumChange / entry.count).toFixed(2)) : 0;
       });
 
-      // Step 2: Realistic Trigger Time Slot Generator
-      // Generates natural market session trigger timestamps during market hours (09:20 - 11:30)
-      const getRealisticTriggerTime = (sym: string, rankIndex: number) => {
-        const triggerMinutes = [
-          '09:22 AM', '09:35 AM', '09:48 AM', '10:04 AM', '10:18 AM',
-          '10:32 AM', '10:55 AM', '11:12 AM', '11:40 AM', '13:15 AM'
-        ];
-        return triggerMinutes[rankIndex % triggerMinutes.length];
-      };
-
-      // Step 3: Build enhanced intraday candidates
+      // Step 2: Build enhanced intraday candidates
       const candidates: IntradayData[] = [];
 
       for (let idx = 0; idx < INTRADAY_UNIVERSE.length; idx++) {
         const item = INTRADAY_UNIVERSE[idx];
         const fullKey = `${item.symbol}.NS`;
         const live = batchData[fullKey] || batchData[item.symbol];
-        const data = (live && live.price > 0 && marketIsLiveNow) 
+        const data = (live && typeof live.price === 'number' && live.price > 0) 
           ? live 
           : getSessionStockPrice(item.symbol, item.basePrice, activeSessionKey);
         
@@ -702,13 +714,13 @@ const IntradayPlayer: React.FC = () => {
         };
 
         // 5 Institutional Gates Verification
-        const gate1Sector = isBull ? (sectorChange >= 0 && sectorAlpha >= 0.25) : (sectorChange <= 0 && sectorAlpha <= -0.25);
+        const gate1Sector = isBull ? (sectorAlpha >= 0.25) : (sectorAlpha <= -0.25);
         const gate2CprCam = isNarrowCpr || (isBull ? price >= camH4 * 0.998 : price <= camL4 * 1.002);
-        const gate3Orb = isBull ? distToDayHighPct <= 0.45 : distToDayLowPct <= 0.45;
+        const gate3Orb = isBull ? distToDayHighPct <= 0.35 : distToDayLowPct <= 0.35;
         const gate4Rvol = volMultiplier >= 1.8;
         const gate5Vwap = isBull 
-          ? (vwapStatus === 'ABOVE_VWAP' && Math.abs(vwapDistancePct) <= 2.2) 
-          : (vwapStatus === 'BELOW_VWAP' && Math.abs(vwapDistancePct) <= 2.2);
+          ? (vwapStatus === 'ABOVE_VWAP' && Math.abs(vwapDistancePct) <= 2.5) 
+          : (vwapStatus === 'BELOW_VWAP' && Math.abs(vwapDistancePct) <= 2.5);
 
         const gates: InstitutionalGates = {
           sectorAlphaLeader: gate1Sector,
@@ -720,58 +732,66 @@ const IntradayPlayer: React.FC = () => {
 
         const gatesPassedCount = [gate1Sector, gate2CprCam, gate3Orb, gate4Rvol, gate5Vwap].filter(Boolean).length;
 
-        // Setup Classification
+        // Diverse Institutional Setup Classification (No single setup dominates)
         let setupCat: 'CAMARILLA_H4_BO' | 'NARROW_CPR_TREND' | 'ORB_BREAKOUT' | 'SECTOR_ALPHA' | 'VWAP_SURGE' = 'ORB_BREAKOUT';
         let setupTitle = isBull ? '15-Min ORB High Breakout' : 'Day Low Breakdown';
         let rationale = '';
 
         if (isBull) {
-          if (price >= camH4 * 0.998) {
-            setupCat = 'CAMARILLA_H4_BO';
-            setupTitle = 'Camarilla H4 Breakout';
-            rationale = `Sustaining firmly above Camarilla H4 level ₹${camH4} with ${volMultiplier}x volume surge.`;
-          } else if (isNarrowCpr && distToDayHighPct <= 0.5) {
+          if (isNarrowCpr && distToDayHighPct <= 0.5) {
             setupCat = 'NARROW_CPR_TREND';
             setupTitle = 'Narrow CPR Trend Day';
-            rationale = `Ultra-narrow CPR (${cprWidthPct}%) confirms high-probability institutional expansion.`;
-          } else if (gate3Orb) {
+            rationale = `Ultra-narrow CPR (${cprWidthPct}%) indicates high-probability institutional expansion day.`;
+          } else if (distToDayHighPct <= 0.25) {
             setupCat = 'ORB_BREAKOUT';
             setupTitle = '15-Min ORB High Breakout';
-            rationale = `Breaking opening range high ₹${dayHigh.toFixed(1)} with aggressive institutional buy flow.`;
-          } else if (sectorLeader && sectorChange > 0.4) {
+            rationale = `Breaking opening 15-minute range high ₹${dayHigh.toFixed(1)} with aggressive institutional buy flow.`;
+          } else if (sectorLeader && sectorAlpha >= 0.6) {
             setupCat = 'SECTOR_ALPHA';
             setupTitle = 'Sector Alpha Outperformance';
-            rationale = `Outperforming ${item.sector} sector (+${sectorChange}%) by +${sectorAlpha}% with strong institutional bids.`;
+            rationale = `Outperforming ${item.sector} sector by +${sectorAlpha}% with strong institutional bids.`;
+          } else if (price >= camH4 * 0.998) {
+            setupCat = 'CAMARILLA_H4_BO';
+            setupTitle = 'Camarilla H4 Breakout';
+            rationale = `Sustaining firmly above Camarilla H4 level ₹${camH4} with volume expansion.`;
           } else {
             setupCat = 'VWAP_SURGE';
             setupTitle = 'VWAP Pullback Bounce';
             rationale = `Holding above VWAP support ₹${vwap.toFixed(1)} with solid order-flow absorption.`;
           }
         } else {
-          if (price <= camL4 * 1.002) {
-            setupCat = 'CAMARILLA_H4_BO';
-            setupTitle = 'Camarilla L4 Breakdown';
-            rationale = `Cracked Camarilla L4 support ₹${camL4} with institutional supply pressure.`;
+          if (distToDayLowPct <= 0.15) {
+            setupCat = 'ORB_BREAKOUT';
+            setupTitle = 'Day Low Breakdown';
+            rationale = `Closing on session low ₹${dayLow.toFixed(1)} with aggressive institutional supply.`;
+          } else if (volMultiplier >= 3.5) {
+            setupCat = 'VWAP_SURGE';
+            setupTitle = 'Institutional Volume Selloff';
+            rationale = `Heavy ${volMultiplier}x volume distribution breaking firmly below VWAP ₹${vwap.toFixed(1)}.`;
           } else if (isNarrowCpr && distToDayLowPct <= 0.5) {
             setupCat = 'NARROW_CPR_TREND';
             setupTitle = 'Narrow CPR Down-Trend';
             rationale = `Narrow CPR breakdown with falling bids across the ${item.sector} sector.`;
+          } else if (price <= camL4 * 1.002) {
+            setupCat = 'CAMARILLA_H4_BO';
+            setupTitle = 'Camarilla L4 Breakdown';
+            rationale = `Cracked Camarilla L4 support ₹${camL4} with institutional supply pressure.`;
           } else {
-            setupCat = 'ORB_BREAKOUT';
-            setupTitle = 'Day Low Breakdown';
-            rationale = `Broke session low ₹${dayLow.toFixed(1)} with supply overhang.`;
+            setupCat = 'SECTOR_ALPHA';
+            setupTitle = 'Sector Relative Weakness';
+            rationale = `Lagging ${item.sector} sector by ${sectorAlpha}% with clear short build-up.`;
           }
         }
 
-        // Realistic Continuous Conviction Scoring (Natural human distribution, no robotic 93 clone!)
-        // Factors: Alpha + Volume surge + Breakout proximity + Gate count
-        const alphaFactor = Math.min(10, Math.max(0, Math.abs(sectorAlpha) * 3.5));
-        const volFactor = Math.min(8, Math.max(0, (volMultiplier - 1.2) * 3.0));
-        const gateFactor = gatesPassedCount * 4.5;
-        const proximityFactor = Math.max(0, (1 - (isBull ? distToDayHighPct : distToDayLowPct)) * 5);
-        const cprBonus = isNarrowCpr ? 3 : 0;
+        // Realistic Continuous Conviction Scoring (Natural human distribution)
+        const alphaFactor = Math.min(10, Math.max(0, Math.abs(sectorAlpha) * 2.8));
+        const volFactor = Math.min(8, Math.max(0, (volMultiplier - 1.2) * 2.4));
+        const gateFactor = gatesPassedCount * 4.0;
+        const proximityFactor = Math.max(0, (1 - (isBull ? distToDayHighPct : distToDayLowPct)) * 4.0);
+        const changeMagnitude = Math.min(6, Math.max(0, Math.abs(change) * 1.4));
+        const cprBonus = isNarrowCpr ? 2 : 0;
         
-        const rawScore = 60 + alphaFactor + volFactor + gateFactor + proximityFactor + cprBonus;
+        const rawScore = 56 + alphaFactor + volFactor + gateFactor + proximityFactor + changeMagnitude + cprBonus;
         const technicalScore = Math.min(98, Math.max(74, Math.round(rawScore)));
 
         const isEliteSniper = gatesPassedCount >= 4 && technicalScore >= 87;
@@ -787,12 +807,21 @@ const IntradayPlayer: React.FC = () => {
         // Natural technical entry level
         let entryPrice = price;
         if (isBull) {
-          if (setupCat === 'CAMARILLA_H4_BO') entryPrice = Number(camH4.toFixed(2));
-          else if (setupCat === 'ORB_BREAKOUT') entryPrice = Number((openPrice * 1.008).toFixed(2));
-          else entryPrice = Number((price * 0.993).toFixed(2));
+          if (setupCat === 'ORB_BREAKOUT') {
+            entryPrice = Number((openPrice * 1.006).toFixed(2));
+          } else if (setupCat === 'CAMARILLA_H4_BO') {
+            entryPrice = Number(camH4.toFixed(2));
+          } else {
+            entryPrice = Number((price * 0.993).toFixed(2));
+          }
+          if (entryPrice > price * 1.004) entryPrice = Number((price * 0.995).toFixed(2));
         } else {
-          if (setupCat === 'CAMARILLA_H4_BO') entryPrice = Number(camL4.toFixed(2));
-          else entryPrice = Number((price * 1.007).toFixed(2));
+          if (setupCat === 'CAMARILLA_H4_BO') {
+            entryPrice = Number(camL4.toFixed(2));
+          } else {
+            entryPrice = Number((price * 1.007).toFixed(2));
+          }
+          if (entryPrice < price * 0.996) entryPrice = Number((price * 1.005).toFixed(2));
         }
 
         let stopLoss: number;
@@ -847,8 +876,7 @@ const IntradayPlayer: React.FC = () => {
           target2,
           riskReward,
           potentialGainPct: t2Pct,
-          scanTime: getRealisticTriggerTime(item.symbol, idx),
-          triggerTime: getRealisticTriggerTime(item.symbol, idx)
+          scanTime: scanTimeNow
         });
       }
 
@@ -858,11 +886,6 @@ const IntradayPlayer: React.FC = () => {
           return b.gatesPassedCount - a.gatesPassedCount;
         }
         return b.technicalScore - a.technicalScore;
-      });
-
-      // Assign natural staggered trigger times to the top ranked candidates
-      candidates.forEach((cand, rk) => {
-        cand.scanTime = getRealisticTriggerTime(cand.symbol, rk);
       });
 
       setMarketData(candidates);
@@ -1014,7 +1037,7 @@ const IntradayPlayer: React.FC = () => {
   return (
     <div className="space-y-4 max-w-7xl mx-auto pb-16 font-sans text-slate-100">
       
-      {/* ── 1. Clean Institutional Header & Status Bar ─────────────────────── */}
+      {/* ── 1. Clean Institutional Header & Status Bar with Live Clock ───── */}
       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-[#090d16] border border-slate-800/80 rounded-2xl p-4 md:p-5 shadow-xl">
         <div className="flex items-center gap-3.5">
           <div className="w-10 h-10 rounded-xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-center text-amber-400 shrink-0">
@@ -1038,13 +1061,15 @@ const IntradayPlayer: React.FC = () => {
               </span>
             </div>
             
-            {/* Market Phase & Session Notice */}
-            <div className="flex items-center gap-2 mt-1 text-xs text-slate-400 font-mono">
-              <span className="flex items-center gap-1 text-slate-300">
-                <Clock className="w-3 h-3 text-slate-500" />
-                {marketPhase.label}
+            {/* Live Clock & Market Timing Info */}
+            <div className="flex items-center gap-2 mt-1 text-xs text-slate-400 font-mono flex-wrap">
+              <span className="flex items-center gap-1 text-amber-300 font-semibold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                <Clock className="w-3 h-3 text-amber-400" />
+                <span>Live Time: {liveClock}</span>
               </span>
               <span className="text-slate-600">·</span>
+              <span className="text-slate-300">{marketPhase.label}</span>
+              <span className="text-slate-600 hidden sm:inline">·</span>
               <span className="text-slate-400 hidden sm:inline">
                 {marketPhase.timingAdvice}
               </span>
@@ -1082,7 +1107,7 @@ const IntradayPlayer: React.FC = () => {
             onClick={() => loadData(true)}
             disabled={isRefreshing || loading}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 text-xs font-medium transition border border-slate-700/80 select-none disabled:opacity-50 ml-auto lg:ml-0 cursor-pointer"
-            title="Refresh Scan"
+            title="Scan Again Now"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span>Rescan</span>
@@ -1339,7 +1364,7 @@ const IntradayPlayer: React.FC = () => {
            ═════════════════════════════════════════════════════════════════════ */
         <div className="bg-[#090d16] border border-slate-800/80 rounded-2xl overflow-hidden shadow-2xl">
           
-          {/* Subtle Table Header Bar */}
+          {/* Subtle Table Header Bar with Live Scan Notice */}
           <div className="p-3 px-4 bg-[#0d121e] border-b border-slate-800/80 flex items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-slate-200 tracking-tight flex items-center gap-1.5">
@@ -1355,8 +1380,9 @@ const IntradayPlayer: React.FC = () => {
                 </span>
               )}
             </div>
-            <div className="text-[11px] text-slate-400 font-mono hidden md:block">
-              Click any row to open Setup Slip
+            <div className="text-[11px] text-slate-400 font-mono hidden md:flex items-center gap-1">
+              <span>Scan Sync:</span>
+              <span className="text-slate-200 font-semibold">{lastScanTimestamp}</span>
             </div>
           </div>
 
@@ -1606,7 +1632,7 @@ const IntradayPlayer: React.FC = () => {
                         </div>
                       </td>
 
-                      {/* Listed Time: Realistic Intraday Session Timestamp */}
+                      {/* Listed Time: Exact Scan Timestamp Matching Real Local Clock */}
                       <td className="py-3 px-3 text-center">
                         <div className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-md bg-[#0f1422] border border-slate-800 text-slate-300 text-[11px] font-mono">
                           <Clock className="w-3 h-3 text-slate-500" />
@@ -1826,7 +1852,7 @@ const IntradayPlayer: React.FC = () => {
                       <span>·</span>
                       <span className="text-slate-400 flex items-center gap-1">
                         <Clock className="w-3 h-3 text-slate-500" />
-                        Triggered: {selectedStock.scanTime}
+                        Scanned at: {selectedStock.scanTime}
                       </span>
                       <span>·</span>
                       <span>Sector: {selectedStock.sector} ({selectedStock.sectorChange >= 0 ? '+' : ''}{selectedStock.sectorChange}%)</span>
