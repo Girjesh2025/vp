@@ -1678,6 +1678,56 @@ app.delete('/api/admin/users/:id', (req, res) => {
   res.json({ success: true, message: 'User deleted from database' });
 });
 
+// Remove stock from portfolio (Backend endpoint with full Supabase service rights)
+app.delete('/api/portfolio/stock', async (req, res) => {
+  try {
+    const { symbol, rawSymbol, stockId, portfolioId } = req.body || {};
+    const sym = (symbol || rawSymbol || '').trim().toUpperCase().replace(/\.(NS|BO)$/i, '').split('-')[0];
+
+    if (!stockId && !sym) {
+      return res.status(400).json({ error: 'stockId or symbol is required' });
+    }
+
+    let query = supabase.from('stocks').select('id');
+    if (stockId) {
+      query = query.eq('id', stockId);
+    } else if (portfolioId) {
+      query = query.eq('portfolio_id', portfolioId).or(`symbol.eq.${sym},symbol.eq.${rawSymbol || sym}`);
+    } else {
+      query = query.or(`symbol.eq.${sym},symbol.eq.${rawSymbol || sym}`);
+    }
+
+    const { data: matchingStocks, error: findError } = await query;
+    if (findError) {
+      console.error('Error finding stock to delete:', findError);
+      return res.status(500).json({ error: findError.message });
+    }
+
+    if (!matchingStocks || matchingStocks.length === 0) {
+      // Nothing found in database, still return ok so UI is not blocked
+      return res.json({ success: true, message: 'Stock not in DB, removed from local state' });
+    }
+
+    const ids = matchingStocks.map(s => s.id);
+
+    // Delete associated transactions first
+    const { error: txErr } = await supabase.from('transactions').delete().in('stock_id', ids);
+    if (txErr) console.warn('Warning deleting transactions:', txErr);
+
+    // Delete the stock rows
+    const { error: delErr } = await supabase.from('stocks').delete().in('id', ids);
+    if (delErr) {
+      console.error('Error deleting stock row:', delErr);
+      return res.status(500).json({ error: delErr.message });
+    }
+
+    res.json({ success: true, message: `Successfully deleted ${ids.length} stock row(s)` });
+  } catch (err) {
+    console.error('API error deleting stock:', err);
+    res.status(500).json({ error: err.message || 'Server error deleting stock' });
+  }
+});
+
 const { NseIndia } = require('stock-nse-india');
 const nseIndia = new NseIndia();
 

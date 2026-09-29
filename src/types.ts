@@ -1,6 +1,7 @@
 export type TransactionType = 'buy' | 'sell';
 
 export interface Stock {
+  id?: string;
   symbol: string;
   name: string;
   displaySymbol: string;

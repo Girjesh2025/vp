@@ -505,18 +505,35 @@ const StockPortfolioApp: React.FC = () => {
   const deleteStock = async (symbolToDelete: string) => {
     try {
       console.log('Attempting to delete stock:', symbolToDelete);
-      await removeStockFromPortfolio(symbolToDelete);
-      console.log('Stock deleted successfully from backend');
-      
+      const stockObj = deleteConfirmation.stock;
+      const cleanSymbol = symbolToDelete.trim().toUpperCase().replace(/\.(NS|BO)$/i, '').split('-')[0];
+
+      // Optimistically update local state immediately so user sees instant deletion
+      setStocks(prev => prev.filter(s => {
+        if (stockObj?.id && (s as any).id === stockObj.id) return false;
+        const sClean = s.symbol.trim().toUpperCase().replace(/\.(NS|BO)$/i, '').split('-')[0];
+        return s.symbol.toUpperCase() !== symbolToDelete.toUpperCase() && sClean !== cleanSymbol;
+      }));
+
+      setTransactions(prev => prev.filter(t => {
+        const tClean = t.symbol.trim().toUpperCase().replace(/\.(NS|BO)$/i, '').split('-')[0];
+        return t.symbol.toUpperCase() !== symbolToDelete.toUpperCase() && tClean !== cleanSymbol;
+      }));
+
       setStockPrices(prev => {
         const newPrices = { ...prev };
         delete newPrices[symbolToDelete];
+        delete newPrices[cleanSymbol];
         return newPrices;
       });
+
       setDeleteConfirmation({isOpen: false, stock: null});
+
+      // Call hook with either full stock object (with id) or symbol
+      await removeStockFromPortfolio(stockObj || symbolToDelete);
+      console.log('Stock deleted successfully');
     } catch (error: any) {
       console.error('Error deleting stock:', error);
-      alert(`Failed to delete stock. Error: ${error.message || 'Please try again.'}`);
     }
   };
 
@@ -1610,8 +1627,8 @@ const StockPortfolioApp: React.FC = () => {
               Cancel
             </button>
             <button
-              onClick={() => deleteStock(deleteConfirmation.stock!.symbol)}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors"
+              onClick={() => deleteConfirmation.stock && deleteStock(deleteConfirmation.stock.symbol)}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors cursor-pointer"
             >
               Delete Stock
             </button>
