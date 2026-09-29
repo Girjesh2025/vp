@@ -102,21 +102,35 @@ body {
   border-color: #1e293b !important;
 }
 
-.dark .bg-slate-50 {
+.dark .bg-slate-50,
+.dark [class*="bg-slate-50"] {
   background-color: #131c2e !important;
   border-color: #1e293b !important;
 }
 
-.dark .bg-slate-100 {
+.dark .bg-slate-100,
+.dark [class*="bg-slate-100"] {
   background-color: #1a273e !important;
   border-color: #27354f !important;
 }
 
-.dark .hover\:bg-slate-50:hover {
+.dark thead,
+.dark thead tr,
+.dark thead th,
+.dark thead [class*="bg-slate-50"],
+.dark thead [class*="bg-slate-100"] {
+  background-color: #0b1320 !important;
+  border-color: #1e293b !important;
+  color: #94a3b8 !important;
+}
+
+.dark .hover\:bg-slate-50:hover,
+.dark [class*="hover:bg-slate-50"]:hover {
   background-color: #172237 !important;
 }
 
-.dark .hover\:bg-slate-100:hover {
+.dark .hover\:bg-slate-100:hover,
+.dark [class*="hover:bg-slate-100"]:hover {
   background-color: #1e2c45 !important;
 }
 
@@ -171,4 +185,5 @@ body {
 .dark tr:hover {
   background-color: rgba(30, 41, 59, 0.45) !important;
 }
+
 

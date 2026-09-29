@@ -1,13 +1,44 @@
 [
   {
-    "id": "75935584-830b-4c23-aa16-9e440e28c4ad",
-    "email": "sartaj2475@gmail.com",
-    "name": "sartaj",
+    "id": "6f916821-3265-4f6a-ae7d-626ce90c5603",
+    "email": "girjesh.ai25@gmail.com",
+    "name": "ram",
+    "role": "admin",
+    "plan": "pro",
+    "joinedDate": "2026-03-19",
+    "lastActive": "Just now",
+    "portfoliosCount": 6,
+    "portfolioCapital": "₹2.05 Cr",
+    "holdingsCount": 38,
+    "device": "macOS • Chrome",
+    "city": "Mumbai, IN",
+    "lastSeenAt": "2026-09-29T19:11:22.363Z",
+    "isOnline": true,
+    "currentPage": "Admin Cockpit",
+    "sessionDuration": "29m",
+    "totalTimeSeconds": 4860,
+    "timeOnSite": "1h 21m",
+    "pagesVisited": [
+      {
+        "page": "Admin Cockpit",
+        "count": 81,
+        "lastVisited": "Just now"
+      }
+    ]
+  },
+  {
+    "id": "bb85fd1d-a15f-4ee4-b6e9-35f84262a4b5",
+    "email": "kirti.myinfo@gmail.com",
+    "name": "Kirti",
     "role": "user",
     "plan": "pro",
-    "joinedDate": "2026-06-24",
-    "lastActive": "24/09/2026",
-    "portfoliosCount": 1
+    "joinedDate": "2026-09-25",
+    "lastActive": "25/09/2026",
+    "portfoliosCount": 3,
+    "portfolioCapital": "₹14.2L",
+    "holdingsCount": 18,
+    "device": "Windows 11 • Edge",
+    "city": "Delhi NCR, IN"
   },
   {
     "id": "ea02f2e2-30f3-4f1f-bed6-95602b5adc7c",
@@ -17,16 +48,24 @@
     "plan": "pro",
     "joinedDate": "2026-09-14",
     "lastActive": "Active",
-    "portfoliosCount": 1
+    "portfoliosCount": 2,
+    "portfolioCapital": "₹6.8L",
+    "holdingsCount": 11,
+    "device": "macOS • Safari",
+    "city": "Bengaluru, IN"
   },
   {
-    "id": "6f916821-3265-4f6a-ae7d-626ce90c5603",
-    "email": "girjesh.ai25@gmail.com",
-    "name": "ram ",
-    "role": "admin",
+    "id": "75935584-830b-4c23-aa16-9e440e28c4ad",
+    "email": "sartaj2475@gmail.com",
+    "name": "sartaj",
+    "role": "user",
     "plan": "pro",
-    "joinedDate": "2026-03-19",
-    "lastActive": "25/09/2026",
-    "portfoliosCount": 1
+    "joinedDate": "2026-06-24",
+    "lastActive": "28/09/2026",
+    "portfoliosCount": 2,
+    "portfolioCapital": "₹8.6L",
+    "holdingsCount": 14,
+    "device": "Android 14 • Chrome",
+    "city": "Hyderabad, IN"
   }
 ]

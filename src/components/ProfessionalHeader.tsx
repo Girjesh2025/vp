@@ -3,6 +3,7 @@ import { Bell, Search, Settings, User, Globe, Plus, LogOut } from 'lucide-react'
 import { searchStocksOptimized } from '../stockDatabase';
 import { isMarketOpen } from '../utils/priceApi';
 import { useAuth } from '../contexts/AuthContext';
+import { trackStockSearch } from '../utils/activityTracker';
 import type { Stock } from '../types';
 
 
@@ -62,6 +63,12 @@ const ProfessionalHeader: React.FC<ProfessionalHeaderProps> = ({
 
   // Handle stock selection
   const handleStockSelect = (stock: any) => {
+    if (stock && stock.symbol) {
+      trackStockSearch(
+        stock.symbol, 
+        user ? { id: user.id, email: user.email || '', name: user.user_metadata?.full_name } : undefined
+      );
+    }
     setSearchQuery('');
     setSearchResults([]);
     setShowResults(false);

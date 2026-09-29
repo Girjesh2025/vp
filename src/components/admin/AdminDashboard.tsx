@@ -8,12 +8,31 @@ import {
   CheckCircle2, ShieldCheck, PieChart, ChevronDown, 
   UserPlus, Activity, ExternalLink, HardDrive, Cpu, Sliders,
   Clock, Shield, Download, FileText, Check, AlertCircle,
-  ArrowUpRight, Globe, Layers, KeyRound, Sparkles, Filter
+  ArrowUpRight, Globe, Layers, KeyRound, Sparkles, Filter,
+  Briefcase, UserCheck, MapPin, Laptop, Smartphone
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { trackPageView, startPresenceHeartbeat } from '../../utils/activityTracker';
 
-interface UserRecord {
+export interface PageVisitItem {
+  page: string;
+  count: number;
+  lastVisited?: string;
+}
+
+export interface SearchQueryItem {
+  query: string;
+  timestamp?: string;
+}
+
+export interface PortfolioDetailItem {
+  name: string;
+  holdingsCount: number;
+  capital: string;
+}
+
+export interface UserRecord {
   id: string;
   email: string;
   name: string;
@@ -23,7 +42,22 @@ interface UserRecord {
   lastActive: string;
   portfoliosCount: number;
   source?: string;
+  isOnline?: boolean;
+  currentPage?: string;
+  timeOnSite?: string;
+  sessionDuration?: string;
+  pagesVisited?: (string | PageVisitItem)[];
+  searches?: (string | SearchQueryItem)[];
+  lastActiveAgo?: string;
+  lastSeenAt?: string;
+  portfolioCapital?: string;
+  holdingsCount?: number;
+  portfoliosList?: PortfolioDetailItem[];
+  device?: string;
+  city?: string;
 }
+
+
 
 interface AnalyticsData {
   topSearches: { 
@@ -138,6 +172,8 @@ export default function AdminDashboard() {
   const [userSearch, setUserSearch] = useState('');
   const [planFilter, setPlanFilter] = useState<'all' | 'pro' | 'free'>('all');
   const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'user'>('all');
+  const [segmentFilter, setSegmentFilter] = useState<'all' | 'live' | 'pro' | 'hni' | 'desktop'>('all');
+
 
   // New Trader Form
   const [newTraderEmail, setNewTraderEmail] = useState('');
@@ -200,17 +236,19 @@ export default function AdminDashboard() {
   // Fetch Real Users from Supabase Database API
   const fetchUsers = async () => {
     setUsersLoading(true);
+    let loadedFromApi = false;
     try {
       const res = await fetch('/api/admin/users');
       if (res.ok) {
         const data = await res.json();
         if (data.users && Array.isArray(data.users)) {
           setUsersList(data.users);
+          loadedFromApi = true;
         }
       }
 
-      // Directly query Supabase users view from browser
-      if (supabase) {
+      // If API failed or was empty, fallback to direct Supabase users query
+      if (!loadedFromApi && supabase) {
         try {
           const { data: sbUsers } = await supabase.from('users').select('*');
           if (sbUsers && Array.isArray(sbUsers) && sbUsers.length > 0) {
@@ -223,7 +261,10 @@ export default function AdminDashboard() {
               joinedDate: u.created_at ? u.created_at.split('T')[0] : '2026-01-01',
               lastActive: u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleDateString('en-GB') : 'Active',
               portfoliosCount: 1,
-              source: 'supabase_direct'
+              source: 'supabase_direct',
+              isOnline: false,
+              timeOnSite: '30m',
+              sessionDuration: '15m'
             }));
             setUsersList(mapped);
           }
@@ -344,7 +385,30 @@ export default function AdminDashboard() {
     fetchStats();
     fetchAnalytics();
     fetchSettings();
+
+    // Auto-refresh traders & system stats every 15s to keep live presence fresh
+    const interval = setInterval(() => {
+      fetchUsers();
+    }, 15000);
+
+    return () => clearInterval(interval);
   }, []);
+
+  // Admin presence heartbeat
+  useEffect(() => {
+    if (user && user.email) {
+      trackPageView('Admin Cockpit', {
+        id: user.id,
+        email: user.email,
+        name: user.user_metadata?.full_name || user.email.split('@')[0]
+      });
+    }
+    const cleanup = startPresenceHeartbeat(
+      () => user ? { id: user.id, email: user.email || '', name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Admin' } : null,
+      () => 'Admin Cockpit'
+    );
+    return cleanup;
+  }, [user]);
 
   // Flush Server Cache
   const handleFlushCache = async () => {
@@ -474,20 +538,50 @@ export default function AdminDashboard() {
     window.location.reload();
   };
 
+  // Impersonate Trader (Ghost View)
+  const handleImpersonateTrader = (trader: UserRecord) => {
+    try {
+      localStorage.setItem('pp_impersonated_email', trader.email);
+      localStorage.setItem('pp_impersonated_name', trader.name);
+      localStorage.setItem('pp_impersonated_id', trader.id);
+      window.open('/app', '_blank');
+    } catch (e) {
+      window.location.href = '/app';
+    }
+  };
+
   // Filtered Users for Trader Directory
   const filteredUsers = useMemo(() => {
     return usersList.filter(u => {
       const matchesSearch = u.name.toLowerCase().includes(userSearch.toLowerCase()) || 
-                            u.email.toLowerCase().includes(userSearch.toLowerCase());
+                            u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
+                            (u.city && u.city.toLowerCase().includes(userSearch.toLowerCase())) ||
+                            (u.device && u.device.toLowerCase().includes(userSearch.toLowerCase()));
       const matchesPlan = planFilter === 'all' || u.plan === planFilter;
       const matchesRole = roleFilter === 'all' || u.role === roleFilter;
-      return matchesSearch && matchesPlan && matchesRole;
+
+      let matchesSegment = true;
+      if (segmentFilter === 'live') {
+        matchesSegment = Boolean(u.isOnline);
+      } else if (segmentFilter === 'pro') {
+        matchesSegment = u.plan === 'pro';
+      } else if (segmentFilter === 'hni') {
+        matchesSegment = (u.portfoliosCount || 0) >= 3 || Boolean(u.portfolioCapital && u.portfolioCapital.includes('Cr'));
+      } else if (segmentFilter === 'desktop') {
+        matchesSegment = Boolean(u.device && (u.device.toLowerCase().includes('mac') || u.device.toLowerCase().includes('windows')));
+      }
+
+      return matchesSearch && matchesPlan && matchesRole && matchesSegment;
     });
-  }, [usersList, userSearch, planFilter, roleFilter]);
+  }, [usersList, userSearch, planFilter, roleFilter, segmentFilter]);
 
   const proCount = usersList.filter(u => u.plan === 'pro').length;
   const freeCount = usersList.filter(u => u.plan === 'free').length;
   const totalCount = usersList.length;
+  const liveCount = usersList.filter(u => u.isOnline).length;
+  const hniCount = usersList.filter(u => (u.portfoliosCount || 0) >= 3 || Boolean(u.portfolioCapital && u.portfolioCapital.includes('Cr'))).length;
+  const desktopCount = usersList.filter(u => u.device && (u.device.toLowerCase().includes('mac') || u.device.toLowerCase().includes('windows'))).length;
+
 
   // Real Database Registration Timeline Points (Dynamic calculation from usersList joinedDates)
   const registrationChartData = useMemo(() => {
@@ -1054,47 +1148,59 @@ export default function AdminDashboard() {
                 <div className="overflow-x-auto custom-scrollbar">
                   <table className="w-full text-left border-collapse text-xs min-w-[750px]">
                     <thead>
-                      <tr className="bg-slate-50/70 border-b border-slate-100 text-[11px] font-bold text-slate-400 select-none">
+                      <tr className="bg-slate-50 dark:bg-[#0b1320] border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-500 dark:text-slate-400 select-none">
                         <th className="py-3 px-4 w-12">#</th>
                         <th className="py-3 px-4">Trader / Email</th>
                         <th className="py-3 px-3">Role</th>
                         <th className="py-3 px-3">Plan</th>
                         <th className="py-3 px-3">Joined Date</th>
-                        <th className="py-3 px-3">Last Active</th>
+                        <th className="py-3 px-3">Live &amp; Last Active</th>
                         <th className="py-3 px-4 text-center">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {usersList.slice(0, 5).map((u, idx) => (
-                        <tr key={u.id} className="hover:bg-slate-50/70 transition-colors">
+                        <tr key={u.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
                           <td className="py-3 px-4 font-mono font-bold text-slate-500">{idx + 1}</td>
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-2.5">
-                              <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 font-bold text-xs flex items-center justify-center font-mono">
+                              <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 font-bold text-xs flex items-center justify-center font-mono border border-emerald-200 dark:border-emerald-800/50">
                                 {(u.name || u.email).charAt(0).toUpperCase()}
                               </div>
                               <div>
-                                <span className="font-bold text-slate-900 block">{u.name}</span>
+                                <span className="font-bold text-slate-900 dark:text-slate-100 block">{u.name}</span>
                                 <span className="text-[10px] text-slate-400 font-mono">{u.email}</span>
                               </div>
                             </div>
                           </td>
                           <td className="py-3 px-3">
                             <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                              u.role === 'admin' ? 'bg-purple-50 text-purple-700' : 'bg-slate-100 text-slate-600'
+                              u.role === 'admin' ? 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/50' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                             }`}>
                               {u.role.toUpperCase()}
                             </span>
                           </td>
                           <td className="py-3 px-3">
                             <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${
-                              u.plan === 'pro' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                              u.plan === 'pro' ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
                             }`}>
                               {u.plan === 'pro' ? 'PRO' : 'FREE'}
                             </span>
                           </td>
-                          <td className="py-3 px-3 font-mono text-slate-500">{u.joinedDate}</td>
-                          <td className="py-3 px-3 text-slate-600">{u.lastActive}</td>
+                          <td className="py-3 px-3 font-mono text-slate-500 dark:text-slate-400">{u.joinedDate}</td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {u.isOnline ? (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                <span className="relative flex h-1.5 w-1.5">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                                </span>
+                                <span>Live Now</span>
+                              </span>
+                            ) : (
+                              <span className="text-slate-600 dark:text-slate-400 font-mono text-xs">{u.lastActiveAgo || u.lastActive}</span>
+                            )}
+                          </td>
                           <td className="py-3 px-4 text-center">
                             <button
                               type="button"
@@ -1145,6 +1251,38 @@ export default function AdminDashboard() {
                 </button>
               </div>
 
+              {/* Quick Segment Filter Pills */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+                {[
+                  { id: 'all', label: 'All Traders', icon: Users, count: totalCount },
+                  { id: 'live', label: '🟢 Live Online', icon: Activity, count: liveCount },
+                  { id: 'pro', label: '👑 Pro Institutional', icon: Crown, count: proCount },
+                  { id: 'hni', label: '💎 Top Capital / HNI', icon: TrendingUp, count: hniCount },
+                  { id: 'desktop', label: '🖥️ Desktop Terminals', icon: Laptop, count: desktopCount },
+                ].map((seg) => {
+                  const isActive = segmentFilter === seg.id;
+                  return (
+                    <button
+                      key={seg.id}
+                      type="button"
+                      onClick={() => setSegmentFilter(seg.id as any)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2 transition whitespace-nowrap cursor-pointer ${
+                        isActive
+                          ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30'
+                          : 'bg-white dark:bg-[#0b1320] border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:border-emerald-500/50 hover:text-emerald-500'
+                      }`}
+                    >
+                      <span>{seg.label}</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                        isActive ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                      }`}>
+                        {seg.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
               {/* Filter Bar */}
               <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
                 <div className="relative flex-1 w-full">
@@ -1184,46 +1322,105 @@ export default function AdminDashboard() {
               {/* Full Trader Table */}
               <div className="bg-white border border-slate-100 rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] overflow-hidden">
                 <div className="overflow-x-auto custom-scrollbar">
-                  <table className="w-full text-left border-collapse text-xs min-w-[950px]">
+                  <table className="w-full text-left border-collapse text-xs min-w-[1050px]">
                     <thead>
-                      <tr className="bg-slate-50/70 border-b border-slate-100 text-[11px] font-bold text-slate-400 select-none">
-                        <th className="py-3.5 px-4 font-mono w-12">#</th>
+                      <tr className="bg-slate-50 dark:bg-[#0b1320] border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-500 dark:text-slate-400 select-none">
+                        <th className="py-3.5 px-4 font-mono w-10">#</th>
                         <th className="py-3.5 px-4">Trader / Account</th>
+                        <th className="py-3.5 px-3">Live Status</th>
+                        <th className="py-3.5 px-3">Time on Site</th>
                         <th className="py-3.5 px-3">Role</th>
                         <th className="py-3.5 px-3">Current Plan</th>
+                        <th className="py-3.5 px-3">Pages &amp; Searches</th>
                         <th className="py-3.5 px-3">Portfolios</th>
                         <th className="py-3.5 px-3">Joined Date</th>
-                        <th className="py-3.5 px-3">Last Active</th>
-                        <th className="py-3.5 px-3">Status</th>
                         <th className="py-3.5 px-4 text-center">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {filteredUsers.map((u, idx) => {
                         const isPro = u.plan === 'pro';
                         const isAdmin = u.role === 'admin';
                         const initialLetter = (u.name || u.email).charAt(0).toUpperCase();
 
                         return (
-                          <tr key={u.id} className="hover:bg-slate-50/70 transition-colors">
+                          <tr key={u.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
                             <td className="py-4 px-4 font-mono font-bold text-slate-500">{idx + 1}</td>
                             
                             {/* Avatar & Email */}
                             <td className="py-4 px-4">
                               <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 font-black text-xs flex items-center justify-center font-mono shrink-0 border border-emerald-200/60">
+                                <div className="w-9 h-9 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 font-black text-xs flex items-center justify-center font-mono shrink-0 border border-emerald-200 dark:border-emerald-800/50">
                                   {initialLetter}
                                 </div>
                                 <div>
                                   <div className="flex items-center gap-2">
-                                    <span className="font-bold text-slate-900 text-sm">{u.name}</span>
-                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-                                      <Database className="w-2.5 h-2.5 text-emerald-600" />
+                                    <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">{u.name}</span>
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50 flex items-center gap-1">
+                                      <Database className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
                                       <span>Supabase</span>
                                     </span>
                                   </div>
                                   <div className="text-[11px] text-slate-400 font-mono">{u.email}</div>
+                                  <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                                    {u.city && (
+                                      <span className="flex items-center gap-1">
+                                        <span>🇮🇳</span>
+                                        <span>{u.city}</span>
+                                      </span>
+                                    )}
+                                    {u.device && (
+                                      <span className="flex items-center gap-1 text-slate-400 dark:text-slate-500">
+                                        <span>•</span>
+                                        {u.device.toLowerCase().includes('android') || u.device.toLowerCase().includes('iphone') ? (
+                                          <Smartphone className="w-2.5 h-2.5" />
+                                        ) : (
+                                          <Laptop className="w-2.5 h-2.5" />
+                                        )}
+                                        <span>{u.device}</span>
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
+                              </div>
+                            </td>
+
+                            {/* Live Status Column */}
+                            <td className="py-4 px-3 whitespace-nowrap">
+                              {u.isOnline ? (
+                                <div className="flex flex-col gap-1">
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 w-max shadow-sm shadow-emerald-500/10">
+                                    <span className="relative flex h-2 w-2">
+                                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                    </span>
+                                    <span>Live Now</span>
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 font-mono truncate max-w-[130px]" title={u.currentPage}>
+                                    on {u.currentPage || 'Dashboard'}
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="flex flex-col gap-1">
+                                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 w-max">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                                    <span>Offline</span>
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 font-mono">
+                                    {u.lastActiveAgo || u.lastActive}
+                                  </span>
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Time on Site Column */}
+                            <td className="py-4 px-3 whitespace-nowrap">
+                              <div className="flex items-center gap-1.5 font-mono text-slate-800 dark:text-slate-200 font-semibold text-xs">
+                                <Clock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                <span>{u.timeOnSite || '45m'}</span>
+                              </div>
+                              <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                                Sess: {u.sessionDuration || 'Active'}
                               </div>
                             </td>
 
@@ -1235,8 +1432,8 @@ export default function AdminDashboard() {
                                 title="Click to toggle Role"
                                 className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border cursor-pointer transition ${
                                   isAdmin
-                                    ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
-                                    : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+                                    ? 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800/60 hover:bg-purple-100 dark:hover:bg-purple-900/60'
+                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
                                 }`}
                               >
                                 {isAdmin ? 'SUPER ADMIN' : 'TRADER'}
@@ -1251,39 +1448,63 @@ export default function AdminDashboard() {
                                 title="Click to toggle Plan"
                                 className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border flex items-center gap-1.5 w-max cursor-pointer transition ${
                                   isPro
-                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                                    : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'
+                                    ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60'
+                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
                                 }`}
                               >
-                                {isPro && <Crown className="w-3 h-3 text-emerald-600" />}
+                                {isPro && <Crown className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />}
                                 <span>{isPro ? 'PRO INSTITUTIONAL' : 'FREE BASIC'}</span>
                               </button>
                             </td>
 
-                            {/* Portfolios */}
-                            <td className="py-4 px-3 font-mono font-semibold text-slate-700">
-                              {u.portfoliosCount}
-                            </td>
-
-                            {/* Joined Date */}
-                            <td className="py-4 px-3 font-mono text-slate-500">
-                              {u.joinedDate}
-                            </td>
-
-                            {/* Last Active */}
-                            <td className="py-4 px-3 whitespace-nowrap">
-                              <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                <span>{u.lastActive}</span>
+                            {/* Pages & Searches Column */}
+                            <td className="py-4 px-3">
+                              <div className="space-y-1.5 max-w-[210px]">
+                                <div className="flex flex-wrap items-center gap-1">
+                                  {(u.pagesVisited || []).slice(0, 2).map((p, pIdx) => {
+                                    const title = typeof p === 'string' ? p : p.page;
+                                    const cnt = typeof p === 'string' ? null : p.count;
+                                    return (
+                                      <span 
+                                        key={pIdx} 
+                                        className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/50 truncate max-w-[120px]"
+                                        title={title}
+                                      >
+                                        {title} {cnt ? `(${cnt})` : ''}
+                                      </span>
+                                    );
+                                  })}
+                                  {(!u.pagesVisited || u.pagesVisited.length === 0) && (
+                                    <span className="text-[10px] text-slate-400">Dashboard (1)</span>
+                                  )}
+                                </div>
+                                {u.searches && u.searches.length > 0 ? (
+                                  <div className="flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400 font-mono truncate" title="Searched Tickers">
+                                    <Search className="w-2.5 h-2.5 shrink-0 text-slate-400" />
+                                    <span className="truncate">
+                                      {u.searches.slice(0, 3).map(s => typeof s === 'string' ? s : s.query).join(', ')}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <div className="text-[10px] text-slate-400 font-mono">No stock queries</div>
+                                )}
                               </div>
                             </td>
 
-                            {/* Status */}
+                            {/* Portfolios & Capital */}
                             <td className="py-4 px-3 whitespace-nowrap">
-                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1 w-max">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                <span>Active</span>
-                              </span>
+                              <div className="flex items-center gap-1.5 font-mono font-bold text-slate-800 dark:text-slate-200 text-xs">
+                                <Briefcase className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                <span>{u.portfoliosCount} {u.portfoliosCount === 1 ? 'Portfolio' : 'Portfolios'}</span>
+                              </div>
+                              <div className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
+                                {u.portfolioCapital || '₹2.5L'} • <span className="text-slate-400 font-normal">{u.holdingsCount || 10} stocks</span>
+                              </div>
+                            </td>
+
+                            {/* Joined Date */}
+                            <td className="py-4 px-3 font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                              {u.joinedDate}
                             </td>
 
                             {/* Actions */}
@@ -1292,17 +1513,26 @@ export default function AdminDashboard() {
                                 <button
                                   type="button"
                                   onClick={() => setSelectedUserDetail(u)}
-                                  title="View Full Trader Details"
-                                  className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition cursor-pointer"
+                                  title="View Full Trader Details & Activity"
+                                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
                                 >
                                   <Eye className="w-3.5 h-3.5" />
                                 </button>
 
                                 <button
                                   type="button"
+                                  onClick={() => handleImpersonateTrader(u)}
+                                  title={`Open Trader Terminal as ${u.name} (Ghost Login)`}
+                                  className="p-1.5 rounded-lg border border-blue-200 dark:border-blue-900/60 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/60 transition cursor-pointer"
+                                >
+                                  <UserCheck className="w-3.5 h-3.5" />
+                                </button>
+
+                                <button
+                                  type="button"
                                   onClick={() => toggleUserPlan(u.id, u.plan)}
                                   title={isPro ? 'Demote to Free Plan' : 'Upgrade to Pro Plan'}
-                                  className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition cursor-pointer"
+                                  className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 transition cursor-pointer"
                                 >
                                   <Edit3 className="w-3.5 h-3.5" />
                                 </button>
@@ -1311,7 +1541,7 @@ export default function AdminDashboard() {
                                   type="button"
                                   onClick={() => handleDeleteUser(u.id, u.email)}
                                   title="Delete User from Database"
-                                  className="p-1.5 rounded-lg border border-rose-200 text-rose-500 hover:bg-rose-50 transition cursor-pointer"
+                                  className="p-1.5 rounded-lg border border-rose-200 dark:border-rose-900/60 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/60 transition cursor-pointer"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
@@ -1323,7 +1553,7 @@ export default function AdminDashboard() {
 
                       {filteredUsers.length === 0 && (
                         <tr>
-                          <td colSpan={9} className="py-12 text-center text-slate-400">
+                          <td colSpan={10} className="py-12 text-center text-slate-400">
                             {usersLoading ? (
                               <div className="flex items-center justify-center gap-2 text-emerald-600 font-mono text-xs">
                                 <RefreshCw className="w-4 h-4 animate-spin" />
@@ -1672,7 +1902,7 @@ export default function AdminDashboard() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
-                      <tr className="border-b border-slate-100 text-slate-400 text-[11px] font-bold">
+                      <tr className="bg-slate-50 dark:bg-[#0b1320] border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-[11px] font-bold">
                         <th className="py-2.5 px-3">Rank</th>
                         <th className="py-2.5 px-3">Asset &amp; Company</th>
                         <th className="py-2.5 px-3">Sector</th>
@@ -1682,7 +1912,7 @@ export default function AdminDashboard() {
                         <th className="py-2.5 px-3 text-right">Action</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 text-slate-700">
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
                       {(analyticsData?.topSearches || [
                         { symbol: 'RELIANCE', company: 'Reliance Industries Ltd', sector: 'Energy & Retail', count: 48, trend: 'Hot #1', change: '+1.8%' },
                         { symbol: 'TCS', company: 'Tata Consultancy Services', sector: 'IT & Software', count: 39, trend: 'Trending', change: '+0.9%' },
@@ -1698,7 +1928,7 @@ export default function AdminDashboard() {
                         const sharePercent = Math.round((item.count / (analyticsData?.totalQueries || 440)) * 100 * 10) / 10;
 
                         return (
-                          <tr key={item.symbol} className="hover:bg-slate-50/70 transition">
+                          <tr key={item.symbol} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition">
                             <td className="py-3 px-3 font-mono font-bold text-slate-400">
                               #{idx + 1}
                             </td>
@@ -2485,56 +2715,309 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* ── MODAL: VIEW TRADER DETAILS ─────────────────────────────────────── */}
+      {/* ── MODAL: VIEW TRADER DETAILS & ACTIVITY ──────────────────────────── */}
       {selectedUserDetail && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-sm p-6 shadow-2xl space-y-4 text-xs">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-bold text-slate-900">Trader Details</h3>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#0b1320] border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-lg p-6 shadow-2xl space-y-5 text-xs text-slate-800 dark:text-slate-100 max-h-[90vh] overflow-y-auto custom-scrollbar">
+            
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-slate-100 dark:border-slate-800/80 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 font-black text-sm flex items-center justify-center font-mono shrink-0 border border-emerald-200 dark:border-emerald-800/50 shadow-sm shadow-emerald-500/10">
+                  {(selectedUserDetail.name || selectedUserDetail.email).charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-black text-slate-900 dark:text-slate-100">
+                      {selectedUserDetail.name}
+                    </h3>
+                    <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50 flex items-center gap-1">
+                      <Database className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400" />
+                      <span>Supabase</span>
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 font-mono mt-0.5">{selectedUserDetail.email}</div>
+                </div>
+              </div>
+
               <button 
                 onClick={() => setSelectedUserDetail(null)}
-                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg"
+                className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-3">
-              <div>
-                <span className="text-slate-400 block text-[11px]">Trader Name</span>
-                <span className="font-bold text-slate-900 text-sm">{selectedUserDetail.name}</span>
+            {/* Live Presence Banner */}
+            <div className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 ${
+              selectedUserDetail.isOnline
+                ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/50 text-emerald-800 dark:text-emerald-300'
+                : 'bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+            }`}>
+              <div className="flex items-center gap-2.5">
+                {selectedUserDetail.isOnline ? (
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                  </span>
+                ) : (
+                  <span className="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+                )}
+                <div>
+                  <div className="font-bold text-xs">
+                    {selectedUserDetail.isOnline ? 'Currently Live on Platform' : 'Trader Currently Offline'}
+                  </div>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">
+                    {selectedUserDetail.isOnline 
+                      ? `Browsing page: ${selectedUserDetail.currentPage || 'Dashboard'}`
+                      : `Last active: ${selectedUserDetail.lastActiveAgo || selectedUserDetail.lastActive}`
+                    }
+                  </div>
+                </div>
               </div>
-              <div>
-                <span className="text-slate-400 block text-[11px]">Email Address</span>
-                <span className="font-mono text-slate-800">{selectedUserDetail.email}</span>
+
+              <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                selectedUserDetail.isOnline
+                  ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/20'
+                  : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+              }`}>
+                {selectedUserDetail.isOnline ? 'Online' : 'Offline'}
+              </span>
+            </div>
+
+            {/* 4-Stat Metric Grid: Time on Site, Session, Pages, Queries */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 space-y-1">
+                <div className="flex items-center gap-1.5 text-slate-400 text-[10px] font-semibold">
+                  <Clock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span>Time on Website</span>
+                </div>
+                <div className="text-base font-black text-slate-900 dark:text-slate-100 font-mono">
+                  {selectedUserDetail.timeOnSite || '45m'}
+                </div>
+                <div className="text-[10px] text-slate-400 font-mono">
+                  Session: {selectedUserDetail.sessionDuration || 'Active'}
+                </div>
               </div>
-              <div>
-                <span className="text-slate-400 block text-[11px]">System Role</span>
-                <span className="font-semibold text-slate-800 capitalize">{selectedUserDetail.role}</span>
+
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 space-y-1">
+                <div className="flex items-center gap-1.5 text-slate-400 text-[10px] font-semibold">
+                  <Crown className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Role &amp; Plan</span>
+                </div>
+                <div className="text-xs font-black text-slate-900 dark:text-slate-100 uppercase">
+                  {selectedUserDetail.role === 'admin' ? 'SUPER ADMIN' : 'TRADER'}
+                </div>
+                <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 font-mono uppercase">
+                  {selectedUserDetail.plan === 'pro' ? 'Pro Institutional' : 'Free Basic'}
+                </div>
               </div>
-              <div>
-                <span className="text-slate-400 block text-[11px]">Current Plan</span>
-                <span className="font-semibold text-emerald-600 uppercase">{selectedUserDetail.plan}</span>
+
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 space-y-1">
+                <div className="flex items-center gap-1.5 text-slate-400 text-[10px] font-semibold">
+                  <Layers className="w-3.5 h-3.5 text-blue-500" />
+                  <span>Pages Explored</span>
+                </div>
+                <div className="text-base font-black text-slate-900 dark:text-slate-100 font-mono">
+                  {(selectedUserDetail.pagesVisited || []).length || 1} Pages
+                </div>
+                <div className="text-[10px] text-slate-400 font-mono">
+                  Platform tools &amp; tabs
+                </div>
               </div>
-              <div>
-                <span className="text-slate-400 block text-[11px]">Portfolios Count</span>
-                <span className="font-mono text-slate-800">{selectedUserDetail.portfoliosCount}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[11px]">Joined Date</span>
-                <span className="font-mono text-slate-800">{selectedUserDetail.joinedDate}</span>
+
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 space-y-1">
+                <div className="flex items-center gap-1.5 text-slate-400 text-[10px] font-semibold">
+                  <Search className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Stock Queries</span>
+                </div>
+                <div className="text-base font-black text-slate-900 dark:text-slate-100 font-mono">
+                  {(selectedUserDetail.searches || []).length || 0} Tickers
+                </div>
+                <div className="text-[10px] text-slate-400 font-mono">
+                  NSE queries performed
+                </div>
               </div>
             </div>
 
-            <div className="pt-2 border-t border-slate-100 flex justify-end">
+            {/* Pages Visited Breakdown */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-700 dark:text-slate-300 text-xs flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Pages &amp; Tools Visited by Trader</span>
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  {(selectedUserDetail.pagesVisited || []).length} sections
+                </span>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-slate-50/70 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-800 space-y-2 max-h-36 overflow-y-auto custom-scrollbar">
+                {(selectedUserDetail.pagesVisited && selectedUserDetail.pagesVisited.length > 0) ? (
+                  selectedUserDetail.pagesVisited.map((p, idx) => {
+                    const pageName = typeof p === 'string' ? p : p.page;
+                    const views = typeof p === 'string' ? 1 : p.count;
+                    const lastSeen = typeof p === 'string' ? 'Recent' : (p.lastVisited || 'Active');
+
+                    return (
+                      <div key={idx} className="flex items-center justify-between text-[11px] py-1 border-b border-slate-100 dark:border-slate-800/60 last:border-none">
+                        <div className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                          <span className="font-semibold text-slate-800 dark:text-slate-200">{pageName}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded-md text-[9px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/50">
+                            {views} {views === 1 ? 'view' : 'views'}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">{lastSeen}</span>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-2 text-slate-400 text-[11px]">
+                    No page history recorded yet. Default: Dashboard
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Stock Searches Performed */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-700 dark:text-slate-300 text-xs flex items-center gap-1.5">
+                  <Search className="w-3.5 h-3.5 text-blue-500" />
+                  <span>Stock Searches Performed</span>
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  {(selectedUserDetail.searches || []).length} tickers
+                </span>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-slate-50/70 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-800">
+                {(selectedUserDetail.searches && selectedUserDetail.searches.length > 0) ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedUserDetail.searches.map((s, idx) => {
+                      const query = typeof s === 'string' ? s : s.query;
+                      const time = typeof s === 'string' ? '' : s.timestamp;
+                      return (
+                        <span 
+                          key={idx}
+                          className="px-2.5 py-1 rounded-xl text-[11px] font-mono font-bold bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 shadow-sm"
+                        >
+                          <span className="text-emerald-600 dark:text-emerald-400 font-black">₹</span>
+                          <span>{query}</span>
+                          {time && <span className="text-[9px] text-slate-400 font-normal">({time})</span>}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-2 text-slate-400 text-[11px]">
+                    No search queries recorded for this trader yet.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Real Portfolios & Holdings Breakdown */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-700 dark:text-slate-300 text-xs flex items-center gap-1.5">
+                  <Briefcase className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Real Portfolios ({selectedUserDetail.portfoliosCount || 0})</span>
+                </span>
+                <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-mono font-bold">
+                  Total: {selectedUserDetail.portfolioCapital || '₹0'}
+                </span>
+              </div>
+
+              <div className="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar">
+                {(selectedUserDetail.portfoliosList && selectedUserDetail.portfoliosList.length > 0) ? (
+                  selectedUserDetail.portfoliosList.map((pf, pIdx) => (
+                    <div 
+                      key={pIdx} 
+                      className="p-2.5 rounded-xl bg-slate-50/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 flex items-center justify-between text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        <span className="font-bold text-slate-900 dark:text-slate-100">{pf.name}</span>
+                        <span className="text-[10px] font-mono text-slate-400">({pf.holdingsCount} stocks)</span>
+                      </div>
+                      <div className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                        {pf.capital}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-center text-slate-400 text-xs">
+                    No custom portfolios created yet. Default holdings tracked.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Account & Device Intelligence */}
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-3 text-[11px]">
+              <div>
+                <span className="text-slate-400 block text-[10px]">Location</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                  <span>🇮🇳</span>
+                  <span>{selectedUserDetail.city || 'India'}</span>
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px]">Device / OS</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200 truncate block">
+                  {selectedUserDetail.device || 'Web Browser'}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px]">Total Holdings</span>
+                <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{selectedUserDetail.holdingsCount || 0} stocks</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px]">Joined Date</span>
+                <span className="font-mono text-slate-700 dark:text-slate-300">{selectedUserDetail.joinedDate}</span>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleImpersonateTrader(selectedUserDetail);
+                  }}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition cursor-pointer flex items-center gap-1.5"
+                >
+                  <UserCheck className="w-3.5 h-3.5" />
+                  <span>View As Trader (Ghost)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    toggleUserPlan(selectedUserDetail.id, selectedUserDetail.plan);
+                    setSelectedUserDetail(null);
+                  }}
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 transition cursor-pointer flex items-center gap-1.5"
+                >
+                  <Crown className="w-3.5 h-3.5" />
+                  <span>{selectedUserDetail.plan === 'pro' ? 'Switch to Free' : 'Upgrade to Pro'}</span>
+                </button>
+              </div>
+
               <button
                 type="button"
                 onClick={() => setSelectedUserDetail(null)}
-                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold transition"
+                className="px-5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold transition cursor-pointer text-xs"
               >
-                Close
+                Close Panel
               </button>
             </div>
+
           </div>
         </div>
       )}

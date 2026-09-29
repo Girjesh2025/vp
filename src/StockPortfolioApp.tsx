@@ -21,8 +21,9 @@ import IntradayPlayer from './components/IntradayPlayer';
 import GuruScan from './components/GuruScan';
 import OptionsPlayer from './components/OptionsPlayer';
 import OptionsHint   from './components/OptionsHint';
-import OptionsWatch  from './components/OptionsWatch';
 import OptionsDecode from './components/OptionsDecode';
+import { trackPageView, startPresenceHeartbeat } from './utils/activityTracker';
+
 import StockRecommendations from './components/StockRecommendations';
 import HelpAndSupport from './components/HelpAndSupport';
 import TradingPsychology from './components/TradingPsychology';
@@ -123,6 +124,48 @@ const StockPortfolioApp: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('lastActiveTab', activeTab);
   }, [activeTab]);
+
+  // Track live user activity, active page, and presence
+  useEffect(() => {
+    const tabMap: Record<string, string> = {
+      dashboard: 'Dashboard',
+      portfolio: 'Portfolio',
+      holdings: 'Holdings',
+      transactions: 'Transactions',
+      analytics: 'Analytics',
+      tools: 'Trading Tools',
+      'market-eye': 'Market Eye',
+      'swing-player': 'Swing Player',
+      'intraday-player': 'Intraday Breakout',
+      'guru-scan': 'Guru Scanner',
+      'options-player': 'Options Player',
+      'options-hint': 'Options Hint',
+      'options-watch': 'Options Watch',
+      'options-decode': 'Options Decode',
+      'trading-tools': 'Calculators',
+      'stock-recommendations': 'Recommendations',
+      'trading-psychology': 'Psychology',
+      alerts: 'Price Alerts',
+      settings: 'Settings',
+      help: 'Help Center'
+    };
+    const pageName = tabMap[activeTab] || activeTab;
+    const userData = user ? {
+      id: user.id,
+      email: user.email || '',
+      name: user.user_metadata?.full_name || user.email?.split('@')[0] || ''
+    } : null;
+
+    if (userData && userData.email) {
+      trackPageView(pageName, userData);
+    }
+
+    const cleanup = startPresenceHeartbeat(
+      () => user ? { id: user.id, email: user.email || '', name: user.user_metadata?.full_name || user.email?.split('@')[0] || '' } : null,
+      () => tabMap[activeTab] || activeTab
+    );
+    return cleanup;
+  }, [activeTab, user]);
 
   useEffect(() => {
     if (user?.id) localStorage.setItem('pp_user_id', user.id);

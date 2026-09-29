@@ -1304,7 +1304,7 @@ const IntradayPlayer: React.FC = () => {
       ) : viewMode === 'table' ? (
         
         /* ═════════════════════════════════════════════════════════════════════
-           HUMAN-CRAFTED INSTITUTIONAL TABULAR GRID
+           PAPERPROFIT-STYLE COMPACT INSTITUTIONAL TABLE
            ═════════════════════════════════════════════════════════════════════ */
         <div className="bg-[#090d16] border border-slate-800/80 rounded-2xl overflow-hidden shadow-2xl">
           
@@ -1333,273 +1333,264 @@ const IntradayPlayer: React.FC = () => {
           <div className="overflow-x-auto [scrollbar-width:thin]">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="bg-[#070a12] border-b border-slate-800/80 text-[11px] font-mono text-slate-400 uppercase tracking-wider select-none">
-                  <th className="py-3 px-3 w-12 text-center">#</th>
-                  <th 
-                    className="py-3 px-3.5 cursor-pointer hover:text-white transition"
-                    onClick={() => handleSort('symbol')}
-                  >
-                    <div className="flex items-center gap-1">
-                      <span>Stock &amp; Sector</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-600" />
-                    </div>
-                  </th>
-                  <th className="py-3 px-3">Setup &amp; Strategy</th>
-                  <th 
-                    className="py-3 px-3 text-right cursor-pointer hover:text-white transition"
+                <tr className="bg-[#070a12] border-b border-slate-800/60 text-[9px] font-mono text-slate-500 uppercase tracking-widest select-none">
+                  <th className="py-2.5 px-3 w-10 text-center">#</th>
+                  <th className="py-2.5 px-3 min-w-[170px]">Symbol &amp; Price</th>
+                  <th className="py-2.5 px-3 min-w-[160px]">Setup &amp; Signal</th>
+                  <th
+                    className="py-2.5 px-3 text-right cursor-pointer hover:text-slate-300 transition min-w-[80px]"
                     onClick={() => handleSort('change')}
                   >
                     <div className="flex items-center justify-end gap-1">
-                      <span>LTP &amp; Day %</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                      <span>LTP &amp; Chg%</span>
+                      <ArrowUpDown className="w-2.5 h-2.5 text-slate-600" />
                     </div>
                   </th>
-                  <th 
-                    className="py-3 px-3 text-center cursor-pointer hover:text-white transition"
+                  <th className="py-2.5 px-3 text-center min-w-[130px]">Entry · SL · Target</th>
+                  <th
+                    className="py-2.5 px-3 text-center cursor-pointer hover:text-slate-300 transition min-w-[65px]"
                     onClick={() => handleSort('gates')}
                   >
                     <div className="flex items-center justify-center gap-1">
-                      <span>5 Institutional Gates</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                      <span>Gates</span>
+                      <ArrowUpDown className="w-2.5 h-2.5 text-slate-600" />
                     </div>
                   </th>
-                  <th 
-                    className="py-3 px-3 text-center cursor-pointer hover:text-white transition"
+                  <th
+                    className="py-2.5 px-3 text-center cursor-pointer hover:text-slate-300 transition min-w-[80px]"
                     onClick={() => handleSort('score')}
                   >
                     <div className="flex items-center justify-center gap-1">
-                      <span>Conviction</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-600" />
+                      <span>Score · RVOL</span>
+                      <ArrowUpDown className="w-2.5 h-2.5 text-slate-600" />
                     </div>
                   </th>
-                  <th 
-                    className="py-3 px-3 text-center cursor-pointer hover:text-white transition"
-                    onClick={() => handleSort('rvol')}
-                  >
-                    <div className="flex items-center justify-center gap-1">
-                      <span>RVOL &amp; VWAP</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-600" />
-                    </div>
-                  </th>
-                  <th className="py-3 px-3 text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      <Clock className="w-3 h-3 text-slate-500" />
-                      <span>Listed Time</span>
-                    </div>
-                  </th>
-                  <th className="py-3 px-3 text-center">Live Status</th>
-                  <th className="py-3 px-3.5 text-center">Actions</th>
+                  <th className="py-2.5 px-3 text-center min-w-[110px]">VWAP Signal</th>
+                  <th className="py-2.5 px-3 text-center min-w-[110px]">Live Status</th>
+                  <th className="py-2.5 px-3 text-center min-w-[80px]">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 font-mono">
+              <tbody className="divide-y divide-slate-800/30 font-mono">
                 {filteredSetups.map((stock, index) => {
                   const isBull = stock.isBull;
                   const metrics = getPerformanceMetrics(stock);
                   const isWatchlisted = savedWatchlist.includes(stock.symbol);
 
+                  // VWAP Signal badge — PaperProfit OUTPERFORM/WEAK style using our VWAP data
+                  const vwapSignal = (() => {
+                    const aboveVwap = stock.vwapStatus === 'ABOVE_VWAP';
+                    const dist = Math.abs(stock.vwapDistancePct);
+                    if (aboveVwap && isBull && dist <= 1.5) {
+                      return { label: 'OUTPERFORM', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' };
+                    } else if (!aboveVwap && !isBull && dist <= 1.5) {
+                      return { label: 'UNDERPERFORM', cls: 'bg-rose-500/15 text-rose-400 border-rose-500/30' };
+                    } else if (aboveVwap && isBull) {
+                      return { label: 'ABOVE VWAP', cls: 'bg-teal-500/15 text-teal-300 border-teal-500/30' };
+                    } else if (!aboveVwap && !isBull) {
+                      return { label: 'WEAK', cls: 'bg-rose-500/15 text-rose-400 border-rose-500/30' };
+                    } else if (aboveVwap && !isBull) {
+                      return { label: 'CAUTION', cls: 'bg-amber-500/10 text-amber-300 border-amber-500/25' };
+                    }
+                    return { label: 'BELOW VWAP', cls: 'bg-slate-800/80 text-slate-400 border-slate-700/60' };
+                  })();
+
                   return (
-                    <tr 
+                    <tr
                       key={stock.symbol}
                       onClick={() => setSelectedStock(stock)}
-                      className="hover:bg-[#0e131d] transition-colors cursor-pointer group"
+                      className={`cursor-pointer group transition-colors duration-100 hover:bg-[#0e1525] relative ${
+                        index % 2 === 0 ? 'bg-[#090d16]' : 'bg-[#0b1019]'
+                      }`}
                     >
-                      {/* Rank & Bookmark */}
-                      <td className="py-3 px-2 text-center" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-center gap-1">
+                      {/* # + Bookmark + BUY/SELL left border accent */}
+                      <td className="py-3 px-2 text-center relative" onClick={(e) => e.stopPropagation()}>
+                        <div className={`absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full ${isBull ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                        <div className="flex flex-col items-center gap-0.5 pl-1.5">
                           <button
                             type="button"
                             onClick={() => toggleWatchlist(stock)}
-                            className="p-1 rounded hover:bg-slate-800 text-slate-500 hover:text-emerald-400 transition"
+                            className="p-0.5 rounded hover:bg-slate-800 text-slate-600 hover:text-emerald-400 transition"
                             title={isWatchlisted ? 'Remove from Saved' : 'Save to Watchlist'}
                           >
-                            <Bookmark className={`w-3.5 h-3.5 ${isWatchlisted ? 'fill-emerald-400 text-emerald-400' : ''}`} />
+                            <Bookmark className={`w-3 h-3 ${isWatchlisted ? 'fill-emerald-400 text-emerald-400' : ''}`} />
                           </button>
-                          <span className="text-[11px] text-slate-500 font-semibold w-3">
-                            {index + 1}
-                          </span>
+                          <span className="text-[10px] text-slate-600 font-semibold leading-none">{index + 1}</span>
                         </div>
                       </td>
 
-                      {/* Stock Info & Sector */}
-                      <td className="py-3 px-3.5">
+                      {/* Symbol & Price — circular logo */}
+                      <td className="py-3 px-3">
                         <div className="flex items-center gap-2.5">
-                          <StockLogo symbol={stock.symbol} className="w-7 h-7 rounded-lg shrink-0 border border-slate-800 bg-[#121824]" />
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-bold text-white group-hover:text-emerald-400 transition text-[13px] tracking-tight font-sans">
+                          <StockLogo
+                            symbol={stock.symbol}
+                            className="w-8 h-8 rounded-full shrink-0 border-2 border-slate-700/80 bg-[#121824] ring-1 ring-slate-800/80"
+                          />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-white group-hover:text-emerald-300 transition text-[13px] tracking-tight font-sans leading-tight">
                                 {stock.symbol}
                               </span>
-                              {stock.sectorLeader && (
-                                <span className="px-1.5 py-0.2 rounded text-[8px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">
-                                  Alpha Leader
-                                </span>
-                              )}
-                              {stock.pivots.isNarrowCpr && (
-                                <span className="px-1.5 py-0.2 rounded text-[8px] font-semibold bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 uppercase tracking-wider">
-                                  Narrow CPR
-                                </span>
-                              )}
+                              <span className={`px-1.5 py-px rounded text-[8px] font-bold uppercase tracking-wider border leading-tight ${
+                                isBull
+                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25'
+                                  : 'bg-rose-500/10 text-rose-400 border-rose-500/25'
+                              }`}>
+                                {isBull ? 'BUY' : 'SELL'}
+                              </span>
                             </div>
-                            <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-400">
-                              <span className="text-slate-400 font-sans">
-                                {stock.sector}
-                              </span>
-                              <span className="text-slate-600">·</span>
-                              <span className={stock.sectorChange >= 0 ? 'text-emerald-400/80' : 'text-rose-400/80'}>
-                                {stock.sectorChange >= 0 ? '+' : ''}{stock.sectorChange}%
-                              </span>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <span className="text-[10px] text-slate-400 font-sans truncate max-w-[90px]">{stock.sector}</span>
                             </div>
                           </div>
                         </div>
                       </td>
 
-                      {/* Setup & Strategy (Clean full text, no ellipsis cutoff!) */}
+                      {/* Setup & Signal — original setupTitle + rationale */}
                       <td className="py-3 px-3">
                         <div className="space-y-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border shrink-0 flex items-center gap-1 ${
-                              isBull
-                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                            }`}>
-                              {isBull ? (
-                                <>
-                                  <ArrowUp className="w-2.5 h-2.5 stroke-[2.5]" />
-                                  <span>BUY</span>
-                                </>
-                              ) : (
-                                <>
-                                  <ArrowDownRight className="w-2.5 h-2.5 stroke-[2.5]" />
-                                  <span>SELL</span>
-                                </>
-                              )}
-                            </span>
-                            <span className="text-[11px] text-slate-200 font-sans font-medium whitespace-nowrap">
-                              {stock.setupTitle}
-                            </span>
-                          </div>
-                          <div className="text-[10px] text-slate-400 font-sans line-clamp-1 max-w-[200px]">
+                          <span className="text-[11px] text-slate-100 font-sans font-semibold leading-tight block">
+                            {stock.setupTitle}
+                          </span>
+                          <div className="text-[9px] text-slate-500 font-sans line-clamp-1 max-w-[155px]">
                             {stock.strategyRationale}
                           </div>
+                          {stock.pivots.isNarrowCpr && (
+                            <span className="inline-block px-1.5 py-px rounded text-[8px] font-semibold bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 uppercase tracking-wider">
+                              Narrow CPR
+                            </span>
+                          )}
                         </div>
                       </td>
 
-                      {/* LTP & Change */}
+                      {/* LTP & Change% */}
                       <td className="py-3 px-3 text-right">
-                        <div>
-                          <div className="font-bold text-white text-[13px]">
-                            ₹{stock.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </div>
-                          <div className={`text-[11px] font-semibold ${
-                            stock.change >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                          }`}>
-                            {stock.change >= 0 ? '+' : ''}{stock.change.toFixed(2)}%
-                          </div>
+                        <div className="font-bold text-white text-[13px] font-sans">
+                          ₹{stock.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <div className={`inline-flex items-center gap-0.5 text-[11px] font-bold mt-0.5 ${
+                          stock.change >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                        }`}>
+                          {stock.change >= 0
+                            ? <TrendingUp className="w-3 h-3 stroke-[2.5]" />
+                            : <TrendingDown className="w-3 h-3 stroke-[2.5]" />
+                          }
+                          <span>{stock.change >= 0 ? '+' : ''}{stock.change.toFixed(2)}%</span>
                         </div>
                       </td>
 
-                      {/* 5 Institutional Gates: Human-Crafted 5-Segment Bar Indicator */}
+                      {/* Entry · SL · Target — compact 3-line price stack */}
                       <td className="py-3 px-3 text-center">
-                        <div className="inline-flex flex-col items-center gap-1.5">
-                          
-                          {/* Segmented Gate Indicator */}
+                        <div className="inline-flex flex-col items-start gap-0.5 text-[10px] font-sans">
                           <div className="flex items-center gap-1">
-                            <span 
-                              className={`w-3.5 h-2 rounded-sm ${stock.gates.sectorAlphaLeader ? 'bg-emerald-400' : 'bg-slate-700/60'}`}
-                              title="Gate 1: Sector Alpha"
-                            />
-                            <span 
-                              className={`w-3.5 h-2 rounded-sm ${stock.gates.cprCamarillaSetup ? 'bg-emerald-400' : 'bg-slate-700/60'}`}
-                              title="Gate 2: Narrow CPR / Camarilla"
-                            />
-                            <span 
-                              className={`w-3.5 h-2 rounded-sm ${stock.gates.orbConfirmation ? 'bg-emerald-400' : 'bg-slate-700/60'}`}
-                              title="Gate 3: 15-Min ORB"
-                            />
-                            <span 
-                              className={`w-3.5 h-2 rounded-sm ${stock.gates.rvolSurge ? 'bg-emerald-400' : 'bg-slate-700/60'}`}
-                              title="Gate 4: RVOL >= 1.8x"
-                            />
-                            <span 
-                              className={`w-3.5 h-2 rounded-sm ${stock.gates.vwapSweetSpot ? 'bg-emerald-400' : 'bg-slate-700/60'}`}
-                              title="Gate 5: VWAP Shield"
-                            />
+                            <span className="text-slate-500 w-6">Ent</span>
+                            <span className="font-semibold text-slate-100">
+                              ₹{stock.entryPrice.toLocaleString('en-IN', { maximumFractionDigits: 1 })}
+                            </span>
                           </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-slate-500 w-6">SL</span>
+                            <span className="font-semibold text-rose-400">
+                              ₹{stock.stopLoss.toLocaleString('en-IN', { maximumFractionDigits: 1 })}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-slate-500 w-6">T1</span>
+                            <span className="font-semibold text-emerald-400">
+                              ₹{stock.target1.toLocaleString('en-IN', { maximumFractionDigits: 1 })}
+                            </span>
+                          </div>
+                          <div className="text-[8px] text-slate-600 mt-0.5">R:R {stock.riskReward}</div>
+                        </div>
+                      </td>
 
-                          {/* Subtle text label */}
-                          <span className={`text-[10px] font-mono font-medium ${
-                            stock.gatesPassedCount === 5 
-                              ? 'text-emerald-400' 
-                              : stock.gatesPassedCount === 4 
-                              ? 'text-teal-300' 
-                              : 'text-slate-400'
+                      {/* 5 Gates — growing vertical bars */}
+                      <td className="py-3 px-3 text-center">
+                        <div className="inline-flex flex-col items-center gap-1">
+                          <div className="flex items-end gap-[3px] h-4">
+                            {[
+                              { gate: stock.gates.sectorAlphaLeader, title: 'Gate 1: Sector Alpha', h: 'h-2' },
+                              { gate: stock.gates.cprCamarillaSetup, title: 'Gate 2: CPR/Camarilla', h: 'h-2.5' },
+                              { gate: stock.gates.orbConfirmation,   title: 'Gate 3: ORB 15-Min',   h: 'h-3' },
+                              { gate: stock.gates.rvolSurge,         title: 'Gate 4: RVOL Surge',   h: 'h-3.5' },
+                              { gate: stock.gates.vwapSweetSpot,     title: 'Gate 5: VWAP Shield',  h: 'h-4' },
+                            ].map((g, i) => (
+                              <span
+                                key={i}
+                                title={g.title}
+                                className={`w-[5px] ${g.h} rounded-sm ${
+                                  g.gate
+                                    ? (isBull ? 'bg-emerald-400' : 'bg-rose-400')
+                                    : 'bg-slate-700/50'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          <span className={`text-[9px] font-bold font-sans leading-none ${
+                            stock.gatesPassedCount === 5 ? 'text-emerald-400'
+                            : stock.gatesPassedCount === 4 ? 'text-teal-400'
+                            : 'text-slate-500'
                           }`}>
-                            {stock.gatesPassedCount}/5 Gates Passed
+                            {stock.gatesPassedCount}/5
                           </span>
                         </div>
                       </td>
 
-                      {/* Technical Conviction Score: Natural Differentiated Distribution */}
+                      {/* Conviction Score + RVOL — combined cell */}
                       <td className="py-3 px-3 text-center">
-                        <div className="inline-flex flex-col items-center">
-                          <span className={`px-2 py-0.5 rounded-md font-bold text-xs border ${
+                        <div className="inline-flex flex-col items-center gap-1">
+                          <span className={`inline-block px-2.5 py-0.5 rounded-full font-bold text-[12px] border ${
                             stock.technicalScore >= 92
-                              ? 'bg-amber-400/10 text-amber-300 border-amber-400/30'
+                              ? 'bg-amber-400/15 text-amber-300 border-amber-400/30'
                               : stock.technicalScore >= 85
-                              ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/25'
-                              : 'bg-slate-800 text-slate-300 border-slate-700'
+                              ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                              : 'bg-slate-800 text-slate-300 border-slate-700/60'
                           }`}>
                             {stock.technicalScore}
                           </span>
-                          <span className="text-[9px] text-slate-400 uppercase tracking-wider mt-0.5 font-sans">
-                            {stock.technicalScore >= 90 ? 'Elite Sniper' : stock.technicalScore >= 82 ? 'High Conv.' : 'Normal'}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* RVOL & VWAP */}
-                      <td className="py-3 px-3 text-center">
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-center gap-1 text-[11px]">
-                            <span className="font-semibold text-slate-200">
-                              {stock.volMultiplier}x
-                            </span>
-                            <span className="text-[9px] text-slate-500">RVOL</span>
-                          </div>
-                          <div>
-                            <span className={`text-[10px] font-medium ${
-                              stock.vwapStatus === 'ABOVE_VWAP' ? 'text-emerald-400' : 'text-rose-400'
-                            }`}>
-                              {stock.vwapStatus === 'ABOVE_VWAP' ? 'Above VWAP' : 'Below VWAP'}
-                            </span>
+                          <div className={`text-[10px] font-bold ${
+                            stock.volMultiplier >= 2.5 ? 'text-amber-300'
+                            : stock.volMultiplier >= 1.8 ? 'text-emerald-400'
+                            : 'text-slate-400'
+                          }`}>
+                            {stock.volMultiplier}x <span className="text-[8px] text-slate-500 font-normal">RVOL</span>
                           </div>
                         </div>
                       </td>
 
-                      {/* Listed Time: Exact Scan Timestamp Matching Real Local Clock */}
+                      {/* VWAP Signal — PaperProfit OUTPERFORM/WEAK style */}
                       <td className="py-3 px-3 text-center">
-                        <div className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-md bg-[#0f1422] border border-slate-800 text-slate-300 text-[11px] font-mono">
-                          <Clock className="w-3 h-3 text-slate-500" />
-                          <span>{stock.scanTime}</span>
+                        <span className={`px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider border whitespace-nowrap ${vwapSignal.cls}`}>
+                          {vwapSignal.label}
+                        </span>
+                        <div className="text-[8px] text-slate-600 mt-0.5 font-sans">
+                          ₹{stock.vwap.toFixed(1)} VWAP
                         </div>
                       </td>
 
-                      {/* Live Execution Status */}
+                      {/* Live Execution Status — original performance badge */}
                       <td className="py-3 px-3 text-center">
-                        <span className={`px-2.5 py-1 rounded-md text-[10px] font-medium border inline-block whitespace-nowrap ${metrics.statusBadgeColor}`}>
+                        <span className={`px-2.5 py-1 rounded-md text-[9px] font-semibold border inline-block whitespace-nowrap font-sans ${metrics.statusBadgeColor}`}>
                           {metrics.statusLabel}
                         </span>
+                        {metrics.target1Progress > 0 && (
+                          <div className="mt-1 h-1 w-16 mx-auto bg-slate-800 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${isBull ? 'bg-emerald-500' : 'bg-rose-500'}`}
+                              style={{ width: `${metrics.target1Progress}%` }}
+                            />
+                          </div>
+                        )}
                       </td>
 
-                      {/* Actions: Refined Human-Crafted "View Setup" Button */}
-                      <td className="py-3 px-3.5 text-center" onClick={(e) => e.stopPropagation()}>
+                      {/* Actions */}
+                      <td className="py-3 px-3 text-center" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-1.5">
                           <button
                             type="button"
                             onClick={() => setSelectedStock(stock)}
-                            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-sans font-medium text-[11px] transition border border-slate-700/80 active:scale-95 cursor-pointer"
+                            className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-sans font-medium text-[10px] transition border border-slate-700/80 active:scale-95 cursor-pointer whitespace-nowrap"
                           >
-                            View Setup
+                            View
                           </button>
                           <a
                             href={`https://in.tradingview.com/chart/?symbol=NSE:${stock.symbol}`}
