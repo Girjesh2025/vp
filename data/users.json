@@ -12,16 +12,16 @@
     "holdingsCount": 38,
     "device": "macOS • Chrome",
     "city": "Mumbai, IN",
-    "lastSeenAt": "2026-09-29T19:38:12.623Z",
+    "lastSeenAt": "2026-09-29T19:59:57.683Z",
     "isOnline": true,
     "currentPage": "Admin Cockpit",
-    "sessionDuration": "41m",
-    "totalTimeSeconds": 13710,
-    "timeOnSite": "3h 48m",
+    "sessionDuration": "1h 2m",
+    "totalTimeSeconds": 21510,
+    "timeOnSite": "5h 58m",
     "pagesVisited": [
       {
         "page": "Portfolio",
-        "count": 18,
+        "count": 50,
         "lastVisited": "Just now"
       },
       {
@@ -31,7 +31,7 @@
       },
       {
         "page": "Admin Cockpit",
-        "count": 208,
+        "count": 306,
         "lastVisited": "Just now"
       }
     ]

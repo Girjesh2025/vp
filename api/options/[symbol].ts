@@ -29,7 +29,8 @@ export default async function handler(req: any, res: any) {
       ? await nseIndia.getIndexOptionChain(uppercaseSymbol)
       : await nseIndia.getEquityOptionChain(uppercaseSymbol);
 
-    if (!data || !data.records) {
+    const rawData = data as any;
+    if (!rawData || !rawData.records) {
       throw new Error("Invalid response from NSE API");
     }
 
