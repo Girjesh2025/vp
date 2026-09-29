@@ -12,16 +12,26 @@
     "holdingsCount": 38,
     "device": "macOS • Chrome",
     "city": "Mumbai, IN",
-    "lastSeenAt": "2026-09-29T19:26:56.545Z",
+    "lastSeenAt": "2026-09-29T19:28:56.542Z",
     "isOnline": true,
     "currentPage": "Admin Cockpit",
-    "sessionDuration": "29m",
-    "totalTimeSeconds": 10920,
-    "timeOnSite": "3h 2m",
+    "sessionDuration": "31m",
+    "totalTimeSeconds": 11670,
+    "timeOnSite": "3h 14m",
     "pagesVisited": [
       {
+        "page": "Portfolio",
+        "count": 3,
+        "lastVisited": "Just now"
+      },
+      {
+        "page": "Market Eye",
+        "count": 10,
+        "lastVisited": "Just now"
+      },
+      {
         "page": "Admin Cockpit",
-        "count": 182,
+        "count": 188,
         "lastVisited": "Just now"
       }
     ]
