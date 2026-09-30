@@ -3,12 +3,13 @@ import { createClient } from '@supabase/supabase-js'
 const DEFAULT_SUPABASE_URL = 'https://drpzizargycsebvrkscf.supabase.co'
 const DEFAULT_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRycHppemFyZ3ljc2VidnJrc2NmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk1MTU2OTEsImV4cCI6MjA3NTA5MTY5MX0.CODBGqklfZ570P--DlWnQNtbDE8_PgQoWsYoGexmDys'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || DEFAULT_ANON_KEY
+const rawUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim();
+const rawKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
 
-export const supabase = (supabaseUrl && supabaseUrl.startsWith('http') && supabaseAnonKey)
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null as any
+const supabaseUrl = (rawUrl.startsWith('http') && !rawUrl.includes('your_supabase')) ? rawUrl : DEFAULT_SUPABASE_URL;
+const supabaseAnonKey = (rawKey && !rawKey.includes('your_supabase')) ? rawKey : DEFAULT_ANON_KEY;
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Portfolio interface
 export interface Portfolio {
