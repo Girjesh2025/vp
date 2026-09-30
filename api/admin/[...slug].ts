@@ -123,9 +123,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
-  // Determine route action from query slug or path
-  const slug = req.query.slug;
-  const action = Array.isArray(slug) ? slug[0] : (slug || '');
+  // Determine route action from query slug or URL pathname
+  const cleanUrl = (req.url || '').split('?')[0];
+  const urlParts = cleanUrl.split('/').filter(Boolean);
+  const lastSegment = urlParts[urlParts.length - 1] || '';
+  const querySlug = req.query.slug;
+  const slugAction = Array.isArray(querySlug) ? querySlug[querySlug.length - 1] : querySlug;
+  const action = ((slugAction || lastSegment || '') as string).toLowerCase().trim();
 
   // 1. SYSTEM STATS
   if (action === 'system-stats') {
@@ -196,8 +200,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  // 6. USERS (default or action === 'users')
-  if (action === 'users' || action === '') {
+  // 6. USERS
+  if (action === 'users') {
     if (req.method === 'GET') {
       try {
         let users: any[] = [];

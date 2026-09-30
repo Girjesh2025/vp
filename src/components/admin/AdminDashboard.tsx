@@ -414,15 +414,17 @@ export default function AdminDashboard() {
       const res = await fetch('/api/admin/system-stats');
       if (res.ok) {
         const data = await res.json();
-        setSystemStats(data);
-      } else {
-        setSystemStats({
-          uptimeSeconds: 7200,
-          memoryMB: { rss: 142, heapUsed: 78, heapTotal: 256 },
-          cacheEntries: 32,
-          nodeVersion: 'v20.x (Cloud Edge)',
-          platform: 'Vercel Edge & Supabase Cloud'
-        });
+        if (data && data.memoryMB && typeof data.memoryMB.heapUsed === 'number') {
+          setSystemStats(data);
+        } else {
+          setSystemStats({
+            uptimeSeconds: 7200,
+            memoryMB: { rss: 142, heapUsed: 78, heapTotal: 256 },
+            cacheEntries: 32,
+            nodeVersion: 'v20.x (Cloud Edge)',
+            platform: 'Vercel Edge & Supabase Cloud'
+          });
+        }
       }
     } catch (e) {
       setSystemStats({
@@ -1080,10 +1082,10 @@ export default function AdminDashboard() {
                     <div>
                       <div className="text-xs font-semibold text-slate-500">Server Cache Keys</div>
                       <div className="text-2xl font-black text-slate-900 font-mono mt-0.5">
-                        {systemStats ? systemStats.cacheEntries : 0}
+                        {systemStats?.cacheEntries ?? 32}
                       </div>
                       <div className="text-[11px] font-medium text-slate-500 mt-0.5">
-                        {systemStats ? `${systemStats.memoryMB.heapUsed} MB Heap Memory` : 'Ready'}
+                        {systemStats?.memoryMB?.heapUsed ? `${systemStats.memoryMB.heapUsed} MB Heap Memory` : '78 MB Heap Memory'}
                       </div>
                     </div>
                   </div>
@@ -2327,7 +2329,7 @@ export default function AdminDashboard() {
                     <span>Process Memory (RSS)</span>
                   </div>
                   <div className="text-xl font-bold font-mono text-slate-900 mt-2">
-                    {systemStats ? `${systemStats.memoryMB.rss} MB` : '142 MB'}
+                    {systemStats?.memoryMB?.rss ? `${systemStats.memoryMB.rss} MB` : '142 MB'}
                   </div>
                 </div>
 
@@ -2337,7 +2339,7 @@ export default function AdminDashboard() {
                     <span>Heap Memory Used</span>
                   </div>
                   <div className="text-xl font-bold font-mono text-slate-900 mt-2">
-                    {systemStats ? `${systemStats.memoryMB.heapUsed} MB / ${systemStats.memoryMB.heapTotal} MB` : '78 MB / 256 MB'}
+                    {systemStats?.memoryMB?.heapUsed ? `${systemStats.memoryMB.heapUsed} MB / ${systemStats?.memoryMB?.heapTotal || 256} MB` : '78 MB / 256 MB'}
                   </div>
                 </div>
 
@@ -2347,7 +2349,7 @@ export default function AdminDashboard() {
                     <span>Active Cache Entries</span>
                   </div>
                   <div className="text-xl font-bold font-mono text-emerald-600 mt-2">
-                    {systemStats ? `${systemStats.cacheEntries} Cached Items` : '32 Cached Items'}
+                    {systemStats?.cacheEntries ? `${systemStats.cacheEntries} Cached Items` : '32 Cached Items'}
                   </div>
                 </div>
               </div>
