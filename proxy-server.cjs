@@ -13,9 +13,17 @@ if (fs.existsSync(path.join(__dirname, '.env.local'))) {
   require('dotenv').config({ path: path.join(__dirname, '.env.local'), override: true });
 }
 const { createClient: createSupabaseClient } = require('@supabase/supabase-js');
+let wsTransport;
+try {
+  wsTransport = require('ws');
+} catch (e) {}
+
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://drpzizargycsebvrkscf.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRycHppemFyZ3ljc2VidnJrc2NmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk1MTU2OTEsImV4cCI6MjA3NTA5MTY5MX0.CODBGqklfZ570P--DlWnQNtbDE8_PgQoWsYoGexmDys';
-const supabase = createSupabaseClient(SUPABASE_URL, SUPABASE_KEY);
+const supabase = createSupabaseClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: { persistSession: false },
+  ...(wsTransport ? { realtime: { transport: wsTransport } } : {})
+});
 const { fyersModel } = require('fyers-api-v3');
 
 const app = express();
@@ -35,7 +43,7 @@ const isAllowedOrigin = (origin) => {
   try {
     const parsed = new URL(origin);
     const hostname = parsed.hostname.toLowerCase();
-    if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '80.225.231.248') return true;
     if (hostname.endsWith('.vercel.app')) return true;
     if (hostname.endsWith('.onrender.com')) return true;
     if (hostname === 'paperprofit.in' || hostname.endsWith('.paperprofit.in')) return true;
