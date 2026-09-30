@@ -193,16 +193,22 @@ const SectorRotation: React.FC = () => {
     let isMounted = true;
     (async () => {
       try {
-        // Fetch sequentially to avoid rate-limit
-        const rawData: any[] = [];
-        for (const s of SECTORS) {
-          if (!isMounted) break;
-          const { timestamps, closes } = await fetchSectorRawMonthly(s.symbol);
-          rawData.push({ ...s, timestamps, closes,
-            data: getTrailingChanges(timestamps, closes) });
-          await new Promise(resolve => setTimeout(resolve, 300));
-        }
+        // Fetch in parallel for instant loading
+        const settled = await Promise.allSettled(
+          SECTORS.map(async (s) => {
+            const { timestamps, closes } = await fetchSectorRawMonthly(s.symbol);
+            return {
+              ...s,
+              timestamps,
+              closes,
+              data: getTrailingChanges(timestamps, closes)
+            };
+          })
+        );
         if (!isMounted) return;
+        const rawData = settled
+          .filter((res): res is PromiseFulfilledResult<any> => res.status === 'fulfilled')
+          .map(res => res.value);
         rawDataRef.current = rawData;
 
         // ── Heatmap (calendar year) ─────────────────────────────────────────────

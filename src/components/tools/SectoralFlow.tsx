@@ -4,34 +4,56 @@ import ProfessionalSidebar from '../ProfessionalSidebar';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, BarChart3, LayoutGrid, TrendingUp, TrendingDown, Activity, ExternalLink, RefreshCw } from 'lucide-react';
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, ReferenceLine, LabelList } from 'recharts';
-import { fetchStockPrice } from '../../utils/priceApi';
 import StockLogo from '../StockLogo';
 
-/** Fetch Real 20-Day Average % Change via Yahoo Spark API */
-const fetchRealSparkData = async (symbols: string[]): Promise<Record<string, number>> => {
+/** Batch fetch live stock quotes (price, change, 20D volatility) via Yahoo Spark API in parallel */
+const fetchBatchStockData = async (
+  symbols: string[]
+): Promise<Record<string, { price: number; change: number; avgChange20D: number }>> => {
   if (symbols.length === 0) return {};
-  
-  const chunkedSymbols = [];
-  for (let i = 0; i < symbols.length; i += 40) {
-    chunkedSymbols.push(symbols.slice(i, i + 40));
+
+  const chunkSize = 20;
+  const chunkedSymbols: string[][] = [];
+  for (let i = 0; i < symbols.length; i += chunkSize) {
+    chunkedSymbols.push(symbols.slice(i, i + chunkSize));
   }
 
-  const results: Record<string, number> = {};
+  const results: Record<string, { price: number; change: number; avgChange20D: number }> = {};
 
-  for (const chunk of chunkedSymbols) {
-    const query = chunk.map(s => `${s}.NS`).join(',');
-    try {
-      const res = await fetch(`/api/yahoo/spark?symbols=${encodeURIComponent(query)}&range=1mo&interval=1d`);
-      if (!res.ok) continue;
+  await Promise.allSettled(
+    chunkedSymbols.map(async (chunk) => {
+      const query = chunk.map((s) => `${s}.NS`).join(',');
+      try {
+        const res = await fetch(`/api/yahoo/spark?symbols=${encodeURIComponent(query)}&range=1mo&interval=1d`);
+        if (!res.ok) return;
 
-      const parsedData = await res.json();
+        const parsedData = await res.json();
+        if (parsedData?.spark?.result) {
+          parsedData.spark.result.forEach((item: any) => {
+            const sym = item.symbol.replace('.NS', '');
+            const responseNode = item.response?.[0];
+            const closes = responseNode?.indicators?.quote?.[0]?.close;
+            const validCloses = Array.isArray(closes)
+              ? (closes.filter((c: any) => typeof c === 'number' && Number.isFinite(c) && c > 0) as number[])
+              : [];
 
-      if (parsedData?.spark?.result) {
-        parsedData.spark.result.forEach((item: any) => {
-          const sym = item.symbol.replace('.NS', '');
-          const closes = item.response?.[0]?.indicators?.quote?.[0]?.close;
-          if (closes && Array.isArray(closes) && closes.length >= 2) {
-            const validCloses = closes.filter((c: any) => typeof c === 'number' && c > 0) as number[];
+            const price =
+              typeof validCloses[validCloses.length - 1] === 'number'
+                ? validCloses[validCloses.length - 1]
+                : (responseNode?.meta?.regularMarketPrice ?? 0);
+
+            const previousClose =
+              responseNode?.meta?.chartPreviousClose ??
+              responseNode?.meta?.previousClose ??
+              (validCloses.length >= 2 ? validCloses[validCloses.length - 2] : price);
+
+            const change =
+              typeof responseNode?.meta?.regularMarketChangePercent === 'number'
+                ? responseNode.meta.regularMarketChangePercent
+                : previousClose > 0
+                ? ((price - previousClose) / previousClose) * 100
+                : 0;
+
             let totalPercentChange = 0;
             let count = 0;
             for (let i = 1; i < validCloses.length; i++) {
@@ -39,12 +61,22 @@ const fetchRealSparkData = async (symbols: string[]): Promise<Record<string, num
               totalPercentChange += pctChange;
               count++;
             }
-            results[sym] = count > 0 ? totalPercentChange / count : 0.8;
-          }
-        });
+            const avgChange20D = count > 0 ? totalPercentChange / count : getMockAvgPercentChange20D(sym);
+
+            if (sym && (price > 0 || change !== 0)) {
+              results[sym] = {
+                price: Number(price.toFixed(2)),
+                change: Number(change.toFixed(2)),
+                avgChange20D: Number(avgChange20D.toFixed(2)),
+              };
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('Spark chunk fetch error:', e);
       }
-    } catch (e) {}
-  }
+    })
+  );
 
   return results;
 };
@@ -226,7 +258,7 @@ const SectoralFlow: React.FC = () => {
       const symbolArray = Array.from(allSymbols);
       if (isMounted) {
         setError(null);
-        setLoadProgress(0);
+        setLoadProgress(15);
         if (isInitialLoad) {
           setLoading(true);
         } else {
@@ -234,81 +266,48 @@ const SectoralFlow: React.FC = () => {
         }
       }
 
-      // Start fetching the 20-day average percentage change in the background
-      const sparkDataPromise = fetchRealSparkData(symbolArray);
-      const sectorSymbols = SECTOR_DEFINITIONS.map((sector) => sector.symbol).filter(Boolean);
-      const sectorIndexPromise = fetchSectorIndexData(sectorSymbols);
-      const nextLiveData: Record<string, { price: number; change: number; avgChange20D: number }> = {};
-
-      const chunkSize = 12;
-      let loaded = 0;
-      for (let i = 0; i < symbolArray.length; i += chunkSize) {
-        const chunk = symbolArray.slice(i, i + chunkSize);
-        const chunkResults: Record<string, { price: number; change: number; avgChange20D: number }> = {};
-
-        await Promise.allSettled(
-          chunk.map(async (sym) => {
-            const querySym = sym.startsWith('^') ? sym : `${sym}.NSE`;
-            const timeoutPromise = new Promise<{price: number, change: number} | null>((resolve) => 
-               setTimeout(() => resolve(null), 4500)
-            );
-            const data = await Promise.race([
-               fetchStockPrice(querySym),
-               timeoutPromise
-            ]);
-            if (data && isMounted) {
-              // Temporary avgChange until sparkData resolves
-              chunkResults[sym] = { price: data.price, change: data.change || 0, avgChange20D: getMockAvgPercentChange20D(sym) };
-            }
-          })
-        );
-        
-        loaded += chunk.length;
+      // Failsafe watchdog timer to guarantee dashboard unlocks within 1500ms
+      const watchdog = setTimeout(() => {
         if (isMounted) {
-          setLoadProgress(Math.round((loaded / symbolArray.length) * 100));
-          if (Object.keys(chunkResults).length > 0) {
-            Object.assign(nextLiveData, chunkResults);
-            setLiveData(prev => ({ ...prev, ...chunkResults }));
-          }
+          setLoading(false);
+          setRefreshing(false);
         }
-      }
+      }, 1500);
 
-      // Once all live data is loaded, wait for spark data and update state with real averages
-      if (isMounted) {
-        try {
-          const realAverages = await sparkDataPromise;
-          setLiveData(prev => {
-            const updated = { ...prev };
-            Object.keys(updated).forEach(sym => {
-              if (realAverages[sym]) {
-                updated[sym].avgChange20D = realAverages[sym];
-              }
-            });
-            return updated;
-          });
-        } catch (err) {
-          console.warn("Failed to load real spark averages", err);
+      try {
+        const sectorSymbols = SECTOR_DEFINITIONS.map((sector) => sector.symbol).filter(Boolean);
+
+        // Fetch all ~145 stocks and sector indices concurrently in parallel batches
+        const [batchStocks, sectorIndices] = await Promise.all([
+          fetchBatchStockData(symbolArray),
+          fetchSectorIndexData(sectorSymbols),
+        ]);
+
+        if (!isMounted) return;
+
+        if (Object.keys(batchStocks).length > 0) {
+          setLiveData(batchStocks);
         }
 
-        let sectorIndices: Record<string, { price: number; change: number; previousClose: number }> = {};
-        try {
-          sectorIndices = await sectorIndexPromise;
-          if (Object.keys(sectorIndices).length > 0) {
-            setSectorIndexData(sectorIndices);
-          }
-        } catch (err) {
-          console.warn('Failed to load official sector indices', err);
+        if (Object.keys(sectorIndices).length > 0) {
+          setSectorIndexData(sectorIndices);
         }
 
-        if (Object.keys(nextLiveData).length === 0 && Object.keys(sectorIndices).length === 0) {
+        if (Object.keys(batchStocks).length === 0 && Object.keys(sectorIndices).length === 0) {
           setError('Live sector data is currently unavailable. Please refresh and try again.');
         } else {
           setLastUpdatedAt(Date.now());
         }
 
         setLoadProgress(100);
-        setLoading(false);
-        setRefreshing(false);
+      } catch (err) {
+        console.error('Failed to load sectoral flow data:', err);
+      } finally {
+        clearTimeout(watchdog);
+        if (isMounted) {
+          setLoading(false);
+          setRefreshing(false);
+        }
       }
     };
 
