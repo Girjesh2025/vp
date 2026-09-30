@@ -1,6 +1,7 @@
 {
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/api/analytics/heartbeat", "destination": "/api/admin/heartbeat" },
+    { "source": "/api/yahoo/index", "destination": "/api/yahoo/spark" },
     { "source": "/((?!api).*)", "destination": "/index.html" }
   ]
 }
