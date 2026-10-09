@@ -54,6 +54,30 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/app/*"
+        element={
+          <ProtectedRoute>
+            <StockPortfolioApp />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/options-watch"
+        element={
+          <ProtectedRoute>
+            <StockPortfolioApp defaultTab="options-watch" />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/app/options-watch"
+        element={
+          <ProtectedRoute>
+            <StockPortfolioApp defaultTab="options-watch" />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/dashboard"
         element={
           <ProtectedRoute>

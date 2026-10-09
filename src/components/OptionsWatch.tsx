@@ -1,5 +1,6 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Zap, BarChart3, Activity, Target, Shield, Flame, Compass } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { Zap, BarChart3, Activity, Target, Compass, RefreshCw } from 'lucide-react';
+import { fetchStockPrice } from '../utils/priceApi';
 
 type IndexName = 'NIFTY 50' | 'BANK NIFTY' | 'FINNIFTY' | 'SENSEX';
 
@@ -14,20 +15,62 @@ interface StrikeData {
 
 const INDEXES: IndexName[] = ['NIFTY 50', 'BANK NIFTY', 'FINNIFTY', 'SENSEX'];
 
+const INDEX_CONFIG_MAP: Record<IndexName, { apiSymbol: string; yahooSymbol: string; defaultSpot: number; step: number }> = {
+  'NIFTY 50': { apiSymbol: 'NIFTY', yahooSymbol: '^NSEI', defaultSpot: 24800, step: 50 },
+  'BANK NIFTY': { apiSymbol: 'BANKNIFTY', yahooSymbol: '^NSEBANK', defaultSpot: 51200, step: 100 },
+  'FINNIFTY': { apiSymbol: 'FINNIFTY', yahooSymbol: 'NIFTY_FIN_SERVICE.NS', defaultSpot: 23400, step: 50 },
+  'SENSEX': { apiSymbol: 'NIFTY', yahooSymbol: '^BSESN', defaultSpot: 81500, step: 100 },
+};
+
 const INDEX_API_SYMBOL: Record<IndexName, string> = {
   'NIFTY 50': 'NIFTY',
   'BANK NIFTY': 'BANKNIFTY',
   'FINNIFTY': 'FINNIFTY',
-  'SENSEX': 'NIFTY', // Fallback to NIFTY proxy if BSE NSE options not exposed
+  'SENSEX': 'NIFTY',
+};
+
+const generateModeledChain = (indexName: IndexName, spot: number): StrikeData[] => {
+  const step = INDEX_CONFIG_MAP[indexName].step;
+  const atmStrike = Math.round(spot / step) * step;
+  const strikes: StrikeData[] = [];
+
+  for (let i = -15; i <= 15; i++) {
+    const strike = atmStrike + i * step;
+    const dist = (strike - atmStrike) / step;
+
+    const baseOi = Math.round(1500000 / (1 + Math.abs(dist) * 0.18));
+    const isSupportPeak = dist === -4;
+    const isResistPeak = dist === 4;
+
+    const bulls = Math.round(
+      (dist <= 0 ? baseOi * (1.2 + (isSupportPeak ? 1.5 : 0)) : baseOi * 0.4) + Math.abs(Math.sin(strike)) * 200000
+    );
+    const bears = Math.round(
+      (dist >= 0 ? baseOi * (1.2 + (isResistPeak ? 1.5 : 0)) : baseOi * 0.4) + Math.abs(Math.cos(strike)) * 200000
+    );
+
+    const bullsChange = Math.round((bulls * 0.12) * (dist <= 0 ? 1 : -0.5));
+    const bearsChange = Math.round((bears * 0.12) * (dist >= 0 ? 1 : -0.5));
+
+    strikes.push({
+      strike,
+      bulls,
+      bears,
+      bullsChange,
+      bearsChange,
+      isATM: strike === atmStrike,
+    });
+  }
+  return strikes.sort((a, b) => a.strike - b.strike);
 };
 
 const OptionsWatch: React.FC = () => {
   const [selectedIndex, setSelectedIndex] = useState<IndexName>('NIFTY 50');
   const [timeProgress, setTimeProgress] = useState<number>(100);
-  const [maxTimeProgress, setMaxTimeProgress] = useState<number>(100);
   const [fullChainData, setFullChainData] = useState<StrikeData[]>([]);
   const [underlyingValue, setUnderlyingValue] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isUsingFallback, setIsUsingFallback] = useState<boolean>(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
   const [isMarketOpen, setIsMarketOpen] = useState<boolean>(false);
@@ -60,14 +103,12 @@ const OptionsWatch: React.FC = () => {
 
       if (!isWeekday) {
         setTimeProgress(100);
-        setMaxTimeProgress(100);
         return;
       }
 
       if (!openNow) {
         const progress = nowMinutes < openMinutes ? 0 : 100;
         setTimeProgress(progress);
-        setMaxTimeProgress(progress);
         return;
       }
 
@@ -76,7 +117,6 @@ const OptionsWatch: React.FC = () => {
       const progress = (elapsedMinutes / totalMarketMinutes) * 100;
 
       setTimeProgress(progress);
-      setMaxTimeProgress(progress);
     };
 
     compute();
@@ -133,77 +173,82 @@ const OptionsWatch: React.FC = () => {
     };
   };
 
-  useEffect(() => {
-    let cancelled = false;
+  const fetchChain = useCallback(async () => {
+    const apiSymbol = INDEX_API_SYMBOL[selectedIndex];
+    const indexConfig = INDEX_CONFIG_MAP[selectedIndex];
 
-    const fetchChain = async () => {
-      const apiSymbol = INDEX_API_SYMBOL[selectedIndex];
+    setIsLoading(true);
+    setLoadError(null);
 
-      setIsLoading(true);
-      setLoadError(null);
-
-      try {
-        const res = await fetch(`/api/options/${encodeURIComponent(apiSymbol)}`);
-        if (!res.ok) {
-          throw new Error(`API error ${res.status}`);
-        }
-
-        const payload = (await res.json()) as OptionChainResponse;
-        const rows = payload.filtered?.data ?? payload.records?.data ?? [];
-        let underlying = payload.filtered?.underlyingValue ?? payload.records?.underlyingValue ?? null;
-
-        // If Sensex, scale proxy or use realistic spot if needed
-        if (selectedIndex === 'SENSEX' && underlying) {
-          underlying = Math.round(underlying * 3.32); // Approximate Sensex ratio
-        }
-
-        const normalized = rows
-          .map((row): StrikeData | null => {
-            if (typeof row.strikePrice !== 'number') return null;
-            const peOi = row.PE?.openInterest ?? 0;
-            const ceOi = row.CE?.openInterest ?? 0;
-            const peChg = row.PE?.changeinOpenInterest ?? 0;
-            const ceChg = row.CE?.changeinOpenInterest ?? 0;
-
-            const strike = selectedIndex === 'SENSEX' ? Math.round(row.strikePrice * 3.32 / 100) * 100 : row.strikePrice;
-
-            return {
-              strike,
-              bulls: Number.isFinite(peOi) ? peOi : 0,
-              bears: Number.isFinite(ceOi) ? ceOi : 0,
-              bullsChange: Number.isFinite(peChg) ? peChg : 0,
-              bearsChange: Number.isFinite(ceChg) ? ceChg : 0,
-            };
-          })
-          .filter((v): v is StrikeData => v !== null && Number.isFinite(v.strike));
-
-        const sortedAsc = normalized.slice().sort((a, b) => a.strike - b.strike);
-        if (!sortedAsc.length) {
-          throw new Error('No option chain rows returned');
-        }
-
-        if (cancelled) return;
-        setFullChainData(sortedAsc);
-        setUnderlyingValue(typeof underlying === 'number' && Number.isFinite(underlying) ? underlying : null);
-        setLastUpdatedAt(Date.now());
-      } catch (e) {
-        if (cancelled) return;
-        setFullChainData([]);
-        setUnderlyingValue(null);
-        setLoadError(e instanceof Error ? e.message : 'Failed to load option chain');
-        setLastUpdatedAt(null);
-      } finally {
-        if (!cancelled) setIsLoading(false);
+    try {
+      const res = await fetch(`/api/options/${encodeURIComponent(apiSymbol)}`);
+      if (!res.ok) {
+        throw new Error(`API error ${res.status}`);
       }
-    };
 
+      const payload = (await res.json()) as OptionChainResponse;
+      const rows = payload.filtered?.data ?? payload.records?.data ?? [];
+      let underlying = payload.filtered?.underlyingValue ?? payload.records?.underlyingValue ?? null;
+
+      // If Sensex, scale proxy or use realistic spot if needed
+      if (selectedIndex === 'SENSEX' && underlying) {
+        underlying = Math.round(underlying * 3.32); // Approximate Sensex ratio
+      }
+
+      const normalized = rows
+        .map((row): StrikeData | null => {
+          if (typeof row.strikePrice !== 'number') return null;
+          const peOi = row.PE?.openInterest ?? 0;
+          const ceOi = row.CE?.openInterest ?? 0;
+          const peChg = row.PE?.changeinOpenInterest ?? 0;
+          const ceChg = row.CE?.changeinOpenInterest ?? 0;
+
+          const strike = selectedIndex === 'SENSEX' ? Math.round(row.strikePrice * 3.32 / 100) * 100 : row.strikePrice;
+
+          return {
+            strike,
+            bulls: Number.isFinite(peOi) ? peOi : 0,
+            bears: Number.isFinite(ceOi) ? ceOi : 0,
+            bullsChange: Number.isFinite(peChg) ? peChg : 0,
+            bearsChange: Number.isFinite(ceChg) ? ceChg : 0,
+          };
+        })
+        .filter((v): v is StrikeData => v !== null && Number.isFinite(v.strike));
+
+      const sortedAsc = normalized.slice().sort((a, b) => a.strike - b.strike);
+      if (!sortedAsc.length) {
+        throw new Error('No option chain rows returned');
+      }
+
+      setFullChainData(sortedAsc);
+      setUnderlyingValue(typeof underlying === 'number' && Number.isFinite(underlying) ? underlying : null);
+      setIsUsingFallback(false);
+      setLastUpdatedAt(Date.now());
+    } catch {
+      // Graceful fallback to modeled session so Options Watch never breaks
+      let spot = indexConfig.defaultSpot;
+      try {
+        const quote = await fetchStockPrice(indexConfig.yahooSymbol);
+        if (quote && typeof quote.price === 'number' && quote.price > 0) {
+          spot = Math.round(quote.price);
+        }
+      } catch {}
+
+      const modeled = generateModeledChain(selectedIndex, spot);
+      setFullChainData(modeled);
+      setUnderlyingValue(spot);
+      setIsUsingFallback(true);
+      setLastUpdatedAt(Date.now());
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedIndex]);
+
+  useEffect(() => {
     fetchChain();
     const intervalId = window.setInterval(fetchChain, 30000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
-  }, [selectedIndex]);
+    return () => window.clearInterval(intervalId);
+  }, [fetchChain]);
 
   // Factor to scale values when user scrubs timeline
   const timeFactor = useMemo(() => {
@@ -384,19 +429,35 @@ const OptionsWatch: React.FC = () => {
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/10">
               <span
                 className={`w-2.5 h-2.5 rounded-full ${
-                  loadError ? 'bg-rose-500 shadow-[0_0_8px_#f43f5e]' : isMarketOpen ? 'bg-emerald-400 shadow-[0_0_8px_#34d399] animate-pulse' : 'bg-slate-500'
+                  isUsingFallback
+                    ? 'bg-amber-400 shadow-[0_0_8px_#f59e0b]'
+                    : loadError
+                      ? 'bg-rose-500 shadow-[0_0_8px_#f43f5e]'
+                      : isMarketOpen
+                        ? 'bg-emerald-400 shadow-[0_0_8px_#34d399] animate-pulse'
+                        : 'bg-slate-500'
                 }`}
               />
               <span className="text-xs text-slate-300 font-bold tracking-wider uppercase">
                 {isLoading
                   ? 'Loading Chain…'
-                  : loadError
-                    ? 'Data Unavailable'
-                    : isMarketOpen
-                      ? `Market Live • ${lastUpdatedLabel ?? ''}`
-                      : `Market Closed • ${lastUpdatedLabel ?? ''}`}
+                  : isUsingFallback
+                    ? `Modeled Data • ${lastUpdatedLabel ?? ''}`
+                    : loadError
+                      ? 'Data Unavailable'
+                      : isMarketOpen
+                        ? `Market Live • ${lastUpdatedLabel ?? ''}`
+                        : `Market Closed • ${lastUpdatedLabel ?? ''}`}
               </span>
             </div>
+            <button
+              onClick={() => fetchChain()}
+              disabled={isLoading}
+              className="p-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 border border-white/10 cursor-pointer transition-colors"
+              title="Refresh Option Chain"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+            </button>
           </div>
         </div>
 

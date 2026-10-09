@@ -22,6 +22,8 @@ import GuruScan from './components/GuruScan';
 import OptionsPlayer from './components/OptionsPlayer';
 import OptionsHint   from './components/OptionsHint';
 import OptionsDecode from './components/OptionsDecode';
+import OptionsWatch  from './components/OptionsWatch';
+import ErrorBoundary from './components/ErrorBoundary';
 import { trackPageView, startPresenceHeartbeat } from './utils/activityTracker';
 
 import StockRecommendations from './components/StockRecommendations';
@@ -70,7 +72,11 @@ const clearLegacyBrokerStorage = () => {
 
 
 
-const StockPortfolioApp: React.FC = () => {
+interface StockPortfolioAppProps {
+  defaultTab?: string;
+}
+
+const StockPortfolioApp: React.FC<StockPortfolioAppProps> = ({ defaultTab }) => {
   const { user } = useAuth();
   const { 
     portfolios,
@@ -118,8 +124,14 @@ const StockPortfolioApp: React.FC = () => {
   const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
   const location = useLocation();
   const [activeTab, setActiveTab] = useState(() => {
-    return (location.state as any)?.activeTab || localStorage.getItem('lastActiveTab') || 'dashboard';
+    return defaultTab || (location.state as any)?.activeTab || localStorage.getItem('lastActiveTab') || 'dashboard';
   });
+
+  useEffect(() => {
+    if (defaultTab && defaultTab !== activeTab) {
+      setActiveTab(defaultTab);
+    }
+  }, [defaultTab]);
 
   useEffect(() => {
     localStorage.setItem('lastActiveTab', activeTab);
@@ -1416,7 +1428,9 @@ const StockPortfolioApp: React.FC = () => {
             <OptionsHint />
           )}
           {activeTab === 'options-watch' && (
-            <OptionsWatch />
+            <ErrorBoundary fallbackTitle="Options Watch">
+              <OptionsWatch />
+            </ErrorBoundary>
           )}
           {activeTab === 'options-decode' && (
             <OptionsDecode />
