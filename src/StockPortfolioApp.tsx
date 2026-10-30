@@ -1416,7 +1416,9 @@ const StockPortfolioApp: React.FC<StockPortfolioAppProps> = ({ defaultTab }) => 
             <SwingPlayer />
           )}
           {activeTab === 'intraday-player' && (
-            <IntradayPlayer />
+            <ErrorBoundary fallbackTitle="Intraday Player" onReset={() => setActiveTab('dashboard')}>
+              <IntradayPlayer />
+            </ErrorBoundary>
           )}
           {activeTab === 'guru-scan' && (
             <GuruScan />

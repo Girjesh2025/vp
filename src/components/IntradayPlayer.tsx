@@ -8,27 +8,17 @@ import {
   RefreshCw, 
   ExternalLink, 
   X,
-  ArrowUp, 
-  ArrowDownRight, 
   Bookmark, 
   BarChart3,
   Table as TableIcon,
   LayoutGrid,
   ArrowUpDown,
   ShieldCheck,
-  Target,
-  Sparkles,
   CheckCircle2,
   Download,
   Crosshair,
-  Award,
   Zap,
-  CheckCheck,
-  Layers,
-  Flame,
-  Info,
-  Activity,
-  AlertTriangle
+  Activity
 } from 'lucide-react';
 import { fetchMultipleStockPrices, fetchStockPrice, isMarketOpen } from '../utils/priceApi';
 import StockLogo from './StockLogo';
@@ -406,9 +396,6 @@ const IntradayPlayer: React.FC = () => {
   const [sortField, setSortField] = useState<SortField>('score');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
 
-  // Quick Toggles
-  const [highConvictionOnly, setHighConvictionOnly] = useState(false);
-  const [highVolumeOnly, setHighVolumeOnly] = useState(false);
 
   // Saved Intraday Watchlist & Tracker State
   const [trackedSetups, setTrackedSetups] = useState<Record<string, TrackedIntradaySetup>>(() => {
@@ -1154,11 +1141,7 @@ const IntradayPlayer: React.FC = () => {
       if (sortOrder === 'asc') return valA > valB ? 1 : -1;
       return valA < valB ? 1 : -1;
     });
-  }, [marketData, activeCategoryFilter, highConvictionOnly, highVolumeOnly, searchQuery, savedWatchlist, trackedSetups, sortField, sortOrder]);
-
-  const sectorList: SectorName[] = [
-    'Banking', 'IT', 'Automobile', 'Energy', 'Metals', 'FMCG', 'Pharma', 'Infra & Tech'
-  ];
+  }, [marketData, activeCategoryFilter, searchQuery, savedWatchlist, trackedSetups, sortField, sortOrder]);
 
   // Counts
   const longCount = useMemo(() => marketData.filter(d => d.isBull).length, [marketData]);
@@ -1171,7 +1154,6 @@ const IntradayPlayer: React.FC = () => {
     const m = getPerformanceMetrics(d);
     return m.isSlTrailedToCost;
   }).length, [marketData, trackedSetups]);
-  const eliteSniperCount = useMemo(() => marketData.filter(d => d.gatesPassedCount >= 4).length, [marketData]);
 
   const marketLive = isMarketOpen();
   const marketPhase = getMarketTimingPhase();
@@ -1462,18 +1444,16 @@ const IntradayPlayer: React.FC = () => {
           <BarChart3 className="w-8 h-8 mx-auto text-slate-600" />
           <h3 className="text-sm font-semibold text-white">No Matching Sniper Setups Found</h3>
           <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            Criteria is tightly calibrated for high conviction. Switch to Top 10 or Top 15 to expand opportunities.
+            Try resetting your active category or search filter to see the 5 locked morning snipers.
           </p>
           <button
             onClick={() => {
               setActiveCategoryFilter('ALL');
-              setSelectedSector('ALL');
-              setCurationLimit('TOP_10');
               setSearchQuery('');
             }}
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-xl border border-slate-700 transition cursor-pointer"
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl border border-emerald-500/30 transition cursor-pointer shadow-sm"
           >
-            Show Top 10 Setups
+            Show All 5 Snipers
           </button>
         </div>
       ) : viewMode === 'table' ? (
@@ -1493,11 +1473,9 @@ const IntradayPlayer: React.FC = () => {
               <span className="px-2 py-0.5 rounded bg-slate-800/90 text-slate-300 font-mono text-[10px] border border-slate-700/80">
                 {filteredSetups.length} Curated Candidates
               </span>
-              {curationLimit === 'ELITE_SNIPER' && (
-                <span className="px-2 py-0.5 rounded bg-amber-400/10 text-amber-300 font-mono text-[10px] font-medium border border-amber-400/20">
-                  Elite Sniper Focus Active
-                </span>
-              )}
+              <span className="px-2 py-0.5 rounded bg-emerald-400/10 text-emerald-300 font-mono text-[10px] font-medium border border-emerald-400/20">
+                Top 5 Snipers Locked
+              </span>
             </div>
             <div className="text-[11px] text-slate-400 font-mono hidden md:flex items-center gap-1">
               <span>Scan Sync:</span>

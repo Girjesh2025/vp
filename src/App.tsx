@@ -14,6 +14,7 @@ import SectoralFlow from './components/tools/SectoralFlow'
 import ReturnsCalculator from './components/tools/ReturnsCalculator'
 import PositionCalculator from './components/PositionCalculator'
 import AdminRoute from './components/admin/AdminRoute'
+import ErrorBoundary from './components/ErrorBoundary'
 import './App.css'
 
 function AppRoutes() {
@@ -111,9 +112,11 @@ function AppRoutes() {
 
 function App() {
   return (
-    <AuthProvider>
-      <AppRoutes />
-    </AuthProvider>
+    <ErrorBoundary fallbackTitle="PaperProfit Application">
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </ErrorBoundary>
   )
 }
 
