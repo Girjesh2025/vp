@@ -1103,9 +1103,6 @@ const IntradayPlayer: React.FC = () => {
         return m.status === 'SL_HIT';
       }
 
-      if (highConvictionOnly && item.technicalScore < 85) return false;
-      if (highVolumeOnly && item.volMultiplier < 1.8) return false;
-
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         return item.symbol.toLowerCase().includes(q) || item.name.toLowerCase().includes(q) || item.sector.toLowerCase().includes(q);
