@@ -481,10 +481,28 @@ const IntradayPlayer: React.FC = () => {
       return val >= 0 ? `+${formatted}%` : `-${formatted}%`;
     };
 
-    let status: 'TARGET_2_HIT' | 'TARGET_1_HIT' | 'SL_HIT' | 'IN_PROFIT' | 'IN_DRAWDOWN' | 'TESTING_ENTRY' = 'IN_PROFIT';
+    let status: 'TARGET_2_HIT' | 'TARGET_1_HIT' | 'SL_HIT' | 'IN_PROFIT' | 'IN_DRAWDOWN' | 'TESTING_ENTRY' | 'PENDING_TRIGGER' = 'IN_PROFIT';
     let statusLabel = '';
     let statusBadgeColor = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
     let isSlTrailedToCost = false;
+
+    // Check if the entry trigger was ever reached during today's session
+    const isEntryTriggered = isBull
+      ? dayHigh >= (entryPrice * 0.9995)
+      : dayLow <= (entryPrice * 1.0005);
+
+    if (!isEntryTriggered) {
+      return {
+        pnlPercent: 0,
+        status: 'PENDING_TRIGGER',
+        statusLabel: isBull 
+          ? `Pending Trigger (High ₹${dayHigh.toFixed(1)} < Entry ₹${entryPrice.toFixed(1)})`
+          : `Pending Trigger (Low ₹${dayLow.toFixed(1)} > Entry ₹${entryPrice.toFixed(1)})`,
+        statusBadgeColor: 'text-amber-300 bg-amber-500/10 border-amber-500/25',
+        isSlTrailedToCost: false,
+        target1Progress: 0,
+      };
+    }
 
     if (isBull) {
       const hitT2 = currentPrice >= target2;
