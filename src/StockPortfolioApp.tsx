@@ -522,14 +522,17 @@ const StockPortfolioApp: React.FC<StockPortfolioAppProps> = ({ defaultTab }) => 
 
       // Optimistically update local state immediately so user sees instant deletion
       setStocks(prev => prev.filter(s => {
-        if (stockObj?.id && (s as any).id === stockObj.id) return false;
         const sClean = s.symbol.trim().toUpperCase().replace(/\.(NS|BO)$/i, '').split('-')[0];
-        return s.symbol.toUpperCase() !== symbolToDelete.toUpperCase() && sClean !== cleanSymbol;
+        const isMatch = (stockObj?.id && (s as any).id === stockObj.id) ||
+                        s.symbol.toUpperCase() === symbolToDelete.toUpperCase() ||
+                        sClean === cleanSymbol;
+        return !isMatch;
       }));
 
       setTransactions(prev => prev.filter(t => {
         const tClean = t.symbol.trim().toUpperCase().replace(/\.(NS|BO)$/i, '').split('-')[0];
-        return t.symbol.toUpperCase() !== symbolToDelete.toUpperCase() && tClean !== cleanSymbol;
+        const isMatch = t.symbol.toUpperCase() === symbolToDelete.toUpperCase() || tClean === cleanSymbol;
+        return !isMatch;
       }));
 
       setStockPrices(prev => {
@@ -1082,7 +1085,12 @@ const StockPortfolioApp: React.FC<StockPortfolioAppProps> = ({ defaultTab }) => 
                   portfolios={portfolios}
                   currentPortfolio={currentPortfolio}
                   onPortfolioChange={switchPortfolio}
-                  onCreatePortfolio={createPortfolio}
+                  onCreatePortfolio={async (name) => {
+                    const newP = await createPortfolio(name);
+                    if (newP) {
+                      await switchPortfolio(newP);
+                    }
+                  }}
                   onEditPortfolio={(portfolio, newName) => editPortfolio(portfolio.id, newName)}
                   onDeletePortfolio={(portfolio) => deletePortfolio(portfolio.id)}
                   portfolioStats={{

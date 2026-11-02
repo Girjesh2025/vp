@@ -47,9 +47,9 @@ const PortfolioSelector: React.FC<PortfolioSelectorProps> = ({
     };
   }, [isDropdownOpen]);
 
-  const handleCreatePortfolio = () => {
+  const handleCreatePortfolio = async () => {
     if (newPortfolioName.trim()) {
-      onCreatePortfolio(newPortfolioName.trim());
+      await onCreatePortfolio(newPortfolioName.trim());
       setNewPortfolioName('');
       setIsCreating(false);
       setIsDropdownOpen(false);

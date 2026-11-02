@@ -80,12 +80,27 @@ const PortfolioPage: React.FC<PortfolioPageProps> = ({
 
   // Compute calculated holding statistics
   const holdingsData = useMemo(() => {
-    return stocks.map((stock) => {
-      const stockTransactions = transactions.filter((t) => t.symbol === stock.symbol);
-      const totalShares = stockTransactions.reduce(
-        (sum, t) => (t.type === 'buy' ? sum + t.quantity : sum - t.quantity),
-        0
-      );
+    // Deduplicate stocks by symbol so each stock has only 1 row in the table
+    const seenSymbols = new Set<string>();
+    const uniqueStocks = stocks.filter((stock) => {
+      const clean = stock.symbol.trim().toUpperCase().replace(/\.(NS|BO)$/i, '').split('-')[0];
+      if (seenSymbols.has(clean)) return false;
+      seenSymbols.add(clean);
+      return true;
+    });
+
+    return uniqueStocks.map((stock) => {
+      const cleanStockSymbol = stock.symbol.trim().toUpperCase().replace(/\.(NS|BO)$/i, '').split('-')[0];
+      const stockTransactions = transactions.filter((t) => {
+        const tClean = t.symbol.trim().toUpperCase().replace(/\.(NS|BO)$/i, '').split('-')[0];
+        return t.symbol.toUpperCase() === stock.symbol.toUpperCase() || tClean === cleanStockSymbol;
+      });
+      const totalShares = stockTransactions.length > 0
+        ? stockTransactions.reduce(
+            (sum, t) => (t.type === 'buy' ? sum + t.quantity : sum - t.quantity),
+            0
+          )
+        : stock.quantity || 0;
 
       const totalBuyValue = stockTransactions.reduce(
         (sum, t) => (t.type === 'buy' ? sum + t.price * t.quantity : sum),
@@ -102,7 +117,7 @@ const PortfolioPage: React.FC<PortfolioPageProps> = ({
         0
       );
 
-      const priceObj = stockPrices[stock.symbol];
+      const priceObj = stockPrices[stock.symbol] || stockPrices[cleanStockSymbol];
       const currentPrice = priceObj?.price || 0;
       const dayChange = priceObj?.change || 0;
       const dayChangePercent = priceObj?.previousClose
@@ -115,7 +130,7 @@ const PortfolioPage: React.FC<PortfolioPageProps> = ({
       const pnlPercent = investedValue > 0 ? (pnl / investedValue) * 100 : 0;
       const weight = stats.totalCurrent > 0 ? (marketValue / stats.totalCurrent) * 100 : 0;
 
-      const info = getStockBySymbol(stock.symbol);
+      const info = getStockBySymbol(stock.symbol) || getStockBySymbol(cleanStockSymbol);
       const sector = info?.sector || 'Diversified';
 
       return {
@@ -443,98 +458,23 @@ const PortfolioPage: React.FC<PortfolioPageProps> = ({
         <div className="space-y-4">
           {stocks.length === 0 ? (
             /* EMPTY PORTFOLIO ONBOARDING STATE */
-            <div className="rounded-2xl border border-slate-800 bg-[#0c121e]/90 p-8 text-center shadow-xl">
-              <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center mx-auto mb-4 text-amber-400">
-                <Briefcase className="w-7 h-7" />
+            <div className="rounded-2xl border border-slate-800 bg-[#0c121e]/90 p-12 text-center shadow-xl">
+              <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center mx-auto mb-4 text-amber-400">
+                <Briefcase className="w-8 h-8" />
               </div>
               <h3 className="text-xl font-bold text-white tracking-tight mb-2">
                 Your Portfolio is Currently Empty
               </h3>
-              <p className="text-sm text-slate-400 max-w-lg mx-auto mb-8">
-                Build your trading portfolio by adding institutional Indian equities or start by exploring market leaders below.
+              <p className="text-sm text-slate-400 max-w-md mx-auto mb-6">
+                No stocks added to this portfolio yet. Click below to search and add stocks to your holdings.
               </p>
-
-              {/* Popular Starter Stocks */}
-              {popularStocks.length > 0 && (
-                <div className="max-w-4xl mx-auto text-left">
-                  <div className="flex items-center justify-between mb-3 px-1">
-                    <span className="text-xs font-mono uppercase tracking-widest text-slate-400 font-semibold">
-                      Popular NSE Blue-Chip Equities
-                    </span>
-                    <span className="text-[11px] font-mono text-slate-500">Click + to add instantly</span>
-                  </div>
-
-                  <div className="rounded-xl border border-slate-800 overflow-hidden bg-[#090d16]">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b border-slate-800 text-[10px] font-mono uppercase text-slate-400 bg-white/[0.02]">
-                            <th className="text-left py-3 px-4 font-semibold">Instrument</th>
-                            <th className="text-left py-3 px-4 font-semibold">Exchange</th>
-                            <th className="text-right py-3 px-4 font-semibold">Market Price (LTP)</th>
-                            <th className="text-right py-3 px-4 font-semibold">Day Change</th>
-                            <th className="text-center py-3 px-4 font-semibold">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-800/60 font-mono">
-                          {popularStocks.slice(0, 6).map((stock) => {
-                            const pData = popularStockPrices[stock.symbol];
-                            const currentPrice = pData?.price || 0;
-                            const change = pData?.change || 0;
-                            const changePercent = pData?.previousClose
-                              ? ((currentPrice - pData.previousClose) / pData.previousClose) * 100
-                              : 0;
-
-                            return (
-                              <tr key={stock.symbol} className="hover:bg-white/[0.02] transition-colors">
-                                <td className="py-3 px-4 font-sans">
-                                  <div className="flex items-center gap-3">
-                                    <StockLogo symbol={stock.symbol} className="w-7 h-7" />
-                                    <div>
-                                      <p className="font-bold text-white font-mono">{stock.symbol}</p>
-                                      <p className="text-[11px] text-slate-400 truncate max-w-[200px]">
-                                        {stock.name}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="py-3 px-4 font-sans text-slate-400">
-                                  <span className="px-2 py-0.5 rounded bg-white/[0.04] border border-white/10 text-[10px] font-mono">
-                                    NSE
-                                  </span>
-                                </td>
-                                <td className="text-right py-3 px-4 text-slate-100 font-bold">
-                                  {currentPrice > 0 ? formatINR(currentPrice) : 'Loading...'}
-                                </td>
-                                <td className="text-right py-3 px-4">
-                                  <span
-                                    className={`px-2 py-0.5 rounded font-bold text-[11px] ${
-                                      change >= 0
-                                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                        : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                                    }`}
-                                  >
-                                    {formatPct(changePercent)}
-                                  </span>
-                                </td>
-                                <td className="text-center py-3 px-4">
-                                  <button
-                                    onClick={() => onAddPopularStock(stock)}
-                                    className="px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-bold font-sans transition-all cursor-pointer inline-flex items-center gap-1.5"
-                                  >
-                                    <Plus className="w-3.5 h-3.5" />
-                                    Add Position
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              )}
+              <button
+                onClick={onAddStock}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-sm transition-all shadow-lg shadow-emerald-500/20 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Stock to Portfolio</span>
+              </button>
             </div>
           ) : (
             /* ACTIVE HOLDINGS TABLE */
@@ -614,13 +554,15 @@ const PortfolioPage: React.FC<PortfolioPageProps> = ({
                       <th className="text-right py-3.5 px-4 font-semibold">Unrealized P&L</th>
                       <th className="text-right py-3.5 px-4 font-semibold">Realized P&L</th>
                       <th className="text-right py-3.5 px-4 font-semibold">Weight</th>
-                      <th className="text-center py-3.5 px-4 font-semibold">Actions</th>
+                      <th className="text-center py-3.5 px-4 font-semibold sticky right-0 bg-[#0c121e] z-10 shadow-[-12px_0_16px_rgba(0,0,0,0.6)] min-w-[210px]">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60 font-mono">
-                    {filteredHoldings.map((item) => (
+                    {filteredHoldings.map((item, index) => (
                       <tr
-                        key={item.stock.symbol}
+                        key={`${item.stock.symbol}-${item.stock.id || index}`}
                         className="hover:bg-white/[0.025] transition-colors group"
                       >
                         {/* 1. Instrument (Logo + Name + Sector) */}
@@ -728,11 +670,11 @@ const PortfolioPage: React.FC<PortfolioPageProps> = ({
                         </td>
 
                         {/* 9. Actions (Buy, Sell, Delete) */}
-                        <td className="text-center py-3.5 px-4 font-sans">
+                        <td className="text-center py-3.5 px-4 font-sans sticky right-0 bg-[#0c121e] group-hover:bg-[#121927] transition-colors z-10 shadow-[-12px_0_16px_rgba(0,0,0,0.6)] min-w-[210px]">
                           <div className="flex items-center justify-center gap-1.5">
                             <button
                               onClick={() => onBuyStock(item.stock)}
-                              className="px-2.5 py-1 rounded bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-[11px] font-bold transition-all cursor-pointer"
+                              className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-[11px] font-bold transition-all cursor-pointer inline-flex items-center gap-1 shadow-sm"
                               title="Buy more shares"
                             >
                               Buy
@@ -741,7 +683,7 @@ const PortfolioPage: React.FC<PortfolioPageProps> = ({
                             <button
                               onClick={() => onSellStock(item.stock)}
                               disabled={item.totalShares === 0}
-                              className="px-2.5 py-1 rounded bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-[11px] font-bold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                              className="px-2.5 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-[11px] font-bold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1 shadow-sm"
                               title="Sell position"
                             >
                               Sell
@@ -749,10 +691,11 @@ const PortfolioPage: React.FC<PortfolioPageProps> = ({
 
                             <button
                               onClick={() => onDeleteStock(item.stock)}
-                              className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-950/40 transition-colors cursor-pointer"
-                              title="Remove from portfolio"
+                              className="px-2.5 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/35 border border-rose-500/40 text-rose-300 hover:text-rose-100 text-[11px] font-bold transition-all cursor-pointer inline-flex items-center gap-1 shadow-sm"
+                              title={`Delete ${item.stock.symbol} from portfolio`}
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-3 h-3 text-rose-400" />
+                              <span>Delete</span>
                             </button>
                           </div>
                         </td>

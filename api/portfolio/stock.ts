@@ -24,29 +24,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: 'stockId or symbol is required' });
       }
 
-      let query = supabase.from('stocks').select('id');
-      if (stockId) {
-        query = query.eq('id', stockId);
-      } else if (portfolioId) {
-        query = query.eq('portfolio_id', portfolioId).or(`symbol.eq.${sym},symbol.eq.${rawSymbol || sym}`);
-      } else {
-        query = query.or(`symbol.eq.${sym},symbol.eq.${rawSymbol || sym}`);
+      let query = supabase.from('stocks').select('id, symbol');
+      if (portfolioId) {
+        query = query.eq('portfolio_id', portfolioId);
       }
 
-      const { data: matchingStocks, error: findError } = await query;
+      const { data: allStocks, error: findError } = await query;
       if (findError) {
         return res.status(500).json({ error: findError.message });
       }
 
-      if (!matchingStocks || matchingStocks.length === 0) {
+      const matchingIds = (allStocks || [])
+        .filter(s => {
+          if (stockId && s.id === stockId) return true;
+          if (sym) {
+            const sClean = s.symbol.trim().toUpperCase().replace(/\.(NS|BO)$/i, '').split('-')[0];
+            return s.symbol.toUpperCase() === sym || sClean === sym || (rawSymbol && s.symbol.toUpperCase() === rawSymbol.toUpperCase());
+          }
+          return false;
+        })
+        .map(s => s.id);
+
+      if (matchingIds.length === 0) {
         return res.status(200).json({ success: true, message: 'Stock not in DB, removed locally' });
       }
 
-      const ids = matchingStocks.map(s => s.id);
-      await supabase.from('transactions').delete().in('stock_id', ids);
-      await supabase.from('stocks').delete().in('id', ids);
+      await supabase.from('transactions').delete().in('stock_id', matchingIds);
+      await supabase.from('stocks').delete().in('id', matchingIds);
 
-      return res.status(200).json({ success: true, message: `Deleted ${ids.length} rows` });
+      return res.status(200).json({ success: true, message: `Deleted ${matchingIds.length} rows` });
     } catch (err: any) {
       return res.status(500).json({ error: err.message || 'Server error' });
     }

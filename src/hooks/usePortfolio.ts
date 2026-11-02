@@ -3,18 +3,8 @@ import { supabase, Portfolio } from '../lib/supabase'
 import { Stock, Transaction } from '../types'
 import { useAuth } from '../contexts/AuthContext'
 
-const DEMO_STOCKS: Stock[] = [
-  { symbol: 'AAPL', name: 'Apple Inc.', displaySymbol: 'AAPL-NASDAQ', quantity: 15, avgPrice: 165.50 },
-  { symbol: 'MSFT', name: 'Microsoft Corp.', displaySymbol: 'MSFT-NASDAQ', quantity: 8, avgPrice: 380.20 },
-  { symbol: 'RELIANCE', name: 'Reliance Industries', displaySymbol: 'RELIANCE-NSE', quantity: 25, avgPrice: 2850.00 }
-];
-
-const DEMO_TRANSACTIONS: Transaction[] = [
-  { id: 1, symbol: 'AAPL', displaySymbol: 'AAPL-NASDAQ', name: 'Apple Inc.', type: 'buy', quantity: 10, price: 160.00, date: new Date(Date.now() - 30*24*60*60*1000).toISOString(), total: 1600.00 },
-  { id: 2, symbol: 'MSFT', displaySymbol: 'MSFT-NASDAQ', name: 'Microsoft Corp.', type: 'buy', quantity: 8, price: 380.20, date: new Date(Date.now() - 15*24*60*60*1000).toISOString(), total: 3041.60 },
-  { id: 3, symbol: 'AAPL', displaySymbol: 'AAPL-NASDAQ', name: 'Apple Inc.', type: 'buy', quantity: 5, price: 176.50, date: new Date(Date.now() - 5*24*60*60*1000).toISOString(), total: 882.50 },
-  { id: 4, symbol: 'RELIANCE', displaySymbol: 'RELIANCE-NSE', name: 'Reliance Industries', type: 'buy', quantity: 25, price: 2850.00, date: new Date(Date.now() - 2*24*60*60*1000).toISOString(), total: 71250.00 }
-];
+const DEMO_STOCKS: Stock[] = [];
+const DEMO_TRANSACTIONS: Transaction[] = [];
 
 export function usePortfolio() {
   const { user } = useAuth()
@@ -150,15 +140,23 @@ export function usePortfolio() {
 
       if (transactionsError) throw transactionsError
 
-      // Convert to local format
-      const localStocks: Stock[] = stocksData?.map((stock: any) => ({
+      // Convert to local format and deduplicate by symbol so UI never shows duplicate rows
+      const seenSymbols = new Set<string>();
+      const deduplicatedStocksData = (stocksData || []).filter((stock: any) => {
+        const clean = stock.symbol.trim().toUpperCase().replace(/\.(NS|BO)$/i, '').split('-')[0];
+        if (seenSymbols.has(clean)) return false;
+        seenSymbols.add(clean);
+        return true;
+      });
+
+      const localStocks: Stock[] = deduplicatedStocksData.map((stock: any) => ({
         id: stock.id,
         symbol: stock.symbol,
         name: stock.name,
         displaySymbol: `${stock.symbol}-${stock.exchange}`,
         quantity: Number(stock.quantity),
         avgPrice: Number(stock.average_price)
-      })) || []
+      }));
 
       const localTransactions: Transaction[] = transactionsData?.map((transaction: { stocks: { symbol: string; name: string }; type: string; quantity: string | number; price: string | number; date: string }, index: number) => ({
         id: Date.now() + index, // Unique ID to avoid key collisions
@@ -185,9 +183,19 @@ export function usePortfolio() {
     if (!currentPortfolio) return
 
     try {
+      const cleanInput = stockData.symbol.trim().toUpperCase().replace(/\.(NS|BO)$/i, '').split('-')[0];
+
       // Check if we're in offline mode (demo portfolio)
       if (currentPortfolio.id === 'demo-portfolio-1') {
-        // Add stock locally for demo mode
+        const existing = stocks.find(s => s.symbol.trim().toUpperCase().replace(/\.(NS|BO)$/i, '').split('-')[0] === cleanInput);
+        if (existing) {
+          const totalQty = existing.quantity + stockData.quantity;
+          const totalVal = (existing.quantity * existing.avgPrice) + (stockData.quantity * stockData.avgPrice);
+          const newAvg = totalQty > 0 ? totalVal / totalQty : stockData.avgPrice;
+          setStocks(prev => prev.map(s => s.symbol === existing.symbol ? { ...s, quantity: totalQty, avgPrice: newAvg } : s));
+          return existing;
+        }
+
         const newStock: Stock = {
           symbol: stockData.symbol,
           name: stockData.name,
@@ -197,10 +205,52 @@ export function usePortfolio() {
         }
         
         setStocks(prev => [...prev, newStock])
-        return
+        return newStock;
       }
 
-      // Normal Supabase mode
+      // Check if stock already exists in database for this portfolio
+      const { data: existingStock } = await supabase
+        .from('stocks')
+        .select('*')
+        .eq('portfolio_id', currentPortfolio.id)
+        .or(`symbol.eq.${cleanInput},symbol.eq.${stockData.symbol}`)
+        .maybeSingle();
+
+      if (existingStock) {
+        // Stock already exists in this portfolio, update quantity & avg price
+        const totalQty = Number(existingStock.quantity) + Number(stockData.quantity);
+        const totalVal = (Number(existingStock.quantity) * Number(existingStock.average_price)) + (Number(stockData.quantity) * Number(stockData.avgPrice));
+        const newAvg = totalQty > 0 ? totalVal / totalQty : Number(stockData.avgPrice);
+
+        const { data: updatedStock, error: updateErr } = await supabase
+          .from('stocks')
+          .update({
+            quantity: totalQty,
+            average_price: newAvg
+          })
+          .eq('id', existingStock.id)
+          .select()
+          .single();
+
+        if (updateErr) throw updateErr;
+
+        const localStock: Stock = {
+          id: updatedStock.id,
+          symbol: updatedStock.symbol,
+          name: updatedStock.name,
+          displaySymbol: `${updatedStock.symbol}-${updatedStock.exchange}`,
+          quantity: Number(updatedStock.quantity),
+          avgPrice: Number(updatedStock.average_price)
+        };
+
+        setStocks(prev => prev.map(s => {
+          const sClean = s.symbol.trim().toUpperCase().replace(/\.(NS|BO)$/i, '').split('-')[0];
+          return (s.symbol === localStock.symbol || sClean === cleanInput) ? localStock : s;
+        }));
+        return localStock;
+      }
+
+      // Normal Supabase mode - insert new stock
       const { data: newStock, error } = await supabase
         .from('stocks')
         .insert([{
@@ -217,6 +267,7 @@ export function usePortfolio() {
       if (error) throw error
 
       const localStock: Stock = {
+        id: newStock.id,
         symbol: newStock.symbol,
         name: newStock.name,
         displaySymbol: `${newStock.symbol}-${newStock.exchange}`,
@@ -225,7 +276,7 @@ export function usePortfolio() {
       }
 
       setStocks(prev => [...prev, localStock])
-      return { ...localStock, id: newStock.id } // Return with DB ID for further operations
+      return localStock
     } catch (err) {
       console.error('Error adding stock:', err)
       throw err
@@ -276,15 +327,16 @@ export function usePortfolio() {
       }
 
       // Normal Supabase mode
-      // Find the stock in database
-      const { data: stockData, error: stockError } = await supabase
+      // Find the stock in database (handles clean symbols and duplicate rows gracefully)
+      const cleanSym = transactionData.stockSymbol.trim().toUpperCase().replace(/\.(NS|BO)$/i, '').split('-')[0];
+      const { data: stockRows, error: stockError } = await supabase
         .from('stocks')
         .select('*')
         .eq('portfolio_id', currentPortfolio?.id)
-        .eq('symbol', transactionData.stockSymbol)
-        .maybeSingle()
+        .or(`symbol.eq.${cleanSym},symbol.eq.${transactionData.stockSymbol}`);
 
-      if (stockError || !stockData) throw new Error('Stock not found')
+      if (stockError || !stockRows || stockRows.length === 0) throw new Error('Stock not found');
+      const stockData = stockRows[0];
 
       const { data: newTransaction, error } = await supabase
         .from('transactions')
@@ -408,27 +460,35 @@ export function usePortfolio() {
         console.warn('Backend delete API failed, falling back to direct Supabase:', apiErr);
       }
 
-      // 2. Direct Supabase Fallback
-      let query = supabase.from('stocks').select('id');
-      if (stockId) {
-        query = query.eq('id', stockId);
-      } else if (currentPortfolio?.id) {
-        query = query.eq('portfolio_id', currentPortfolio.id).or(`symbol.eq.${cleanSymbol},symbol.eq.${symbol}`);
-      } else {
-        query = query.or(`symbol.eq.${cleanSymbol},symbol.eq.${symbol}`);
+      // 2. Direct Supabase Fallback: Find all matching stocks in this portfolio (or globally)
+      const portfolioId = currentPortfolio?.id;
+      let query = supabase.from('stocks').select('id, symbol');
+      if (portfolioId) {
+        query = query.eq('portfolio_id', portfolioId);
       }
 
-      const { data: matchingStocks, error: stockError } = await query;
+      const { data: allStocks, error: stockError } = await query;
       if (stockError) {
         console.warn('Could not query stocks in Supabase:', stockError);
       }
 
-      if (matchingStocks && matchingStocks.length > 0) {
-        const ids = matchingStocks.map(s => s.id);
-        await supabase.from('transactions').delete().in('stock_id', ids);
-        const { error: delErr } = await supabase.from('stocks').delete().in('id', ids);
-        if (delErr) {
-          console.error('Error deleting stock row in Supabase:', delErr);
+      if (allStocks && allStocks.length > 0) {
+        const matchingIds = allStocks
+          .filter(s => {
+            if (stockId && s.id === stockId) return true;
+            const sClean = s.symbol.trim().toUpperCase().replace(/\.(NS|BO)$/i, '').split('-')[0];
+            return s.symbol.toUpperCase() === symbol.toUpperCase() || sClean === cleanSymbol;
+          })
+          .map(s => s.id);
+
+        if (matchingIds.length > 0) {
+          await supabase.from('transactions').delete().in('stock_id', matchingIds);
+          const { error: delErr } = await supabase.from('stocks').delete().in('id', matchingIds);
+          if (delErr) {
+            console.error('Error deleting stock row in Supabase:', delErr);
+          } else {
+            console.log(`Successfully deleted ${matchingIds.length} stock row(s) from Supabase`);
+          }
         }
       }
     } catch (err) {
@@ -456,6 +516,9 @@ export function usePortfolio() {
         }
         
         setPortfolios(prev => [...prev, newPortfolio])
+        setCurrentPortfolio(newPortfolio)
+        setStocks([])
+        setTransactions([])
         return newPortfolio
       }
 
@@ -474,6 +537,9 @@ export function usePortfolio() {
       if (error) throw error
 
       setPortfolios(prev => [...prev, newPortfolio])
+      setCurrentPortfolio(newPortfolio)
+      setStocks([])
+      setTransactions([])
       return newPortfolio
     } catch (err) {
       console.error('Error creating portfolio:', err)
