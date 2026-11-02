@@ -1818,131 +1818,94 @@ const IntradayPlayer: React.FC = () => {
               <div
                 key={stock.symbol}
                 onClick={() => setSelectedStock(stock)}
-                className="bg-[#0c1017] rounded-xl p-4 flex flex-col justify-between transition-all duration-200 cursor-pointer group border border-slate-800 hover:border-slate-700 hover:bg-[#0e131d] shadow-lg relative overflow-hidden"
+                className="bg-[#0c1017] rounded-xl p-4 flex flex-col justify-between transition-all duration-200 cursor-pointer group border border-slate-800 hover:border-slate-700 hover:bg-[#0e131d] shadow-sm relative overflow-hidden"
               >
                 <div>
-                  {/* Symbol & Price Header */}
-                  <div className="flex items-start justify-between gap-2 mb-2.5">
+                  {/* Symbol, Name & LTP Header */}
+                  <div className="flex items-start justify-between gap-2 mb-3">
                     <div className="flex items-center gap-2.5">
-                      <StockLogo symbol={stock.symbol} className="w-8 h-8 rounded-lg shrink-0 border border-slate-800 bg-[#121824]" />
+                      <StockLogo symbol={stock.symbol} className="w-9 h-9 rounded-lg shrink-0 border border-slate-800 bg-[#121824]" />
                       <div>
                         <div className="flex items-center gap-1.5">
-                          <h3 className="text-sm font-bold text-white group-hover:text-emerald-400 transition tracking-tight font-sans">
+                          <h3 className="text-sm font-bold text-white group-hover:text-emerald-400 transition tracking-tight">
                             {stock.symbol}
                           </h3>
-                          <span className="text-[9px] font-mono text-slate-400 uppercase bg-slate-800 px-1 rounded">
+                          <span className="text-[10px] font-mono text-slate-400 bg-slate-800/80 px-1.5 py-0.5 rounded border border-slate-700/60">
                             {stock.sector}
                           </span>
                         </div>
-                        <div className="flex items-center gap-1.5 mt-0.5 font-mono">
-                          <span className="text-xs font-bold text-slate-100">
-                            ₹{stock.price.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                          </span>
-                          <span className={`text-[10px] font-semibold px-1 rounded ${
-                            stock.change >= 0 ? 'text-emerald-400 bg-emerald-500/10' : 'text-rose-400 bg-rose-500/10'
-                          }`}>
-                            {stock.change >= 0 ? '+' : ''}{stock.change.toFixed(2)}%
-                          </span>
+                        <div className="text-[11px] text-slate-400 truncate max-w-[140px] mt-0.5">
+                          {stock.name}
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex flex-col items-end gap-1">
-                      <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider border shrink-0 flex items-center gap-1 ${
+                    <div className="text-right">
+                      <div className="text-sm font-bold text-white font-mono">
+                        ₹{stock.price.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                      </div>
+                      <div className={`text-[11px] font-semibold ${
+                        stock.change >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                      }`}>
+                        {stock.change >= 0 ? '+' : ''}{stock.change.toFixed(2)}%
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Trigger & Direction Pill */}
+                  <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-slate-900/80 border border-slate-800 text-xs mb-3">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
                         isBull
-                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                          : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                          ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                          : 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
                       }`}>
                         {isBull ? 'BUY' : 'SELL'}
                       </span>
-                      <span className="flex items-center gap-1 text-[10px] font-mono text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/25 font-bold">
-                        <Clock className="w-2.5 h-2.5 text-amber-400" />
-                        <span>{stock.triggerTime}</span>
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Strategy Title & Gate Progress */}
-                  <div className="flex items-center justify-between gap-1 text-[11px] mb-2 font-sans">
-                    <span className="font-medium text-slate-200">
-                      {stock.setupTitle}
-                    </span>
-                    <span className="text-[10px] font-mono text-slate-400">
-                      {stock.gatesPassedCount}/5 Gates
-                    </span>
-                  </div>
-
-                  {/* Technical Confluence Badges */}
-                  <div className="flex items-center gap-1.5 flex-wrap my-2 font-mono text-[10px]">
-                    <span className={`px-1.5 py-0.5 rounded border ${
-                      stock.vwapStatus === 'ABOVE_VWAP'
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                        : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                    }`}>
-                      {stock.vwapStatus === 'ABOVE_VWAP' ? 'Above VWAP' : 'Below VWAP'}
-                    </span>
-                    <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                      {stock.volMultiplier}x Vol
-                    </span>
-                    <span className="px-1.5 py-0.5 rounded bg-slate-800 text-emerald-400 border border-slate-700 ml-auto font-semibold">
-                      Score: {stock.technicalScore}
-                    </span>
-                  </div>
-
-                  {/* Execution Status Strip */}
-                  <div className="my-2 p-2.5 bg-[#0f1422] border border-slate-800 rounded-xl space-y-2">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-slate-400 font-medium font-sans">Trigger</span>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold tracking-tight border ${
-                        stock.triggerType === 'ENTER_CMP'
-                          ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                          : stock.triggerType === 'BUY_ABOVE'
-                            ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                            : stock.triggerType === 'SELL_BELOW'
-                              ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
-                              : stock.triggerType === 'WAIT_PULLBACK'
-                                ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
-                                : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30'
-                      }`}>
+                      <span className="font-mono text-slate-200 text-[11px] font-semibold">
                         {stock.triggerLabel}
                       </span>
                     </div>
+                    <span className="text-[10px] font-mono text-slate-400 flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-slate-500" />
+                      {stock.triggerTime}
+                    </span>
+                  </div>
 
-                    <div className="flex items-center justify-between text-[10px]">
-                      <span className="text-slate-400 font-medium font-sans">Live Status</span>
-                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-medium border ${metrics.statusBadgeColor}`}>
-                        {metrics.statusLabel}
-                      </span>
+                  {/* Clean 4-Column Levels Grid */}
+                  <div className="grid grid-cols-4 gap-1.5 text-center font-mono text-[11px] p-2 rounded-lg bg-[#080b11] border border-slate-800/80 mb-2">
+                    <div>
+                      <div className="text-slate-500 text-[9px] uppercase">Entry</div>
+                      <div className="font-semibold text-slate-200">₹{stock.entryPrice.toFixed(1)}</div>
                     </div>
+                    <div>
+                      <div className="text-rose-400 text-[9px] uppercase">SL</div>
+                      <div className="font-semibold text-rose-400">₹{stock.stopLoss.toFixed(1)}</div>
+                    </div>
+                    <div>
+                      <div className="text-emerald-400 text-[9px] uppercase">Target 1</div>
+                      <div className="font-semibold text-emerald-400">₹{stock.target1.toFixed(1)}</div>
+                    </div>
+                    <div>
+                      <div className="text-teal-400 text-[9px] uppercase">Target 2</div>
+                      <div className="font-semibold text-teal-400">₹{stock.target2.toFixed(1)}</div>
+                    </div>
+                  </div>
 
-                    {/* Clean Levels Grid */}
-                    <div className="grid grid-cols-4 gap-1 text-[10px] font-mono pt-1 border-t border-slate-800/80">
-                      <div>
-                        <div className="text-slate-500 text-[9px] uppercase">Entry</div>
-                        <div className="font-semibold text-slate-200">₹{stock.entryPrice.toFixed(1)}</div>
-                      </div>
-                      <div>
-                        <div className="text-rose-400 text-[9px] uppercase">SL</div>
-                        <div className="font-semibold text-rose-400">₹{stock.stopLoss.toFixed(1)}</div>
-                      </div>
-                      <div>
-                        <div className="text-emerald-400 text-[9px] uppercase">T1</div>
-                        <div className="font-semibold text-emerald-400">₹{stock.target1.toFixed(1)}</div>
-                      </div>
-                      <div>
-                        <div className="text-teal-400 text-[9px] uppercase">T2</div>
-                        <div className="font-semibold text-teal-400">₹{stock.target2.toFixed(1)}</div>
-                      </div>
-                    </div>
+                  {/* Order Status */}
+                  <div className="flex items-center justify-between text-[11px] px-1 py-1">
+                    <span className="text-slate-400 font-sans">Status</span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium border ${metrics.statusBadgeColor}`}>
+                      {metrics.statusLabel}
+                    </span>
                   </div>
                 </div>
 
                 {/* Footer Actions */}
-                <div className="mt-2 pt-2 border-t border-slate-800 flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono">
-                    <Clock className="w-3 h-3 text-amber-400" />
-                    <span className="text-amber-300/90 font-semibold">Triggered: {stock.triggerTime}</span>
-                  </div>
+                <div className="mt-3 pt-2.5 border-t border-slate-800 flex items-center justify-between">
+                  <span className="text-[11px] text-slate-400 font-sans">
+                    Setup: <span className="text-slate-300 font-medium">{stock.setupTitle}</span>
+                  </span>
                   <div className="flex items-center gap-1.5">
                     <button
                       type="button"
@@ -1950,22 +1913,21 @@ const IntradayPlayer: React.FC = () => {
                         e.stopPropagation();
                         toggleWatchlist(stock);
                       }}
-                      className={`p-1 rounded-lg border transition cursor-pointer select-none ${
+                      className={`p-1.5 rounded-lg border transition cursor-pointer select-none ${
                         isWatchlisted
                           ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                          : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-emerald-400'
+                          : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
                       }`}
                       title={isWatchlisted ? 'Remove from Saved' : 'Save Intraday Trade'}
                     >
-                      <Bookmark className={`w-3 h-3 ${isWatchlisted ? 'fill-emerald-400 text-emerald-400' : ''}`} />
+                      <Bookmark className={`w-3.5 h-3.5 ${isWatchlisted ? 'fill-emerald-400 text-emerald-400' : ''}`} />
                     </button>
                     <button
                       type="button"
                       onClick={() => setSelectedStock(stock)}
-                      className="flex items-center gap-1 text-xs font-medium text-slate-300 hover:text-white transition"
+                      className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-medium transition cursor-pointer"
                     >
-                      <span>View Setup</span>
-                      <ChevronRight className="w-3 h-3" />
+                      Details
                     </button>
                   </div>
                 </div>
@@ -1980,255 +1942,158 @@ const IntradayPlayer: React.FC = () => {
         const modalMetrics = getPerformanceMetrics(selectedStock);
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
-            <div className="bg-[#0a0e17] border border-slate-800 rounded-2xl max-w-xl w-full p-5 shadow-2xl relative overflow-hidden space-y-4 max-h-[92vh] overflow-y-auto custom-scrollbar font-sans">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+            <div className="bg-[#0c1017] border border-slate-800 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl font-sans">
               
-              {/* Header */}
-              <div className="flex items-start justify-between border-b border-slate-800 pb-3">
+              {/* Header: Symbol, Name, LTP, Actions */}
+              <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-800">
                 <div className="flex items-center gap-3">
-                  <StockLogo symbol={selectedStock.symbol} className="w-10 h-10 rounded-xl border border-slate-800 bg-[#121824]" />
+                  <StockLogo symbol={selectedStock.symbol} className="w-10 h-10 rounded-xl shrink-0 border border-slate-800 bg-[#121824]" />
                   <div>
                     <div className="flex items-center gap-2">
-                      <h2 className="text-base font-bold text-white">{selectedStock.symbol}</h2>
-                      <span className="text-xs text-slate-400">({selectedStock.name})</span>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-semibold uppercase ${
-                        selectedStock.isBull ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                      <h2 className="text-base font-bold text-white tracking-tight">
+                        {selectedStock.symbol}
+                      </h2>
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-400 bg-slate-800/80 border border-slate-700/60">
+                        NSE
+                      </span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                        selectedStock.isBull ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
                       }`}>
-                        {selectedStock.tradeType === 'BUY' ? 'BUY · MIS' : 'SELL · MIS'}
+                        {selectedStock.isBull ? 'BUY' : 'SELL'}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400 font-mono mt-0.5 flex items-center gap-1.5 flex-wrap">
-                      <span>LTP: ₹{selectedStock.price.toFixed(2)}</span>
-                      <span>·</span>
-                      <span className="text-amber-300 flex items-center gap-1 font-semibold">
-                        <Clock className="w-3 h-3 text-amber-400" />
-                        Triggered at: {selectedStock.triggerTime}
-                      </span>
-                      <span>·</span>
-                      <span>Sector: {selectedStock.sector} ({selectedStock.sectorChange >= 0 ? '+' : ''}{selectedStock.sectorChange}%)</span>
-                    </p>
+                    <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-2">
+                      <span>{selectedStock.name}</span>
+                      <span>•</span>
+                      <span className="text-slate-500">{selectedStock.sector}</span>
+                    </div>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-2">
-                  <a
-                    href={`https://in.tradingview.com/chart/?symbol=NSE:${selectedStock.symbol}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-medium transition"
-                    title="Open live chart in TradingView"
-                  >
-                    <span>Chart</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
+                  <div className="text-right">
+                    <div className="text-base font-bold text-white font-mono">
+                      ₹{selectedStock.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                    <div className={`text-xs font-semibold ${selectedStock.change >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {selectedStock.change >= 0 ? '+' : ''}{selectedStock.change.toFixed(2)}%
+                    </div>
+                  </div>
                   <button
                     onClick={() => setSelectedStock(null)}
-                    className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 flex items-center justify-center transition cursor-pointer"
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer ml-1"
                   >
-                    <X className="w-4 h-4" />
+                    <X className="w-5 h-5" />
                   </button>
                 </div>
               </div>
 
-              {/* Rationale & Setup Quality Strip */}
-              <div className="bg-[#0f1422] border border-slate-800 rounded-xl p-3 space-y-1.5 text-xs">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="font-semibold text-slate-200">
-                    {selectedStock.setupTitle}
-                  </span>
-                  <span className="font-mono text-emerald-400 font-semibold">
-                    Conviction Score: {selectedStock.technicalScore}/100 ({selectedStock.gatesPassedCount}/5 Gates)
-                  </span>
-                </div>
-                <p className="text-slate-300 leading-relaxed text-xs">
-                  {selectedStock.strategyRationale}
-                </p>
-              </div>
-
-              {/* Action Trigger Directive Banner */}
-              <div className={`p-3 rounded-xl border flex items-center justify-between gap-2.5 ${
-                selectedStock.triggerType === 'ENTER_CMP'
-                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-                  : selectedStock.triggerType === 'BUY_ABOVE'
-                    ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
-                    : selectedStock.triggerType === 'SELL_BELOW'
-                      ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
-                      : selectedStock.triggerType === 'WAIT_PULLBACK'
-                        ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-300'
-                        : 'bg-yellow-500/10 border-yellow-500/30 text-yellow-300'
-              }`}>
-                <div className="flex items-center gap-2">
-                  <Zap className="w-4 h-4 shrink-0" />
-                  <div>
-                    <div className="text-xs font-bold font-mono uppercase tracking-wide">
-                      {selectedStock.triggerType === 'ENTER_CMP' ? 'Execution Directive: Immediate Market Entry' :
-                       selectedStock.triggerType === 'BUY_ABOVE' ? 'Execution Directive: Stop-Limit Breakout Order' :
-                       selectedStock.triggerType === 'SELL_BELOW' ? 'Execution Directive: Stop-Limit Breakdown Order' :
-                       selectedStock.triggerType === 'WAIT_PULLBACK' ? 'Execution Directive: Pullback Limit Order' :
-                       'Risk Guard: Stock Overextended - Wait For Dip'}
-                    </div>
-                    <div className="text-[11px] opacity-90 font-sans mt-0.5">
-                      <span className="font-semibold text-amber-300 mr-1">⚡ Triggered {selectedStock.triggerTime}:</span>
-                      {selectedStock.triggerType === 'ENTER_CMP' ? `Enter at Current Market Price ₹${selectedStock.price.toFixed(2)}.` :
-                       selectedStock.triggerType === 'BUY_ABOVE' ? `Place Buy Stop-Limit trigger at ₹${selectedStock.triggerPrice.toFixed(2)} (Only enter if price breaks out).` :
-                       selectedStock.triggerType === 'SELL_BELOW' ? `Place Sell Stop-Limit trigger at ₹${selectedStock.triggerPrice.toFixed(2)} (Only enter if price breaks down).` :
-                       selectedStock.triggerType === 'WAIT_PULLBACK' ? `Do not chase at market! Set limit bid near VWAP support ₹${selectedStock.triggerPrice.toFixed(2)}.` :
-                       `Stock has already gained ${selectedStock.change.toFixed(1)}%. Do not chase at peak; wait for pullback to VWAP.`}
-                    </div>
-                  </div>
-                </div>
-                <div className="px-2.5 py-1 rounded-lg bg-black/40 text-[10px] font-mono font-bold shrink-0">
-                  {selectedStock.triggerLabel}
-                </div>
-              </div>
-
-              {/* Order Levels */}
-              <div className="p-3 bg-[#0f1422] border border-slate-800 rounded-xl space-y-2">
+              {/* Action Directive & Live Status */}
+              <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-300 font-medium">Session Order Levels (Strict 1:2.6 R:R)</span>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium border ${modalMetrics.statusBadgeColor}`}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-400 font-medium">Order Trigger:</span>
+                    <span className="font-bold text-slate-100 font-mono">
+                      {selectedStock.triggerLabel}
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-mono text-slate-400 flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-slate-500" />
+                    {selectedStock.triggerTime}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-800/60">
+                  <span className="text-slate-400 font-medium">Status:</span>
+                  <span className={`px-2 py-0.5 rounded text-[11px] font-mono font-medium border ${modalMetrics.statusBadgeColor}`}>
                     {modalMetrics.statusLabel}
                   </span>
                 </div>
-
-                <div className="grid grid-cols-4 gap-2 text-center text-xs font-mono pt-1">
-                  <div className="bg-[#080b12] p-2 rounded-lg border border-slate-800">
-                    <div className="text-[9px] text-slate-500 uppercase">Entry Price</div>
-                    <div className="font-semibold text-slate-200">₹{selectedStock.entryPrice.toFixed(2)}</div>
-                  </div>
-                  <div className="bg-[#080b12] p-2 rounded-lg border border-slate-800">
-                    <div className="text-[9px] text-rose-400 uppercase">Stop Loss</div>
-                    <div className="font-semibold text-rose-400">₹{selectedStock.stopLoss.toFixed(2)}</div>
-                  </div>
-                  <div className="bg-[#080b12] p-2 rounded-lg border border-slate-800">
-                    <div className="text-[9px] text-emerald-400 uppercase">Target 1 (50%)</div>
-                    <div className="font-semibold text-emerald-400">₹{selectedStock.target1.toFixed(2)}</div>
-                  </div>
-                  <div className="bg-[#080b12] p-2 rounded-lg border border-slate-800">
-                    <div className="text-[9px] text-teal-300 uppercase">Target 2 (Runner)</div>
-                    <div className="font-semibold text-teal-300">₹{selectedStock.target2.toFixed(2)}</div>
-                  </div>
-                </div>
-
-                <div className="mt-2 p-2 rounded-lg border border-slate-800/80 text-xs font-mono flex items-center justify-between text-slate-400">
-                  <span>Session Range</span>
-                  <span>
-                    High: ₹{modalMetrics.dayHigh?.toFixed(1)} · Low: ₹{modalMetrics.dayLow?.toFixed(1)} · VWAP: ₹{selectedStock.vwap.toFixed(1)}
-                  </span>
-                </div>
               </div>
 
-              {/* Institutional Risk Management Rules */}
-              <div className="p-3 bg-[#0a0e17] border border-slate-800 rounded-xl space-y-2 text-xs">
-                <div className="flex items-center justify-between text-slate-300 font-medium">
-                  <span className="flex items-center gap-1.5 text-emerald-400 font-mono text-[11px] font-semibold">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Prop Desk Money Management</span>
-                  </span>
-                  <span className="text-[10px] text-slate-500 font-mono">1% Max Capital Risk</span>
+              {/* Key Price Levels */}
+              <div>
+                <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2 font-mono">
+                  Order Execution Levels
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] font-sans text-slate-300">
-                  <div className="bg-[#101522] p-2 rounded-lg border border-slate-800/80 space-y-0.5">
-                    <div className="font-semibold text-slate-200">1. Position Sizing</div>
-                    <div className="text-slate-400 text-[10px]">Risk per share is ₹{Math.abs(selectedStock.entryPrice - selectedStock.stopLoss).toFixed(1)}. Size qty = Max Risk / ₹{Math.abs(selectedStock.entryPrice - selectedStock.stopLoss).toFixed(1)}.</div>
+                <div className="grid grid-cols-4 gap-2 text-center font-mono">
+                  <div className="p-2.5 rounded-xl bg-[#080b11] border border-slate-800">
+                    <div className="text-[10px] text-slate-500 uppercase">Entry</div>
+                    <div className="text-xs font-bold text-slate-200 mt-0.5">
+                      ₹{selectedStock.entryPrice.toFixed(2)}
+                    </div>
                   </div>
-                  <div className="bg-[#101522] p-2 rounded-lg border border-slate-800/80 space-y-0.5">
-                    <div className="font-semibold text-emerald-300">2. Target 1 (50% Book)</div>
-                    <div className="text-slate-400 text-[10px]">At ₹{selectedStock.target1.toFixed(1)}, book 50% profit immediately and trail Stop Loss to ₹{selectedStock.entryPrice.toFixed(1)} (Cost).</div>
+                  <div className="p-2.5 rounded-xl bg-[#080b11] border border-slate-800">
+                    <div className="text-[10px] text-rose-400 uppercase">Stop Loss</div>
+                    <div className="text-xs font-bold text-rose-400 mt-0.5">
+                      ₹{selectedStock.stopLoss.toFixed(2)}
+                    </div>
                   </div>
-                  <div className="bg-[#101522] p-2 rounded-lg border border-slate-800/80 space-y-0.5">
-                    <div className="font-semibold text-amber-300">3. 15:15 IST Cutoff</div>
-                    <div className="text-slate-400 text-[10px]">Never hold overnight. Square-off all open intraday positions before brokers auto-close at 15:15 IST.</div>
+                  <div className="p-2.5 rounded-xl bg-[#080b11] border border-slate-800">
+                    <div className="text-[10px] text-emerald-400 uppercase">Target 1</div>
+                    <div className="text-xs font-bold text-emerald-400 mt-0.5">
+                      ₹{selectedStock.target1.toFixed(2)}
+                    </div>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-[#080b11] border border-slate-800">
+                    <div className="text-[10px] text-teal-400 uppercase">Target 2</div>
+                    <div className="text-xs font-bold text-teal-400 mt-0.5">
+                      ₹{selectedStock.target2.toFixed(2)}
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Camarilla & Central Pivot Range (CPR) Matrix */}
-              <div className="bg-[#0f1422] border border-slate-800 rounded-xl p-3 space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-slate-200 uppercase font-mono text-[11px]">
-                    Camarilla &amp; CPR Technical Levels
-                  </span>
-                  {selectedStock.pivots.isNarrowCpr && (
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 font-medium">
-                      Narrow CPR ({selectedStock.pivots.cprWidthPct}%)
-                    </span>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-4 gap-2 text-center text-[10px] font-mono">
-                  <div className="bg-[#080b12] p-2 rounded-lg border border-slate-800">
-                    <div className="text-slate-500 text-[8px] uppercase">Cam H4 (BO)</div>
-                    <div className="font-semibold text-emerald-400">₹{selectedStock.pivots.camH4}</div>
+              {/* Technical Snapshot */}
+              <div className="p-3 rounded-xl bg-[#080b11] border border-slate-800 text-xs">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center font-mono">
+                  <div>
+                    <span className="text-[10px] text-slate-500 block uppercase">Day High</span>
+                    <span className="font-semibold text-slate-200">₹{selectedStock.dayHigh?.toFixed(2)}</span>
                   </div>
-                  <div className="bg-[#080b12] p-2 rounded-lg border border-slate-800">
-                    <div className="text-slate-500 text-[8px] uppercase">Cam H3 (Res)</div>
-                    <div className="font-semibold text-slate-300">₹{selectedStock.pivots.camH3}</div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 block uppercase">Day Low</span>
+                    <span className="font-semibold text-slate-200">₹{selectedStock.dayLow?.toFixed(2)}</span>
                   </div>
-                  <div className="bg-[#080b12] p-2 rounded-lg border border-slate-800">
-                    <div className="text-slate-500 text-[8px] uppercase">Cam L3 (Sup)</div>
-                    <div className="font-semibold text-slate-300">₹{selectedStock.pivots.camL3}</div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 block uppercase">VWAP</span>
+                    <span className="font-semibold text-slate-200">₹{selectedStock.vwap?.toFixed(2)}</span>
                   </div>
-                  <div className="bg-[#080b12] p-2 rounded-lg border border-slate-800">
-                    <div className="text-slate-500 text-[8px] uppercase">Cam L4 (BD)</div>
-                    <div className="font-semibold text-rose-400">₹{selectedStock.pivots.camL4}</div>
+                  <div>
+                    <span className="text-[10px] text-slate-500 block uppercase">RVOL</span>
+                    <span className="font-semibold text-emerald-400">{selectedStock.volMultiplier}x</span>
                   </div>
                 </div>
               </div>
 
-              {/* 5 Institutional Gates Verification Checklist */}
-              <div className="bg-[#0a0e17] border border-slate-800 rounded-xl p-3.5 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-200 uppercase font-mono">
-                    Verified Institutional Gates ({selectedStock.gatesPassedCount}/5 Passed)
-                  </span>
-                  <span className="text-[10px] font-mono text-emerald-400 font-semibold">
-                    High Probability
-                  </span>
-                </div>
-
-                <div className="space-y-1.5 text-xs text-slate-300">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className={`w-3.5 h-3.5 shrink-0 ${selectedStock.gates.sectorAlphaLeader ? 'text-emerald-400' : 'text-slate-600'}`} />
-                    <span><b>Gate 1: Sector Alpha:</b> Outperforming {selectedStock.sector} sector by {selectedStock.sectorAlpha >= 0 ? '+' : ''}{selectedStock.sectorAlpha}%</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className={`w-3.5 h-3.5 shrink-0 ${selectedStock.gates.cprCamarillaSetup ? 'text-emerald-400' : 'text-slate-600'}`} />
-                    <span><b>Gate 2: CPR/Camarilla:</b> {selectedStock.pivots.isNarrowCpr ? 'Narrow CPR Trend Day' : 'Holding Camarilla Breakout Pivot'}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className={`w-3.5 h-3.5 shrink-0 ${selectedStock.gates.orbConfirmation ? 'text-emerald-400' : 'text-slate-600'}`} />
-                    <span><b>Gate 3: 15-Min ORB:</b> Opening Range Breakout near session high ₹{selectedStock.dayHigh.toFixed(1)}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className={`w-3.5 h-3.5 shrink-0 ${selectedStock.gates.rvolSurge ? 'text-emerald-400' : 'text-slate-600'}`} />
-                    <span><b>Gate 4: RVOL Surge:</b> Volume surge of {selectedStock.volMultiplier}x confirming institutional participation</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className={`w-3.5 h-3.5 shrink-0 ${selectedStock.gates.vwapSweetSpot ? 'text-emerald-400' : 'text-slate-600'}`} />
-                    <span><b>Gate 5: VWAP Shield:</b> Price holding {selectedStock.vwapStatus === 'ABOVE_VWAP' ? 'above' : 'below'} VWAP ₹{selectedStock.vwap.toFixed(1)}</span>
-                  </div>
-                </div>
+              {/* Concise Setup & Risk Ratio */}
+              <div className="text-xs text-slate-400 flex items-center justify-between px-1">
+                <span><b className="text-slate-300">Strategy:</b> {selectedStock.setupTitle}</span>
+                <span className="text-slate-500 text-[11px] font-mono">R:R {selectedStock.riskReward}</span>
               </div>
 
-              {/* Action Buttons in Modal */}
-              <div className="flex items-center gap-2 pt-1">
+              {/* Bottom Actions */}
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
+                <a
+                  href={`https://in.tradingview.com/chart/?symbol=NSE:${selectedStock.symbol}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold flex items-center justify-center gap-2 transition"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>Open Chart (TradingView)</span>
+                </a>
                 <button
                   onClick={() => toggleWatchlist(selectedStock)}
-                  className={`flex-1 py-2.5 rounded-xl border text-xs font-semibold transition flex items-center justify-center gap-2 cursor-pointer ${
+                  className={`px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition border ${
                     savedWatchlist.includes(selectedStock.symbol)
                       ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                      : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:text-white'
                   }`}
                 >
                   <Bookmark className={`w-4 h-4 ${savedWatchlist.includes(selectedStock.symbol) ? 'fill-emerald-400 text-emerald-400' : ''}`} />
-                  <span>{savedWatchlist.includes(selectedStock.symbol) ? 'Saved in Watchlist' : 'Add to Intraday Watchlist'}</span>
-                </button>
-                <button
-                  onClick={() => setSelectedStock(null)}
-                  className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition cursor-pointer"
-                >
-                  Close
+                  <span>{savedWatchlist.includes(selectedStock.symbol) ? 'Saved' : 'Watchlist'}</span>
                 </button>
               </div>
 
