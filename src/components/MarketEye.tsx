@@ -55,20 +55,11 @@ interface MarketEyeData {
   high52?: number;
   low52?: number;
 
-  // Intraday Hunter (Relative Strength & Day Range Momentum)
+  // Intraday Hunter (Relative Strength)
   rsAlpha: number;
   rsScore: number;
   rsTrend: 'STRONG BUY' | 'OUTPERFORM' | 'NEUTRAL' | 'WEAK' | 'BREAKDOWN';
   hunterScore: number;
-  dayRangePos?: number;
-  vwapEst?: number;
-  isAboveVwap?: boolean;
-  vwapDistancePct?: number;
-  triggerPrice?: number;
-  targetPrice?: number;
-  stopLossPrice?: number;
-  intradaySetup?: string;
-  benchmarkName?: 'NIFTY' | 'BANK NIFTY';
 
   // Breakout Gems
   breakoutType: '52W HIGH' | 'DAY HIGH' | 'DAY LOW' | 'STRONG SURGE' | 'HEAVY DROP' | 'RANGE BREAK' | 'MOMENTUM';
@@ -214,9 +205,8 @@ const MarketEye = () => {
   const [isBreakoutFilterOpen, setIsBreakoutFilterOpen] = useState(false);
 
   const [boostSearch, setBoostSearch] = useState('');
-  const [boostFilter, setBoostFilter] = useState<'All Signals' | 'Bullish' | 'Bearish' | 'Day High' | 'Day Low'>('All Signals');
+  const [boostFilter, setBoostFilter] = useState<'All Signals' | 'Bullish' | 'Bearish'>('All Signals');
   const [isBoostFilterOpen, setIsBoostFilterOpen] = useState(false);
-  const [selectedHunterStock, setSelectedHunterStock] = useState<MarketEyeData | null>(null);
 
   const [weeklyBreakoutSearch, setWeeklyBreakoutSearch] = useState('');
   const [weeklyBreakdownSearch, setWeeklyBreakdownSearch] = useState('');
@@ -350,64 +340,36 @@ const MarketEye = () => {
               
               // --- Benchmark & Relative Strength (RS / Alpha) Calculation ---
               const isBank = BANK_NIFTY_SYMBOLS.includes(symbol);
-              const benchmarkName: MarketEyeData['benchmarkName'] = isBank ? 'BANK NIFTY' : 'NIFTY';
               const benchmarkChange = isBank ? baselineBankNiftyChange : baselineNiftyChange;
               
               // 1. Pure Alpha vs Benchmark (Signed e.g. +3.47% or -5.57%)
               const rsAlpha = Number((stockChange - benchmarkChange).toFixed(2));
               
-              // 2. Intraday Day Range Position (0% = at Day Low, 100% = at Day High)
+              // 2. Intraday Day Range Position & VWAP Confluence
               const daySpread = dayHigh - dayLow;
-              const dayRangePos = daySpread > 0 
-                ? Math.min(100, Math.max(0, Number((((currentPrice - dayLow) / daySpread) * 100).toFixed(1))))
-                : 50;
-
-              // 3. Intraday VWAP / Typical Price estimate
-              const vwapEst = Number(((dayHigh + dayLow + currentPrice) / 3).toFixed(2));
+              const dayRangePos = daySpread > 0 && currentPrice ? (currentPrice - dayLow) / daySpread : 0.5;
+              const vwapEst = (dayHigh + dayLow + currentPrice) / 3;
               const isAboveVwap = currentPrice >= vwapEst;
-              const vwapDistancePct = vwapEst > 0 ? Number((((currentPrice - vwapEst) / vwapEst) * 100).toFixed(2)) : 0;
-
-              // 4. Actionable Execution Levels
-              const isBullHunter = rsAlpha >= 0;
-              const triggerPrice = isBullHunter 
-                ? Number((dayHigh >= currentPrice ? dayHigh : currentPrice * 1.002).toFixed(2))
-                : Number((dayLow <= currentPrice ? dayLow : currentPrice * 0.998).toFixed(2));
               
-              const targetPrice = isBullHunter
-                ? Number((currentPrice * 1.012).toFixed(2))
-                : Number((currentPrice * 0.988).toFixed(2));
-
-              const stopLossPrice = isBullHunter
-                ? Number((Math.min(currentPrice * 0.993, vwapEst > 0 ? vwapEst : currentPrice * 0.993)).toFixed(2))
-                : Number((Math.max(currentPrice * 1.007, vwapEst > 0 ? vwapEst : currentPrice * 1.007)).toFixed(2));
-
-              // 5. Real Institutional Intraday RS Score (1 to 99)
+              // 3. Institutional Intraday RS Score (1 to 99)
               let rawScore = 50;
-              if (isBullHunter) {
-                rawScore = 50 + (rsAlpha * 7.5) + ((dayRangePos - 50) * 0.4) + (isAboveVwap ? 8 : -6);
+              if (rsAlpha >= 0) {
+                rawScore = 50 + (rsAlpha * 8) + ((dayRangePos - 0.5) * 20) + (isAboveVwap ? 5 : -4);
               } else {
-                rawScore = 50 + (rsAlpha * 7.5) - ((50 - dayRangePos) * 0.4) - (!isAboveVwap ? 8 : -6);
+                rawScore = 50 + (rsAlpha * 8) + ((dayRangePos - 0.5) * 20) + (!isAboveVwap ? -5 : 4);
               }
               const rsScore = Math.min(99, Math.max(5, Math.round(rawScore)));
               
-              // 6. Action Signal & Setup
+              // 4. RS Trend / Action signal
               let rsTrend: MarketEyeData['rsTrend'] = 'NEUTRAL';
-              if (rsScore >= 78 && isAboveVwap) rsTrend = 'STRONG BUY';
-              else if (rsScore >= 58 && rsAlpha > 0) rsTrend = 'OUTPERFORM';
-              else if (rsScore <= 25 && !isAboveVwap) rsTrend = 'BREAKDOWN';
-              else if (rsScore <= 42 && rsAlpha < 0) rsTrend = 'WEAK';
+              if (rsScore >= 78 && stockChange > 0 && isAboveVwap) rsTrend = 'STRONG BUY';
+              else if (rsScore >= 58 && stockChange > 0) rsTrend = 'OUTPERFORM';
+              else if (rsScore <= 22 && stockChange < 0 && !isAboveVwap) rsTrend = 'BREAKDOWN';
+              else if (rsScore <= 42 && stockChange < 0) rsTrend = 'WEAK';
               else rsTrend = rsAlpha >= 0 ? 'OUTPERFORM' : 'WEAK';
 
-              let intradaySetup = '';
-              if (dayRangePos >= 90 && rsAlpha > 0.4) intradaySetup = 'Day High Breakout';
-              else if (dayRangePos <= 10 && rsAlpha < -0.4) intradaySetup = 'Day Low Breakdown';
-              else if (isAboveVwap && rsAlpha >= 1.0) intradaySetup = 'Alpha Leader';
-              else if (!isAboveVwap && rsAlpha <= -1.0) intradaySetup = 'Short Breakdown';
-              else if (isAboveVwap) intradaySetup = 'Above VWAP';
-              else intradaySetup = 'Below VWAP';
-
               // Composite Hunter Score
-              const hunterScore = (Math.abs(rsAlpha) * 2.5 + absChange * 1.5 + (Math.abs(dayRangePos - 50) * 0.15)) * (rsAlpha >= 0 ? 1.2 : 0.95);
+              const hunterScore = (Math.abs(rsAlpha) * 2.5 + absChange * 1.5 + Math.abs(dayRangePos - 0.5) * 10) * (rsAlpha >= 0 ? 1.2 : 0.95);
 
               // --- Breakout Type & Trigger Classification ---
               const dist52wH = high52 > 0 ? ((high52 - currentPrice) / high52) * 100 : 999;
@@ -470,15 +432,6 @@ const MarketEye = () => {
                 rsScore,
                 rsTrend,
                 hunterScore,
-                dayRangePos,
-                vwapEst,
-                isAboveVwap,
-                vwapDistancePct,
-                triggerPrice,
-                targetPrice,
-                stopLossPrice,
-                intradaySetup,
-                benchmarkName,
                 breakoutType,
                 breakoutTrigger,
                 signalPct,
@@ -807,30 +760,26 @@ const MarketEye = () => {
     })
     .slice(0, 8);
     
-  // Intraday Hunter: Institutional Relative Strength & Day Range Momentum
+  // Intraday Hunter: Institutional Relative Strength & Alpha Radar
   const boosters = [...marketData]
     .filter(d => d.symbol.toLowerCase().includes(boostSearch.toLowerCase()))
     .filter(d => {
       const absAlpha = Math.abs(d.rsAlpha);
       const absMove = Math.abs(d.change);
-      const qualifies = absAlpha >= 0.2 || absMove >= 0.5 || (d.dayRangePos !== undefined && (d.dayRangePos >= 80 || d.dayRangePos <= 20));
+      const qualifies = absAlpha >= 0.25 || absMove >= 0.6 || d.rsScore >= 65 || d.rsScore <= 35;
       if (!qualifies) return false;
 
       if (boostFilter === 'Bullish') return d.rsAlpha > 0 && d.change >= 0;
       if (boostFilter === 'Bearish') return d.rsAlpha < 0 && d.change <= 0;
-      if (boostFilter === 'Day High') return (d.dayRangePos ?? 50) >= 80;
-      if (boostFilter === 'Day Low') return (d.dayRangePos ?? 50) <= 20;
       return true;
     })
     .sort((a, b) => {
       if (boostFilter === 'Bullish') return b.rsAlpha - a.rsAlpha;
       if (boostFilter === 'Bearish') return a.rsAlpha - b.rsAlpha;
-      if (boostFilter === 'Day High') return (b.dayRangePos ?? 0) - (a.dayRangePos ?? 0);
-      if (boostFilter === 'Day Low') return (a.dayRangePos ?? 0) - (b.dayRangePos ?? 0);
       // All Signals: Sort by largest absolute Alpha divergence
       return Math.abs(b.rsAlpha) - Math.abs(a.rsAlpha);
     })
-    .slice(0, 10);
+    .slice(0, 8);
 
   const filteredWeeklyBreakouts = weeklyBreakouts
     .filter(d => d.symbol.toLowerCase().includes(weeklyBreakoutSearch.toLowerCase()))
@@ -1365,65 +1314,88 @@ const MarketEye = () => {
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 w-full min-w-0">
             
             {/* BREAKOUT GEMS */}
-            <div className="bg-[#111827] border border-slate-800 rounded-xl overflow-hidden flex flex-col transition-all">
-              <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/60 shrink-0">
-                <div className="flex items-center gap-3.5">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
-                    <Flame className="w-5 h-5" />
+            <div className="relative bg-gradient-to-br from-[#172030] to-[#131b26] border border-slate-700/50 hover:border-slate-500/80 rounded-2xl overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.5)] flex flex-col transition-all duration-300 group">
+              {/* Top glowing line for a premium feel */}
+              <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent opacity-50 group-hover:opacity-100 transition-opacity" />
+
+              <div className="p-4 sm:p-5 border-b border-slate-700/50 flex items-center justify-between bg-[#172030]/50 relative overflow-hidden shrink-0">
+                <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none bg-gradient-to-r from-emerald-500 to-transparent blur-2xl" />
+
+                <div className="flex items-center gap-4 sm:gap-5 relative z-10">
+                  <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-b from-[#1e293b] to-[#0f1520] border border-slate-600 shadow-[inset_0_2px_10px_rgba(255,255,255,0.1)] flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-all duration-300">
+                    <div className="scale-110 sm:scale-125">
+                      <div className="relative w-full h-full flex flex-col items-center justify-center">
+                        <div className="flex items-end gap-1">
+                          <div className="w-1.5 h-3 bg-red-500 rounded-sm shadow-[0_0_5px_currentColor]"/>
+                          <div className="w-1.5 h-4.5 bg-emerald-500 rounded-sm shadow-[0_0_5px_currentColor]"/>
+                          <div className="w-1.5 h-6.5 bg-emerald-400 rounded-sm shadow-[0_0_8px_currentColor]"/>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   <div>
-                    <div className="flex items-center gap-2.5">
-                      <h2 className="text-base sm:text-lg font-black text-white tracking-wide uppercase">BREAKOUT GEMS</h2>
-                      <span className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> LIVE SCAN
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-lg sm:text-2xl font-black text-white tracking-widest uppercase drop-shadow-[0_2px_10px_rgba(255,255,255,0.2)]">BREAKOUT GEMS</h2>
+                      <Flame className="w-5 h-5 text-orange-500 fill-orange-500 drop-shadow-[0_0_12px_rgba(249,115,22,0.8)] animate-pulse" />
+                    </div>
+                    <div className="flex items-center gap-2.5 mt-1.5 text-xs sm:text-sm font-bold text-slate-400">
+                      <span className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black shadow-[0_0_10px_rgba(16,185,129,0.2)] uppercase tracking-wider">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_5px_currentColor]" /> LIVE
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-semibold bg-slate-800/60 px-2 py-0.5 rounded border border-slate-700/40">
+                        {breakouts.length} Setups
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400 font-medium mt-0.5">
-                      Volume Surges & 52W / Day Range Breakouts
-                    </p>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <div className="relative hidden sm:block">
-                    <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input 
-                      type="text" 
-                      placeholder="Search Breakout..." 
-                      value={breakoutSearch}
-                      onChange={(e) => setBreakoutSearch(e.target.value.toUpperCase())}
-                      className="bg-slate-950 border border-slate-800 text-xs text-white rounded-lg pl-8 pr-3 py-1.5 w-36 focus:outline-none focus:border-emerald-500 transition-colors placeholder:text-slate-500"
-                    />
-                  </div>
+                <div className="relative hidden sm:block z-10">
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input 
+                    type="text" 
+                    placeholder="Search Breakout..." 
+                    value={breakoutSearch}
+                    onChange={(e) => setBreakoutSearch(e.target.value.toUpperCase())}
+                    className="bg-[#0f1520] border border-slate-700 text-sm text-white rounded-full pl-9 pr-4 py-1.5 w-44 focus:outline-none focus:border-emerald-500 transition-colors"
+                  />
                 </div>
               </div>
 
-              {/* Filters toolbar */}
-              <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-800 bg-slate-900/30 gap-2 overflow-x-auto custom-scrollbar">
-                <div className="flex items-center gap-1.5">
-                  {(['All Signals', 'Bullish', 'Bearish'] as const).map((filter) => (
-                    <button
-                      key={filter}
-                      onClick={() => setBreakoutFilter(filter)}
-                      className={`px-2.5 py-1 rounded text-xs font-bold transition-colors whitespace-nowrap ${
-                        breakoutFilter === filter
-                          ? 'bg-emerald-600 text-white shadow-sm'
-                          : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/60'
-                      }`}
-                    >
-                      {filter}
-                    </button>
-                  ))}
+              {/* Filters */}
+              <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800/60 bg-[#172030]/50 relative z-20">
+                <div className="relative">
+                  <button 
+                    onClick={() => setIsBreakoutFilterOpen(!isBreakoutFilterOpen)}
+                    onBlur={() => setTimeout(() => setIsBreakoutFilterOpen(false), 150)}
+                    className="flex items-center gap-1.5 bg-[#1e293b] hover:bg-slate-700 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-700 transition-colors"
+                  >
+                    {breakoutFilter === 'Bullish' ? <TrendingUp className="w-3.5 h-3.5 text-emerald-400" /> : 
+                     breakoutFilter === 'Bearish' ? <TrendingDown className="w-3.5 h-3.5 text-red-400" /> : 
+                     <Activity className="w-3.5 h-3.5 text-slate-400" />}
+                    {breakoutFilter} <ChevronDown className="w-3 h-3" />
+                  </button>
+                  {isBreakoutFilterOpen && (
+                    <div className="absolute top-full left-0 mt-1 w-36 bg-[#1e293b] border border-slate-700 rounded-lg shadow-xl overflow-hidden py-1 z-50">
+                      <button onMouseDown={(e) => { e.preventDefault(); setBreakoutFilter('All Signals'); setIsBreakoutFilterOpen(false); }} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
+                        <Activity className="w-3.5 h-3.5 text-slate-400"/> All Signals
+                      </button>
+                      <button onMouseDown={(e) => { e.preventDefault(); setBreakoutFilter('Bullish'); setIsBreakoutFilterOpen(false); }} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
+                        <TrendingUp className="w-3.5 h-3.5 text-emerald-400"/> Bullish
+                      </button>
+                      <button onMouseDown={(e) => { e.preventDefault(); setBreakoutFilter('Bearish'); setIsBreakoutFilterOpen(false); }} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
+                        <TrendingDown className="w-3.5 h-3.5 text-red-400"/> Bearish
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <span className="text-[10px] text-slate-400 font-mono hidden md:inline shrink-0">
-                  {breakouts.length} Setups
+                <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase hidden md:inline">
+                  High Probability Vol & Surge Breakouts
                 </span>
               </div>
 
               {/* Table */}
-              <div className="bg-slate-950/40 relative overflow-x-auto custom-scrollbar">
+              <div className="bg-[#0f1520]/50 relative overflow-x-auto custom-scrollbar">
                 <div className="w-full flex flex-col min-w-[550px]">
-                  <div className="sticky top-0 bg-slate-900/95 backdrop-blur-md z-10 border-b border-slate-800 flex items-center px-4 py-2.5 text-[10px] uppercase tracking-wider text-slate-400 font-bold shrink-0">
+                  <div className="sticky top-0 bg-[#172030]/95 backdrop-blur-md z-10 shadow-sm border-b border-slate-700/50 flex items-center px-4 py-3 text-[10px] uppercase tracking-wider text-slate-500 font-bold shrink-0">
                     <div className="w-[60px] sm:w-[70px] shrink-0">Signal</div>
                     <div className="flex-1 min-w-0 pr-2">Symbol & Price</div>
                     <div className="w-[85px] sm:w-[100px] text-center shrink-0">% Change</div>
@@ -1528,185 +1500,188 @@ const MarketEye = () => {
             </div>
 
             {/* INTRADAY HUNTER */}
-            <div className="bg-[#111827] border border-slate-800 rounded-xl overflow-hidden flex flex-col transition-all">
-              {/* Header */}
-              <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-900/60 shrink-0">
-                <div className="flex items-center gap-3.5">
-                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
-                    <Target className="w-5 h-5" />
+            <div className="relative bg-gradient-to-br from-[#172030] to-[#131b26] border border-slate-700/50 hover:border-slate-500/80 rounded-2xl overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.5)] flex flex-col transition-all duration-300 group">
+              {/* Top glowing line for a premium feel */}
+              <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-blue-500/50 to-transparent opacity-50 group-hover:opacity-100 transition-opacity" />
+
+              <div className="p-4 sm:p-5 border-b border-slate-700/50 flex items-center justify-between bg-[#172030]/50 relative overflow-hidden shrink-0">
+                <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none bg-gradient-to-r from-blue-500 to-transparent blur-2xl" />
+
+                <div className="flex items-center gap-4 sm:gap-5 relative z-10">
+                  <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-b from-[#1e293b] to-[#0f1520] border border-slate-600 shadow-[inset_0_2px_10px_rgba(255,255,255,0.1)] flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:shadow-[0_0_20px_rgba(59,130,246,0.3)] transition-all duration-300">
+                    <div className="scale-110 sm:scale-125">
+                      <div className="flex flex-col items-center justify-center">
+                        <Zap className="w-5 h-5 text-blue-400 fill-blue-400/30 drop-shadow-[0_0_8px_rgba(96,165,250,0.6)]" />
+                        <span className="text-[7px] font-black text-blue-300 tracking-wider">HUNTER</span>
+                      </div>
+                    </div>
                   </div>
                   <div>
-                    <div className="flex items-center gap-2.5">
-                      <h2 className="text-base sm:text-lg font-black text-white tracking-wide uppercase">INTRADAY HUNTER</h2>
-                      <span className="flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/30 text-blue-400 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" /> LIVE SCAN
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-lg sm:text-2xl font-black text-white tracking-widest uppercase drop-shadow-[0_2px_10px_rgba(255,255,255,0.2)]">INTRADAY HUNTER</h2>
+                      <Droplets className="w-5 h-5 text-blue-400 fill-blue-400 drop-shadow-[0_0_12px_rgba(96,165,250,0.8)] animate-pulse" />
+                    </div>
+                    <div className="flex items-center gap-2.5 mt-1.5 text-xs sm:text-sm font-bold text-slate-400">
+                      <span className="flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/30 text-blue-400 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black shadow-[0_0_10px_rgba(59,130,246,0.2)] uppercase tracking-wider">
+                        <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse shadow-[0_0_5px_currentColor]" /> LIVE
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-semibold bg-slate-800/60 px-2 py-0.5 rounded border border-slate-700/40">
+                        {boosters.length} Institutional Leads
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400 font-medium mt-0.5">
-                      Institutional Relative Strength (Alpha) & Day Range Momentum
-                    </p>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <div className="relative hidden sm:block">
-                    <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input 
-                      type="text" 
-                      placeholder="Search Hunter..." 
-                      value={boostSearch}
-                      onChange={(e) => setBoostSearch(e.target.value.toUpperCase())}
-                      className="bg-slate-950 border border-slate-800 text-xs text-white rounded-lg pl-8 pr-3 py-1.5 w-36 focus:outline-none focus:border-blue-500 transition-colors placeholder:text-slate-500"
-                    />
-                  </div>
+                <div className="relative hidden sm:block z-10">
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input 
+                    type="text" 
+                    placeholder="Search Hunter..." 
+                    value={boostSearch}
+                    onChange={(e) => setBoostSearch(e.target.value.toUpperCase())}
+                    className="bg-[#0f1520] border border-slate-700 text-sm text-white rounded-full pl-9 pr-4 py-1.5 w-44 focus:outline-none focus:border-blue-500 transition-colors"
+                  />
                 </div>
               </div>
 
-              {/* Filters toolbar */}
-              <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-800 bg-slate-900/30 gap-2 overflow-x-auto custom-scrollbar">
-                <div className="flex items-center gap-1.5">
-                  {(['All Signals', 'Bullish', 'Bearish', 'Day High', 'Day Low'] as const).map((filter) => (
-                    <button
-                      key={filter}
-                      onClick={() => setBoostFilter(filter)}
-                      className={`px-2.5 py-1 rounded text-xs font-bold transition-colors whitespace-nowrap ${
-                        boostFilter === filter
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'bg-slate-800/80 hover:bg-slate-800 text-slate-300 border border-slate-700/60'
-                      }`}
-                    >
-                      {filter === 'All Signals' ? 'All Signals' :
-                       filter === 'Bullish' ? 'Bullish Alpha' :
-                       filter === 'Bearish' ? 'Bearish Alpha' :
-                       filter === 'Day High' ? 'Near Day High' : 'Near Day Low'}
-                    </button>
-                  ))}
+              {/* Filters */}
+              <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800/60 bg-[#172030]/50 relative z-20">
+                <div className="relative">
+                  <button 
+                    onClick={() => setIsBoostFilterOpen(!isBoostFilterOpen)}
+                    onBlur={() => setTimeout(() => setIsBoostFilterOpen(false), 150)}
+                    className="flex items-center gap-1.5 bg-[#1e293b] hover:bg-slate-700 text-slate-300 text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-700 transition-colors"
+                  >
+                    {boostFilter === 'Bullish' ? <TrendingUp className="w-3.5 h-3.5 text-emerald-400" /> : 
+                     boostFilter === 'Bearish' ? <TrendingDown className="w-3.5 h-3.5 text-red-400" /> : 
+                     <Activity className="w-3.5 h-3.5 text-slate-400" />}
+                    {boostFilter} <ChevronDown className="w-3 h-3" />
+                  </button>
+                  {isBoostFilterOpen && (
+                    <div className="absolute top-full left-0 mt-1 w-36 bg-[#1e293b] border border-slate-700 rounded-lg shadow-xl overflow-hidden py-1 z-50">
+                      <button onMouseDown={(e) => { e.preventDefault(); setBoostFilter('All Signals'); setIsBoostFilterOpen(false); }} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
+                        <Activity className="w-3.5 h-3.5 text-slate-400"/> All Signals
+                      </button>
+                      <button onMouseDown={(e) => { e.preventDefault(); setBoostFilter('Bullish'); setIsBoostFilterOpen(false); }} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
+                        <TrendingUp className="w-3.5 h-3.5 text-emerald-400"/> Bullish Alpha
+                      </button>
+                      <button onMouseDown={(e) => { e.preventDefault(); setBoostFilter('Bearish'); setIsBoostFilterOpen(false); }} className="w-full text-left px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-700 flex items-center gap-2">
+                        <TrendingDown className="w-3.5 h-3.5 text-red-400"/> Bearish Alpha
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <span className="text-[10px] text-slate-400 font-mono hidden md:inline shrink-0">
-                  {boosters.length} Active Leads
+                <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase hidden md:inline">
+                  Real Relative Strength vs NIFTY / BANKNIFTY
                 </span>
               </div>
 
               {/* Table */}
-              <div className="bg-slate-950/40 relative overflow-x-auto custom-scrollbar">
-                <div className="w-full flex flex-col min-w-[620px]">
-                  <div className="sticky top-0 bg-slate-900/95 backdrop-blur-md z-10 border-b border-slate-800 flex items-center px-4 py-2.5 text-[10px] uppercase tracking-wider text-slate-400 font-bold shrink-0">
-                    <div className="w-[185px] shrink-0">Stock & Day Range</div>
-                    <div className="w-[80px] text-center shrink-0">% Change</div>
-                    <div className="w-[110px] text-center shrink-0">RS vs Index</div>
-                    <div className="w-[105px] text-center shrink-0">VWAP Status</div>
-                    <div className="w-[115px] text-center shrink-0">Setup / Trigger</div>
-                    <div className="flex-1 text-right shrink-0">Action</div>
+              <div className="bg-[#0f1520]/50 relative overflow-x-auto custom-scrollbar">
+                <div className="w-full flex flex-col min-w-[550px]">
+                  <div className="sticky top-0 bg-[#172030]/95 backdrop-blur-md z-10 shadow-sm border-b border-slate-700/50 flex items-center px-4 py-3 text-[10px] uppercase tracking-wider text-slate-500 font-bold shrink-0">
+                    <div className="flex-1 min-w-0 pr-2">Symbol & Price</div>
+                    <div className="w-[85px] sm:w-[100px] text-center shrink-0">% Change</div>
+                    <div className="w-[105px] sm:w-[125px] text-center shrink-0">R.Strength (Alpha)</div>
+                    <div className="w-[85px] sm:w-[100px] text-center shrink-0">RS Rating</div>
+                    <div className="w-[85px] sm:w-[100px] text-right shrink-0">Trend Signal</div>
                   </div>
-
-                  <div className="flex flex-col divide-y divide-slate-800/60">
+                  <div className="flex flex-col divide-y divide-slate-800/50 pb-2">
                     {boosters.length === 0 ? (
-                      <div className="px-4 py-10 text-center text-sm text-slate-400 font-semibold flex flex-col items-center justify-center gap-2">
-                        <Target className="w-8 h-8 text-slate-600" />
-                        No Intraday Hunter signals match the current filter.
+                      <div className="px-4 py-8 text-center text-sm text-slate-400 font-semibold flex flex-col items-center justify-center gap-2">
+                        <Droplets className="w-8 h-8 text-slate-600 mb-1" />
+                        No Intraday Hunter signals currently active.
                       </div>
                     ) : (
                       boosters.map((b) => {
                         const isBank = BANK_NIFTY_SYMBOLS.includes(b.symbol);
                         const benchName = isBank ? 'BNF' : 'NIFTY';
                         const isAlphaPos = b.rsAlpha >= 0;
-                        const dayPos = b.dayRangePos ?? 50;
 
                         return (
                           <div 
                             key={`boost-${b.symbol}`} 
-                            className="flex items-center px-4 py-3 hover:bg-slate-800/40 transition-colors group/row cursor-pointer"
-                            onClick={() => setSelectedHunterStock(b)}
+                            onClick={() => handleRowClick(b.symbol)}
+                            className="flex items-center px-4 py-3 hover:bg-slate-800/30 transition-all duration-200 group/row cursor-pointer relative"
                           >
-                            {/* Stock & Day Range Bar */}
-                            <div className="w-[185px] shrink-0 flex items-center gap-2.5 pr-2">
-                              <StockLogo symbol={b.symbol} className="w-7 h-7 rounded-lg shrink-0" />
-                              <div className="flex flex-col min-w-0 flex-1">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-xs font-bold text-white group-hover/row:text-blue-400 transition-colors truncate">
-                                    {b.symbol}
-                                  </span>
-                                  <span className="text-[10px] text-slate-400 font-mono">
-                                    ₹{b.price ? b.price.toFixed(2) : '--'}
-                                  </span>
-                                </div>
-                                {/* Mini Day Range */}
-                                <div className="flex items-center gap-1 mt-1">
-                                  <span className="text-[8px] text-slate-500 font-mono">L</span>
-                                  <div className="h-1 bg-slate-800 rounded-full flex-1 overflow-hidden">
-                                    <div 
-                                      className={`h-full ${b.change >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`}
-                                      style={{ width: `${dayPos}%` }}
-                                    />
-                                  </div>
-                                  <span className="text-[8px] text-slate-500 font-mono">H</span>
-                                  <span className="text-[9px] text-slate-400 font-mono ml-0.5">{dayPos.toFixed(0)}%</span>
-                                </div>
+                            <div className={`absolute left-0 top-0 bottom-0 w-1 opacity-0 group-hover/row:opacity-100 transition-opacity ${b.isBull ? 'bg-blue-500' : 'bg-red-500'}`} />
+                            
+                            {/* Symbol & Price */}
+                            <div className="flex-1 min-w-0 flex items-center gap-3 pr-2">
+                              <StockLogo symbol={b.symbol} className="w-8 h-8 sm:w-9 sm:h-9 shrink-0" />
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-xs sm:text-sm font-bold text-slate-100 group-hover/row:text-blue-400 transition-colors group-hover/row:translate-x-0.5 duration-200 truncate">
+                                  {b.symbol}
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-medium font-mono">
+                                  ₹{b.price ? b.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '--'}
+                                </span>
                               </div>
                             </div>
 
                             {/* % Change */}
-                            <div className="w-[80px] flex justify-center items-center shrink-0">
-                              <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-xs font-mono font-bold border ${
+                            <div className="w-[85px] sm:w-[100px] flex justify-center items-center shrink-0">
+                              <span className={`inline-flex items-center justify-center w-full max-w-[76px] py-1 rounded-md text-xs font-black border font-mono ${
                                 b.change >= 0 
-                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
-                                  : 'bg-red-500/10 text-red-400 border-red-500/30'
+                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_8px_rgba(16,185,129,0.15)]' 
+                                  : 'bg-red-500/10 text-red-400 border-red-500/20 shadow-[0_0_8px_rgba(239,68,68,0.15)]'
                               }`}>
                                 {b.change >= 0 ? '+' : ''}{b.change.toFixed(2)}%
                               </span>
                             </div>
 
                             {/* Relative Strength Alpha */}
-                            <div className="w-[110px] flex flex-col items-center justify-center shrink-0 font-mono">
-                              <span className={`text-xs font-bold flex items-center gap-0.5 ${
+                            <div className="w-[105px] sm:w-[125px] flex flex-col items-center justify-center shrink-0 font-mono">
+                              <span className={`text-xs sm:text-sm font-black flex items-center gap-0.5 ${
                                 isAlphaPos ? 'text-emerald-400' : 'text-red-400'
                               }`}>
                                 {isAlphaPos ? '▲ +' : '▼ '}{b.rsAlpha.toFixed(2)}%
                               </span>
-                              <span className="text-[9px] text-slate-500 font-sans uppercase">
+                              <span className="text-[9px] text-slate-400 font-medium uppercase tracking-tight">
                                 vs {benchName}
                               </span>
                             </div>
 
-                            {/* VWAP Status */}
-                            <div className="w-[105px] flex flex-col items-center justify-center shrink-0">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                                b.isAboveVwap 
-                                  ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' 
-                                  : 'bg-red-500/10 text-red-300 border-red-500/20'
+                            {/* RS Rating & Mini Gauge */}
+                            <div className="w-[85px] sm:w-[100px] flex flex-col items-center justify-center px-1 shrink-0">
+                              <span className={`text-[11px] font-black px-1.5 py-0.5 rounded font-mono ${
+                                b.rsScore >= 80 
+                                  ? 'text-purple-300 bg-purple-500/20 border border-purple-500/30' 
+                                  : b.rsScore >= 60 
+                                  ? 'text-emerald-300 bg-emerald-500/20 border border-emerald-500/30' 
+                                  : b.rsScore <= 30 
+                                  ? 'text-red-300 bg-red-500/20 border border-red-500/30' 
+                                  : 'text-slate-300 bg-slate-800 border border-slate-700'
                               }`}>
-                                {b.isAboveVwap ? 'Above VWAP' : 'Below VWAP'}
+                                RS {b.rsScore}
                               </span>
-                              <span className="text-[9px] text-slate-500 font-mono mt-0.5">
-                                {b.vwapDistancePct !== undefined ? `${b.vwapDistancePct >= 0 ? '+' : ''}${b.vwapDistancePct}%` : ''}
-                              </span>
+                              <div className="w-14 h-1 bg-slate-800 rounded-full mt-1.5 overflow-hidden">
+                                <div 
+                                  className={`h-full ${
+                                    b.rsScore >= 80 ? 'bg-gradient-to-r from-purple-500 to-cyan-400' :
+                                    b.rsScore >= 60 ? 'bg-gradient-to-r from-emerald-500 to-emerald-300' :
+                                    b.rsScore <= 30 ? 'bg-gradient-to-r from-red-600 to-red-400' :
+                                    'bg-slate-500'
+                                  }`} 
+                                  style={{ width: `${b.rsScore}%` }} 
+                                />
+                              </div>
                             </div>
 
-                            {/* Intraday Setup / Trigger */}
-                            <div className="w-[115px] flex flex-col items-center justify-center shrink-0">
-                              <span className="text-[10px] font-bold text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700/60 truncate max-w-[110px]">
-                                {b.intradaySetup || b.rsTrend}
+                            {/* Trend Badge */}
+                            <div className="w-[85px] sm:w-[100px] shrink-0 flex justify-end">
+                              <span className={`inline-flex items-center justify-center px-2 py-1 rounded-full text-[9px] sm:text-[10px] font-black tracking-wider shadow-sm border truncate ${
+                                b.rsTrend === 'STRONG BUY' 
+                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.2)]' 
+                                  : b.rsTrend === 'OUTPERFORM' 
+                                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-[0_0_10px_rgba(6,182,212,0.2)]' 
+                                  : b.rsTrend === 'BREAKDOWN' 
+                                  ? 'bg-red-500/20 text-red-300 border-red-500/40 shadow-[0_0_10px_rgba(239,68,68,0.2)]' 
+                                  : b.rsTrend === 'WEAK' 
+                                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' 
+                                  : 'bg-slate-800 text-slate-300 border-slate-700'
+                              }`}>
+                                {b.rsTrend}
                               </span>
-                              <span className="text-[9px] font-mono text-slate-400 mt-0.5">
-                                {b.rsAlpha >= 0 ? `Buy > ₹${b.triggerPrice}` : `Sell < ₹${b.triggerPrice}`}
-                              </span>
-                            </div>
-
-                            {/* Plan & Chart Action Buttons */}
-                            <div className="flex-1 flex items-center justify-end gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                              <button
-                                onClick={() => setSelectedHunterStock(b)}
-                                className="px-2 py-1 rounded bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 text-[10px] font-bold border border-blue-500/30 transition-colors"
-                              >
-                                Plan
-                              </button>
-                              <button
-                                onClick={() => handleRowClick(b.symbol)}
-                                title="Open TradingView Chart"
-                                className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors border border-slate-700"
-                              >
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              </button>
                             </div>
                           </div>
                         );
@@ -2044,161 +2019,6 @@ const MarketEye = () => {
                   });
                 })()}
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* INTRADAY HUNTER TRADE PLAN MODAL */}
-      {selectedHunterStock && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-[#0f172a] border border-slate-700 rounded-2xl w-full max-w-lg overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-200">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-800 bg-slate-900/60">
-              <div className="flex items-center gap-3">
-                <StockLogo symbol={selectedHunterStock.symbol} className="w-9 h-9 rounded-xl" />
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-base sm:text-lg font-black text-white">{selectedHunterStock.symbol}</h2>
-                    <span className={`px-2 py-0.5 rounded text-xs font-mono font-bold border ${
-                      selectedHunterStock.change >= 0 
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
-                        : 'bg-red-500/10 text-red-400 border-red-500/30'
-                    }`}>
-                      {selectedHunterStock.change >= 0 ? '+' : ''}{selectedHunterStock.change.toFixed(2)}%
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-400 truncate max-w-[240px]">
-                    {stockDatabase.find(s => s.symbol === selectedHunterStock.symbol)?.name || 'Equity Intraday Setup'}
-                  </p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setSelectedHunterStock(null)}
-                className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-4 sm:p-5 space-y-4 max-h-[75vh] overflow-y-auto custom-scrollbar">
-              {/* Score & RS Banner */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
-                  <div className="text-[10px] uppercase font-bold text-slate-500">Intraday RS</div>
-                  <div className={`text-base font-black font-mono mt-0.5 ${
-                    selectedHunterStock.rsAlpha >= 0 ? 'text-emerald-400' : 'text-red-400'
-                  }`}>
-                    {selectedHunterStock.rsAlpha >= 0 ? '+' : ''}{selectedHunterStock.rsAlpha}%
-                  </div>
-                  <div className="text-[9px] text-slate-400 font-medium">vs {selectedHunterStock.benchmarkName || 'NIFTY'}</div>
-                </div>
-
-                <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
-                  <div className="text-[10px] uppercase font-bold text-slate-500">Day Range Pos</div>
-                  <div className="text-base font-black font-mono text-white mt-0.5">
-                    {selectedHunterStock.dayRangePos ?? 50}%
-                  </div>
-                  <div className="text-[9px] text-slate-400 font-medium">
-                    {(selectedHunterStock.dayRangePos ?? 50) >= 80 ? 'Near High' : (selectedHunterStock.dayRangePos ?? 50) <= 20 ? 'Near Low' : 'Mid Range'}
-                  </div>
-                </div>
-
-                <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
-                  <div className="text-[10px] uppercase font-bold text-slate-500">VWAP Level</div>
-                  <div className="text-base font-black font-mono text-white mt-0.5">
-                    ₹{selectedHunterStock.vwapEst ? selectedHunterStock.vwapEst.toFixed(2) : '--'}
-                  </div>
-                  <div className={`text-[9px] font-bold ${
-                    selectedHunterStock.isAboveVwap ? 'text-emerald-400' : 'text-red-400'
-                  }`}>
-                    {selectedHunterStock.isAboveVwap ? 'Above VWAP' : 'Below VWAP'}
-                  </div>
-                </div>
-
-                <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
-                  <div className="text-[10px] uppercase font-bold text-slate-500">RS Rating</div>
-                  <div className="text-base font-black font-mono text-purple-400 mt-0.5">
-                    {selectedHunterStock.rsScore} / 99
-                  </div>
-                  <div className="text-[9px] text-slate-400 font-medium">{selectedHunterStock.rsTrend}</div>
-                </div>
-              </div>
-
-              {/* Day Range Visual */}
-              <div className="bg-slate-900/50 p-3.5 rounded-xl border border-slate-800">
-                <div className="flex items-center justify-between text-xs font-mono text-slate-400 mb-1.5">
-                  <span>Day Low: ₹{selectedHunterStock.low?.toFixed(2) || '--'}</span>
-                  <span className="text-white font-bold">Current: ₹{selectedHunterStock.price ? selectedHunterStock.price.toFixed(2) : '--'}</span>
-                  <span>Day High: ₹{selectedHunterStock.high?.toFixed(2) || '--'}</span>
-                </div>
-                <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden relative">
-                  <div 
-                    className={`h-full ${selectedHunterStock.change >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`}
-                    style={{ width: `${selectedHunterStock.dayRangePos ?? 50}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* Actionable Intraday Trade Setup */}
-              <div className="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black uppercase text-slate-400 tracking-wider">Intraday Trade Plan</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                    {selectedHunterStock.intradaySetup || 'Momentum'}
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2 pt-1 font-mono">
-                  <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-center">
-                    <div className="text-[10px] text-slate-500 uppercase font-sans font-bold">Entry Trigger</div>
-                    <div className="text-xs sm:text-sm font-black text-amber-400 mt-1">
-                      ₹{selectedHunterStock.triggerPrice ? selectedHunterStock.triggerPrice.toFixed(2) : '--'}
-                    </div>
-                    <div className="text-[9px] text-slate-500 font-sans mt-0.5">
-                      {selectedHunterStock.rsAlpha >= 0 ? 'Buy on Breakout' : 'Sell on Breakdown'}
-                    </div>
-                  </div>
-
-                  <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-center">
-                    <div className="text-[10px] text-slate-500 uppercase font-sans font-bold">Target (+1.2%)</div>
-                    <div className="text-xs sm:text-sm font-black text-emerald-400 mt-1">
-                      ₹{selectedHunterStock.targetPrice ? selectedHunterStock.targetPrice.toFixed(2) : '--'}
-                    </div>
-                    <div className="text-[9px] text-slate-500 font-sans mt-0.5">Exit at Resistance</div>
-                  </div>
-
-                  <div className="bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-center">
-                    <div className="text-[10px] text-slate-500 uppercase font-sans font-bold">Stop Loss</div>
-                    <div className="text-xs sm:text-sm font-black text-red-400 mt-1">
-                      ₹{selectedHunterStock.stopLossPrice ? selectedHunterStock.stopLossPrice.toFixed(2) : '--'}
-                    </div>
-                    <div className="text-[9px] text-slate-500 font-sans mt-0.5">Strict Risk Anchor</div>
-                  </div>
-                </div>
-
-                <div className="text-[11px] text-slate-400 bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/80 leading-relaxed">
-                  💡 <span className="font-semibold text-slate-300">Intraday Rule:</span> Only enter when price sustains above trigger level ₹{selectedHunterStock.triggerPrice ? selectedHunterStock.triggerPrice.toFixed(2) : '--'} during market hours. Do not chase if already extended past target.
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-4 border-t border-slate-800 bg-slate-900/80 flex items-center justify-between gap-3">
-              <button
-                onClick={() => setSelectedHunterStock(null)}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-800 transition-colors"
-              >
-                Close
-              </button>
-              <button
-                onClick={() => handleRowClick(selectedHunterStock.symbol)}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-sm transition-colors"
-              >
-                <span>Open TradingView Chart</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </button>
             </div>
           </div>
         </div>
