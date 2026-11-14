@@ -24,6 +24,7 @@ import { fetchStockPrice, fetchHistoricalOHLCV, fetchMultipleStockPrices, fetchI
 import { computeIntradayMetrics, scoreHunter, getNseMarketStatus, istDateString } from '../utils/intradayHunter';
 import MarketStatusBadge from './MarketStatusBadge';
 import HunterScorecard from './HunterScorecard';
+import { detectBreakout, describeBreakout, prior52WeekRange, type BreakoutKind } from '../utils/breakoutScan';
 import { loadJournal, saveJournal, recordSignals, evaluateSignal, type JournalSignal } from '../utils/signalJournal';
 import { stockDatabase } from '../stockDatabase';
 import { fetchMarketNews, type NewsItem } from '../utils/newsApi';
@@ -72,11 +73,11 @@ interface MarketEyeData {
   vwapSince?: string | null;
 
   // Breakout Gems
-  breakoutType: '52W HIGH' | 'DAY HIGH' | 'DAY LOW' | 'STRONG SURGE' | 'HEAVY DROP' | 'RANGE BREAK' | 'MOMENTUM';
+  // Set only when a completed 5m candle closed beyond a real level and price still holds it
+  breakoutType: BreakoutKind | null;
   breakoutTrigger: string;
-  signalPct: number;
-  time: string;
-  rFac: number;
+  breakoutPriority: number;
+  time: string;          // breakout confirmation time (candle close, IST)
   isBull: boolean;
 }
 
@@ -392,12 +393,9 @@ const MarketEye = () => {
             if (data && isMounted) {
               const symbol = symbolWithSuffix.replace('.NS', '');
               const stockChange = data.change || 0;
-              const absChange = Math.abs(stockChange);
               const currentPrice = data.price || 0;
               const dayHigh = data.high || currentPrice;
               const dayLow = data.low || currentPrice;
-              const high52 = data.high52 || currentPrice;
-              const low52 = data.low52 || currentPrice;
               
               // --- Benchmark & Relative Strength (RS / Alpha) Calculation ---
               const isBank = BANK_NIFTY_SYMBOLS.includes(symbol);
@@ -415,36 +413,7 @@ const MarketEye = () => {
                 change: stockChange, rsAlpha, dayRangePos, price: currentPrice, vwap: null, rvol: null
               });
 
-              // --- Breakout Type & Trigger Classification ---
-              const dist52wH = high52 > 0 ? ((high52 - currentPrice) / high52) * 100 : 999;
-              const distDayH = dayHigh > 0 ? ((dayHigh - currentPrice) / dayHigh) * 100 : 999;
-              const distDayL = dayLow > 0 ? ((currentPrice - dayLow) / dayLow) * 100 : 999;
-
-              let breakoutType: MarketEyeData['breakoutType'] = 'MOMENTUM';
-              let breakoutTrigger = '';
-
-              if (dist52wH <= 1.5 && stockChange > 0) {
-                breakoutType = '52W HIGH';
-                breakoutTrigger = dist52wH <= 0.2 ? 'New 52W High' : `${dist52wH.toFixed(1)}% to 52W High`;
-              } else if (distDayH <= 0.4 && stockChange >= 1.2) {
-                breakoutType = 'DAY HIGH';
-                breakoutTrigger = `Day High ₹${Math.round(dayHigh)}`;
-              } else if (distDayL <= 0.4 && stockChange <= -1.2) {
-                breakoutType = 'DAY LOW';
-                breakoutTrigger = `Day Low ₹${Math.round(dayLow)}`;
-              } else if (absChange >= 2.5) {
-                breakoutType = stockChange > 0 ? 'STRONG SURGE' : 'HEAVY DROP';
-                breakoutTrigger = `${stockChange > 0 ? '+' : ''}${stockChange.toFixed(1)}% Move`;
-              } else {
-                breakoutType = 'RANGE BREAK';
-                breakoutTrigger = `${Math.abs(rsAlpha).toFixed(1)}% Alpha Surge`;
-              }
-
               const isBull = stockChange >= 0;
-              const signalPct = absChange;
-              
-              // Event time is filled from real 5m bars for top candidates; unknown otherwise
-              const time = '--';
 
               results.push({
                 symbol,
@@ -463,11 +432,10 @@ const MarketEye = () => {
                 hunterScore,
                 dayRangePos,
                 confirmed,
-                breakoutType,
-                breakoutTrigger,
-                signalPct,
-                time,
-                rFac: Math.abs(rsAlpha),
+                breakoutType: null,
+                breakoutTrigger: '',
+                breakoutPriority: 0,
+                time: '--',
                 isBull
               });
             }
@@ -481,9 +449,10 @@ const MarketEye = () => {
 
       // Enrich top movers + top alpha names with real 5m bars:
       // real VWAP, time-of-day RVOL, VWAP-cross time and move-start time.
-      const topByChange = [...results].sort((a, b) => Math.abs(b.change) - Math.abs(a.change)).slice(0, 20);
-      const topByAlpha = [...results].sort((a, b) => Math.abs(b.rsAlpha) - Math.abs(a.rsAlpha)).slice(0, 30);
-      const candidates = Array.from(new Set([...topByChange, ...topByAlpha]));
+      // All watchlist stocks: a breakout can happen on a small % move, so don't pre-filter by change.
+      // Strongest movers first so they are enriched even if the time cap is hit.
+      const candidates = [...results].sort((a, b) => Math.abs(b.rsAlpha) + Math.abs(b.change) - Math.abs(a.rsAlpha) - Math.abs(a.change));
+      const todayIst = istDateString();
 
       let sessionDateSeen: string | null = null;
       const enrich = async () => {
@@ -502,7 +471,22 @@ const MarketEye = () => {
               c.vwap = m.vwap;
               c.rvol = m.rvol;
               c.vwapSince = m.vwapSince;
-              if (m.moveStart) c.time = m.moveStart;
+
+              // Real level breakout (52W only fetched for stocks trading near their 52W extremes)
+              let prior52: { high: number; low: number } | null = null;
+              const near52 = (c.high52 && c.high && c.high >= c.high52 * 0.985) || (c.low52 && c.low && c.low <= c.low52 * 1.015);
+              if (near52) {
+                const daily = await fetchHistoricalOHLCV(`${c.symbol}.NS`, { range: '2y', interval: '1d' }).catch(() => []);
+                prior52 = prior52WeekRange(daily, todayIst);
+              }
+              const br = detectBreakout(bars, c.price, { prior52High: prior52?.high, prior52Low: prior52?.low });
+              if (br) {
+                c.breakoutType = br.kind;
+                c.breakoutTrigger = describeBreakout(br);
+                c.breakoutPriority = br.priority;
+                c.time = br.time;
+                c.isBull = br.isBull;
+              }
               const scored = scoreHunter({
                 change: c.change, rsAlpha: c.rsAlpha, dayRangePos: c.dayRangePos,
                 price: c.price, vwap: m.vwap, rvol: m.rvol
@@ -516,10 +500,10 @@ const MarketEye = () => {
         }
       };
 
-      // Wait max 10 seconds for enrichment; un-enriched rows keep their preliminary score
+      // Wait max 15 seconds for enrichment; un-enriched rows keep their preliminary score and no breakout
       await Promise.race([
         enrich(),
-        new Promise(resolve => setTimeout(resolve, 10000))
+        new Promise(resolve => setTimeout(resolve, 15000))
       ]);
       
       if (isMounted) {
@@ -765,35 +749,22 @@ const MarketEye = () => {
     .sort((a, b) => (a.price / (a.low52 || 1)) - (b.price / (b.low52 || 1)))
     .slice(0, 5);
   
-  // Breakout Gems: Wall Street Pro Volume & High-Probability Breakout Scanner
-  const breakouts = [...marketData]
+  // Breakout Gems: real level breaks (52W > PDH/PDL > opening range), confirmed on a closed 5m candle
+  const breakouts = marketData
+    .filter(d => d.breakoutType !== null)
     .filter(d => d.symbol.toLowerCase().includes(breakoutSearch.toLowerCase()))
     .filter(d => {
-      const absMove = Math.abs(d.change);
-      const isKeyBreakout = d.breakoutType === '52W HIGH' || d.breakoutType === 'DAY HIGH' || d.breakoutType === 'DAY LOW';
-      const isSignificant = absMove >= 0.75 || isKeyBreakout;
-      if (!isSignificant) return false;
-
-      if (breakoutFilter === 'Bullish') return d.change > 0;
-      if (breakoutFilter === 'Bearish') return d.change < 0;
-      return true; // 'All Signals'
+      if (breakoutFilter === 'Bullish') return d.isBull;
+      if (breakoutFilter === 'Bearish') return !d.isBull;
+      return true;
     })
-    .sort((a, b) => {
-      // Prioritize 52W High and Day High/Low breakouts first
-      const getPriority = (item: MarketEyeData) => {
-        if (item.breakoutType === '52W HIGH') return 4;
-        if (item.breakoutType === 'DAY HIGH' || item.breakoutType === 'DAY LOW') return 3;
-        if (item.breakoutType === 'STRONG SURGE' || item.breakoutType === 'HEAVY DROP') return 2;
-        return 1;
-      };
-      const prioDiff = getPriority(b) - getPriority(a);
-      if (prioDiff !== 0) return prioDiff;
-
-      return Math.abs(b.change) - Math.abs(a.change);
-    })
+    .sort((a, b) =>
+      b.breakoutPriority - a.breakoutPriority ||
+      (b.rvol ?? 0) - (a.rvol ?? 0) ||
+      b.time.localeCompare(a.time)
+    )
     .slice(0, 8);
     
-  // Intraday Hunter: Institutional Relative Strength & Alpha Radar
   // Confirmed signals (price action + VWAP agree with alpha, volume-weighted) rank first
   const boosters = rankHunterRows(marketData)
     .filter(d => d.symbol.toLowerCase().includes(boostSearch.toLowerCase()))
@@ -1405,7 +1376,7 @@ const MarketEye = () => {
                   )}
                 </div>
                 <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase hidden md:inline">
-                  High Probability Vol & Surge Breakouts
+                  Closed 5m candle beyond 52W · PDH/PDL · Opening Range
                 </span>
               </div>
 
@@ -1417,20 +1388,19 @@ const MarketEye = () => {
                     <div className="flex-1 min-w-0 pr-2">Symbol & Price</div>
                     <div className="w-[85px] sm:w-[100px] text-center shrink-0">% Change</div>
                     <div className="w-[125px] sm:w-[145px] text-left pl-2 shrink-0">Breakout Setup</div>
-                    <div className="w-[55px] sm:w-[65px] text-right shrink-0">Time</div>
+                    <div className="w-[55px] sm:w-[65px] text-right shrink-0" title="Close time of the 5-min candle that confirmed the break (IST)">Break @</div>
                   </div>
                   <div className="flex flex-col divide-y divide-slate-800/50 pb-2">
                     {breakouts.length === 0 ? (
                       <div className="px-4 py-8 text-center text-sm text-slate-400 font-semibold flex flex-col items-center justify-center gap-2">
                         <Flame className="w-8 h-8 text-slate-600 mb-1" />
-                        No Breakout Gems signals currently active.
+                        No stock is holding a 52W, previous-day or opening-range break right now.
                       </div>
                     ) : (
                       breakouts.map((b) => {
-                        const is52w = b.breakoutType === '52W HIGH';
-                        const isDayH = b.breakoutType === 'DAY HIGH';
-                        const isDayL = b.breakoutType === 'DAY LOW';
-                        const isSurge = b.breakoutType === 'STRONG SURGE' || b.breakoutType === 'HEAVY DROP';
+                        const is52w = b.breakoutType === '52W HIGH' || b.breakoutType === '52W LOW';
+                        const isDayH = !is52w && b.isBull;
+                        const isDayL = !is52w && !b.isBull;
 
                         return (
                           <div 
@@ -1484,22 +1454,25 @@ const MarketEye = () => {
                                     ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' 
                                     : isDayH 
                                     ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' 
-                                    : isDayL 
-                                    ? 'bg-red-500/15 text-red-300 border-red-500/30' 
-                                    : isSurge 
-                                    ? 'bg-purple-500/15 text-purple-300 border-purple-500/30' 
-                                    : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
+                                    : 'bg-red-500/15 text-red-300 border-red-500/30'
                                 }`}>
                                   {is52w && <Star className="w-2.5 h-2.5 fill-amber-300 text-amber-300" />}
                                   {isDayH && <ArrowUpRight className="w-2.5 h-2.5 text-emerald-300" />}
                                   {isDayL && <ArrowDownRight className="w-2.5 h-2.5 text-red-300" />}
-                                  {!is52w && !isDayH && !isDayL && <Zap className="w-2.5 h-2.5 text-cyan-300" />}
                                   {b.breakoutType}
                                 </span>
                               </div>
-                              <span className="text-[10px] text-slate-400 font-medium mt-0.5 truncate">
-                                {b.breakoutTrigger || 'Active Momentum'}
+                              <span className="text-[10px] text-slate-400 font-medium mt-0.5 truncate" title={b.breakoutTrigger}>
+                                {b.breakoutTrigger}
                               </span>
+                              {b.rvol ? (
+                                <span
+                                  className={`text-[9px] font-mono font-semibold ${b.rvol >= 1.5 ? 'text-amber-300' : 'text-slate-500'}`}
+                                  title="Volume vs average of previous days up to the same time"
+                                >
+                                  RVOL {b.rvol.toFixed(1)}x{b.rvol >= 1.5 ? ' · volume ✓' : ' · low volume'}
+                                </span>
+                              ) : null}
                             </div>
 
                             {/* Time */}

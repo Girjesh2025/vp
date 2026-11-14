@@ -14,7 +14,7 @@ export interface IntradayBar {
 export interface IntradayMetrics {
   vwap: number | null;
   rvol: number | null;          // today's volume vs avg of prior days up to the same time
-  vwapSince: string | null;     // HH:MM (IST) when price last crossed to its current side of VWAP
+  vwapSince: string | null;     // HH:MM (IST) candle-close time when price last crossed to its current side of VWAP
   moveStart: string | null;     // HH:MM (IST) of the swing low (bull) / high (bear) of the latest move
   sessionDate: string | null;   // YYYY-MM-DD (IST) of the latest session in the data
 }
@@ -94,7 +94,7 @@ const findVwapSince = (session: IntradayBar[]): string | null => {
   const current = sides[sides.length - 1].above;
   let i = sides.length - 1;
   while (i > 0 && sides[i - 1].above === current) i--;
-  return formatIstTime(sides[i].ts);
+  return formatIstTime(sides[i].ts + 300); // confirmed when that 5m candle closed
 };
 
 /** Time of the swing low (bull) or swing high (bear) that started the latest move. */
