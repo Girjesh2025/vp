@@ -21,8 +21,10 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { fetchStockPrice, fetchHistoricalOHLCV, fetchMultipleStockPrices, fetchIntradayPrices } from '../utils/priceApi';
-import { computeIntradayMetrics, scoreHunter, getNseMarketStatus } from '../utils/intradayHunter';
+import { computeIntradayMetrics, scoreHunter, getNseMarketStatus, istDateString } from '../utils/intradayHunter';
 import MarketStatusBadge from './MarketStatusBadge';
+import HunterScorecard from './HunterScorecard';
+import { loadJournal, saveJournal, recordSignals, evaluateSignal, type JournalSignal } from '../utils/signalJournal';
 import { stockDatabase } from '../stockDatabase';
 import { fetchMarketNews, type NewsItem } from '../utils/newsApi';
 import { TICKER_INDICES } from './MarketTicker';
@@ -90,6 +92,12 @@ interface WeeklySignal {
   momentumTag?: 'FRESH' | 'EXTENDED' | 'NEUTRAL' | 'WEAK';
   sectorSupport?: boolean;
 }
+
+// Rows that qualify for the Intraday Hunter card, strongest confirmed signal first
+const rankHunterRows = (rows: MarketEyeData[]) =>
+  rows
+    .filter(d => Math.abs(d.rsAlpha) >= 0.25 || Math.abs(d.change) >= 0.6 || d.rsScore >= 65 || d.rsScore <= 35)
+    .sort((a, b) => b.hunterScore - a.hunterScore);
 
 const GaugeChart = ({ score, text, color }: { score: number, text: string, color: string }) => {
   const radius = 80;
@@ -200,6 +208,7 @@ const MarketEye = () => {
   const [clock, setClock] = useState(() => new Date());
   const [latestSessionDate, setLatestSessionDate] = useState<string | null>(null);
   const lastWeeklyRunRef = useRef(0);
+  const [journal, setJournal] = useState<JournalSignal[]>(() => loadJournal());
 
   // Re-evaluate market status every 30s so 09:00 (opening) / 09:15 (open) / 15:30 (closed) flip without reload
   useEffect(() => {
@@ -208,6 +217,43 @@ const MarketEye = () => {
   }, []);
 
   const marketStatus = getNseMarketStatus(clock, latestSessionDate);
+
+  // Grade running journal signals against real 5m bars after every data load
+  useEffect(() => {
+    const pending = journal.filter(s => !s.outcome);
+    if (!pending.length) return;
+    let cancelled = false;
+    (async () => {
+      const cutoff = Date.now() / 1000 - 50 * 86400; // Yahoo keeps 5m bars ~60 days
+      const updates = new Map<string, JournalSignal['outcome']>();
+      const bySymbol = new Map<string, JournalSignal[]>();
+      for (const s of pending) {
+        if (s.entryTs < cutoff) { updates.set(s.id, { exitPrice: s.entryPrice, exitTime: '--', reason: 'NO DATA', netPct: 0 }); continue; }
+        bySymbol.set(s.symbol, [...(bySymbol.get(s.symbol) || []), s]);
+      }
+      const oldest = Math.min(...pending.map(s => s.entryTs));
+      const range = Date.now() / 1000 - oldest > 4 * 86400 ? '1mo' : '5d';
+      const symbols = [...bySymbol.keys()].slice(0, 15);
+      for (let i = 0; i < symbols.length && !cancelled; i += 5) {
+        await Promise.allSettled(symbols.slice(i, i + 5).map(async sym => {
+          const bars = await fetchHistoricalOHLCV(`${sym}.NS`, { range, interval: '5m' });
+          if (!bars.length) return;
+          for (const s of bySymbol.get(sym)!) {
+            const outcome = evaluateSignal(s, bars);
+            if (outcome) updates.set(s.id, outcome);
+          }
+        }));
+      }
+      if (cancelled || !updates.size) return;
+      setJournal(prev => {
+        const next = prev.map(s => (!s.outcome && updates.has(s.id) ? { ...s, outcome: updates.get(s.id) } : s));
+        saveJournal(next);
+        return next;
+      });
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hunterUpdatedAt]);
   const prevStatusRef = useRef(marketStatus);
 
   // While the market is open, refresh data every 2 minutes; also refresh right at the 09:15 open
@@ -480,6 +526,16 @@ const MarketEye = () => {
         setMarketData(results.map(r => ({ ...r })));
         setBenchmarkOk(niftyOk && bankNiftyOk);
         if (sessionDateSeen) setLatestSessionDate(sessionDateSeen);
+        // Journal the card's top signals, only when the data is from today's live session
+        const today = istDateString();
+        if (sessionDateSeen === today && getNseMarketStatus(new Date(), sessionDateSeen) === 'OPEN') {
+          const top = rankHunterRows(results).slice(0, 8);
+          setJournal(prev => {
+            const next = recordSignals(prev, top, today);
+            if (next !== prev) saveJournal(next);
+            return next;
+          });
+        }
         setHunterUpdatedAt(new Date());
         setLoading(false);
         setRefreshing(false);
@@ -738,20 +794,14 @@ const MarketEye = () => {
     .slice(0, 8);
     
   // Intraday Hunter: Institutional Relative Strength & Alpha Radar
-  const boosters = [...marketData]
+  // Confirmed signals (price action + VWAP agree with alpha, volume-weighted) rank first
+  const boosters = rankHunterRows(marketData)
     .filter(d => d.symbol.toLowerCase().includes(boostSearch.toLowerCase()))
     .filter(d => {
-      const absAlpha = Math.abs(d.rsAlpha);
-      const absMove = Math.abs(d.change);
-      const qualifies = absAlpha >= 0.25 || absMove >= 0.6 || d.rsScore >= 65 || d.rsScore <= 35;
-      if (!qualifies) return false;
-
       if (boostFilter === 'Bullish') return d.rsAlpha > 0 && d.change >= 0;
       if (boostFilter === 'Bearish') return d.rsAlpha < 0 && d.change <= 0;
       return true;
     })
-    // Confirmed signals (price action + VWAP agree with alpha, volume-weighted) rank first
-    .sort((a, b) => b.hunterScore - a.hunterScore)
     .slice(0, 8);
 
   const hunterAsOf = hunterUpdatedAt
@@ -1692,6 +1742,8 @@ const MarketEye = () => {
             </div>
 
           </div>
+
+          <HunterScorecard journal={journal} onClear={() => { setJournal([]); saveJournal([]); }} />
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 w-full min-w-0">
             <div className="relative bg-gradient-to-br from-[#172030] to-[#131b26] border border-slate-700/50 hover:border-slate-500/80 rounded-2xl overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.5)] flex flex-col transition-all duration-300 group">
