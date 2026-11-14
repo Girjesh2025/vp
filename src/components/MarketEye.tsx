@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Eye, 
   TrendingUp, 
@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { fetchStockPrice, fetchHistoricalOHLCV, fetchMultipleStockPrices, fetchIntradayPrices } from '../utils/priceApi';
 import { computeIntradayMetrics, scoreHunter, getNseMarketStatus } from '../utils/intradayHunter';
+import MarketStatusBadge from './MarketStatusBadge';
 import { stockDatabase } from '../stockDatabase';
 import { fetchMarketNews, type NewsItem } from '../utils/newsApi';
 import { TICKER_INDICES } from './MarketTicker';
@@ -89,28 +90,6 @@ interface WeeklySignal {
   momentumTag?: 'FRESH' | 'EXTENDED' | 'NEUTRAL' | 'WEAK';
   sectorSupport?: boolean;
 }
-
-const generateRandomWalk = (startValue: number, volatility: number, length: number) => {
-  let current = startValue;
-  const data = [];
-  for (let i = 0; i < length; i++) {
-    const change = (Math.random() - 0.5) * volatility;
-    current += change;
-    data.push({ value: current });
-  }
-  return data;
-};
-
-const mockNiftySparkline = generateRandomWalk(23000, 20, 75);
-const mockBankNiftySparkline = generateRandomWalk(52000, 50, 75);
-const mockADChartData = Array.from({ length: 75 }, (_, i) => {
-  const timeProgress = i / 75;
-  const baseAdvances = 250 + Math.sin(timeProgress * Math.PI * 2) * 50 + (Math.random() - 0.5) * 30;
-  return {
-    advances: Math.max(0, baseAdvances),
-    declines: Math.max(0, 500 - baseAdvances),
-  };
-});
 
 const GaugeChart = ({ score, text, color }: { score: number, text: string, color: string }) => {
   const radius = 80;
@@ -218,6 +197,27 @@ const MarketEye = () => {
   const [benchmarkOk, setBenchmarkOk] = useState(true);
   const [refreshTick, setRefreshTick] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [clock, setClock] = useState(() => new Date());
+  const [latestSessionDate, setLatestSessionDate] = useState<string | null>(null);
+  const lastWeeklyRunRef = useRef(0);
+
+  // Re-evaluate market status every 30s so 09:00 (opening) / 09:15 (open) / 15:30 (closed) flip without reload
+  useEffect(() => {
+    const id = setInterval(() => setClock(new Date()), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  const marketStatus = getNseMarketStatus(clock, latestSessionDate);
+  const prevStatusRef = useRef(marketStatus);
+
+  // While the market is open, refresh data every 2 minutes; also refresh right at the 09:15 open
+  useEffect(() => {
+    if (prevStatusRef.current !== 'OPEN' && marketStatus === 'OPEN') setRefreshTick(t => t + 1);
+    prevStatusRef.current = marketStatus;
+    if (marketStatus !== 'OPEN') return;
+    const id = setInterval(() => setRefreshTick(t => t + 1), 120000);
+    return () => clearInterval(id);
+  }, [marketStatus]);
 
   const [weeklyBreakoutSearch, setWeeklyBreakoutSearch] = useState('');
   const [weeklyBreakdownSearch, setWeeklyBreakdownSearch] = useState('');
@@ -281,12 +281,12 @@ const MarketEye = () => {
             nifty50: niftyRes ? { 
               price: niftyRes.price, 
               change: niftyRes.change,
-              sparkline: niftyHist ? niftyHist.map(v => ({ value: v })) : mockNiftySparkline
+              sparkline: (niftyHist || []).map(v => ({ value: v }))
             } : null,
             bankNifty: bankNiftyRes ? { 
               price: bankNiftyRes.price, 
               change: bankNiftyRes.change,
-              sparkline: bankNiftyHist ? bankNiftyHist.map(v => ({ value: v })) : mockBankNiftySparkline
+              sparkline: (bankNiftyHist || []).map(v => ({ value: v }))
             } : null
           });
           if (newsRes) setAllNewsData(newsRes);
@@ -439,6 +439,7 @@ const MarketEye = () => {
       const topByAlpha = [...results].sort((a, b) => Math.abs(b.rsAlpha) - Math.abs(a.rsAlpha)).slice(0, 30);
       const candidates = Array.from(new Set([...topByChange, ...topByAlpha]));
 
+      let sessionDateSeen: string | null = null;
       const enrich = async () => {
         for (let i = 0; i < candidates.length; i += 6) {
           if (!isMounted) return;
@@ -451,6 +452,7 @@ const MarketEye = () => {
               ]);
               if (!bars || bars.length < 10) return;
               const m = computeIntradayMetrics(bars, c.change >= 0);
+              if (m.sessionDate && (!sessionDateSeen || m.sessionDate > sessionDateSeen)) sessionDateSeen = m.sessionDate;
               c.vwap = m.vwap;
               c.rvol = m.rvol;
               c.vwapSince = m.vwapSince;
@@ -477,6 +479,7 @@ const MarketEye = () => {
       if (isMounted) {
         setMarketData(results.map(r => ({ ...r })));
         setBenchmarkOk(niftyOk && bankNiftyOk);
+        if (sessionDateSeen) setLatestSessionDate(sessionDateSeen);
         setHunterUpdatedAt(new Date());
         setLoading(false);
         setRefreshing(false);
@@ -489,6 +492,9 @@ const MarketEye = () => {
 
   useEffect(() => {
     if (!marketData.length) return;
+    // Weekly bars barely change intraday: rescan at most every 15 minutes, not on every 2-min refresh
+    if (Date.now() - lastWeeklyRunRef.current < 15 * 60 * 1000) return;
+    lastWeeklyRunRef.current = Date.now();
     let isMounted = true;
 
     const loadWeeklySignals = async () => {
@@ -748,7 +754,6 @@ const MarketEye = () => {
     .sort((a, b) => b.hunterScore - a.hunterScore)
     .slice(0, 8);
 
-  const hunterMarketStatus = getNseMarketStatus();
   const hunterAsOf = hunterUpdatedAt
     ? hunterUpdatedAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' })
     : '--';
@@ -762,23 +767,10 @@ const MarketEye = () => {
     .slice(0, 8);
 
   // Calculate Advance/Decline strictly for the Advances/Declines card
-  let advances = adMarketData.filter(d => d.change > 0).length;
-  let declines = adMarketData.filter(d => d.change < 0).length;
-  let unchanged = adMarketData.filter(d => d.change === 0).length;
-  let totalStocks = adMarketData.length || 1;
-
-  // Extrapolate for NIFTY 500 since we only track ~60 stocks live
-  if (adSelectedIndex === 'ALL') {
-    const ratio = 500 / totalStocks;
-    
-    // Add a small random variance so it doesn't look perfectly mathematically derived
-    const variance = Math.floor(Math.random() * 15) - 7; 
-    
-    advances = Math.max(0, Math.min(500, Math.round(advances * ratio) + variance));
-    declines = Math.max(0, Math.min(500, Math.round(declines * ratio) - variance));
-    unchanged = Math.max(0, 500 - advances - declines);
-    totalStocks = 500;
-  }
+  const advances = adMarketData.filter(d => d.change > 0).length;
+  const declines = adMarketData.filter(d => d.change < 0).length;
+  const unchanged = adMarketData.filter(d => d.change === 0).length;
+  const totalStocks = adMarketData.length || 1;
 
   const advancePct = (advances / totalStocks) * 100;
   const declinePct = (declines / totalStocks) * 100;
@@ -798,12 +790,13 @@ const MarketEye = () => {
   const momentumScore = Math.max(0, Math.min(100, 50 + (avgIndexChange * 25)));
   
   // 3. FII/DII Institutional Flow Score (0-100)
-  const netInstitutionalFlow = fiiDiiData ? (fiiDiiData.fii + fiiDiiData.dii) : -713;
-  // Map an outflow of -1000 Cr to a fear score of ~35. A neutral 0 flow is 50.
-  const flowScore = Math.max(0, Math.min(100, 50 + (netInstitutionalFlow / 100)));
+  // Map net flow in Cr to 0-100 (0 Cr = 50, -1000 Cr = 40). Missing data is left out, never guessed.
+  const flowScore = fiiDiiData ? Math.max(0, Math.min(100, 50 + ((fiiDiiData.fii + fiiDiiData.dii) / 100))) : null;
   
-  // Calculate the final dynamic mood score (Weighted Average: 40% Momentum, 30% Breadth, 30% Institutional Flow)
-  const computedScore = Math.round((momentumScore * 0.4) + (breadthScore * 0.3) + (flowScore * 0.3));
+  // Weighted average: 40% Momentum, 30% Breadth, 30% Institutional Flow (re-weighted if flow is unavailable)
+  const computedScore = flowScore !== null
+    ? Math.round((momentumScore * 0.4) + (breadthScore * 0.3) + (flowScore * 0.3))
+    : Math.round((momentumScore * 0.4 + breadthScore * 0.3) / 0.7);
   const moodScore = computedScore; // Use dynamic live score
 
   let moodText = 'Neutral';
@@ -835,6 +828,10 @@ const MarketEye = () => {
         <div>
           <h1 className="text-2xl font-black text-white tracking-tight">Market Eye</h1>
           <p className="text-sm text-slate-400 font-medium">Real-time Top Movers, Breakouts & Intraday Signals</p>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <MarketStatusBadge status={marketStatus} />
+          <span className="hidden sm:inline text-[10px] text-slate-500 font-semibold">NSE 09:15–15:30 IST</span>
         </div>
       </div>
 
@@ -874,7 +871,7 @@ const MarketEye = () => {
                   {/* Sparkline exactly below price */}
                   <div className="w-full h-12 opacity-80 pointer-events-none mt-1 mb-2">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={indicesData.nifty50?.sparkline || mockNiftySparkline}>
+                      <AreaChart data={indicesData.nifty50?.sparkline || []}>
                         <defs>
                           <linearGradient id="colorNifty" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor={indicesData.nifty50 && indicesData.nifty50.change >= 0 ? "#10b981" : "#ef4444"} stopOpacity={0.4}/>
@@ -908,7 +905,7 @@ const MarketEye = () => {
                   {/* Sparkline exactly below price */}
                   <div className="w-full h-12 opacity-80 pointer-events-none mt-1 mb-2">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={indicesData.bankNifty?.sparkline || mockBankNiftySparkline}>
+                      <AreaChart data={indicesData.bankNifty?.sparkline || []}>
                         <defs>
                           <linearGradient id="colorBankNifty" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor={indicesData.bankNifty && indicesData.bankNifty.change >= 0 ? "#10b981" : "#ef4444"} stopOpacity={0.4}/>
@@ -1013,7 +1010,7 @@ const MarketEye = () => {
                     >
                       <option value="NIFTY 50">NIFTY 50</option>
                       <option value="BANK NIFTY">BANK NIFTY</option>
-                      <option value="ALL">NIFTY 500</option>
+                      <option value="ALL">ALL TRACKED ({WATCHLIST_SYMBOLS.length})</option>
                     </select>
                   </div>
                   
@@ -1311,9 +1308,7 @@ const MarketEye = () => {
                       <Flame className="w-5 h-5 text-orange-500 fill-orange-500 drop-shadow-[0_0_12px_rgba(249,115,22,0.8)] animate-pulse" />
                     </div>
                     <div className="flex items-center gap-2.5 mt-1.5 text-xs sm:text-sm font-bold text-slate-400">
-                      <span className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black shadow-[0_0_10px_rgba(16,185,129,0.2)] uppercase tracking-wider">
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_5px_currentColor]" /> LIVE
-                      </span>
+                      <MarketStatusBadge status={marketStatus} tone="emerald" />
                       <span className="text-[10px] text-slate-400 font-semibold bg-slate-800/60 px-2 py-0.5 rounded border border-slate-700/40">
                         {breakouts.length} Setups
                       </span>
@@ -1494,15 +1489,7 @@ const MarketEye = () => {
                       <Droplets className="w-5 h-5 text-blue-400 fill-blue-400 drop-shadow-[0_0_12px_rgba(96,165,250,0.8)] animate-pulse" />
                     </div>
                     <div className="flex items-center gap-2.5 mt-1.5 text-xs sm:text-sm font-bold text-slate-400">
-                      {hunterMarketStatus === 'OPEN' ? (
-                        <span className="flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/30 text-blue-400 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black shadow-[0_0_10px_rgba(59,130,246,0.2)] uppercase tracking-wider">
-                          <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse shadow-[0_0_5px_currentColor]" /> LIVE
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1.5 bg-slate-700/30 border border-slate-600/50 text-slate-300 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider">
-                          <div className="w-1.5 h-1.5 rounded-full bg-slate-400" /> {hunterMarketStatus === 'PRE-OPEN' ? 'PRE-OPEN' : 'MARKET CLOSED'}
-                        </span>
-                      )}
+                      <MarketStatusBadge status={marketStatus} tone="blue" />
                       <span className="text-[10px] text-slate-400 font-semibold bg-slate-800/60 px-2 py-0.5 rounded border border-slate-700/40">
                         as of {hunterAsOf}
                       </span>
@@ -1725,9 +1712,7 @@ const MarketEye = () => {
                       <Flame className="w-5 h-5 text-emerald-400 fill-emerald-400 drop-shadow-[0_0_12px_rgba(16,185,129,0.6)] animate-pulse" />
                     </div>
                     <div className="flex items-center gap-3 mt-2 text-xs sm:text-sm font-bold text-slate-400">
-                      <span className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black shadow-[0_0_10px_rgba(16,185,129,0.15)] uppercase tracking-wider">
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_5px_currentColor]" /> LIVE
-                      </span>
+                      <MarketStatusBadge status={marketStatus} tone="emerald" />
                     </div>
                   </div>
                 </div>
@@ -1841,9 +1826,7 @@ const MarketEye = () => {
                       <TrendingDown className="w-5 h-5 text-red-400 drop-shadow-[0_0_12px_rgba(239,68,68,0.6)] animate-pulse" />
                     </div>
                     <div className="flex items-center gap-3 mt-2 text-xs sm:text-sm font-bold text-slate-400">
-                      <span className="flex items-center gap-1.5 bg-red-500/10 border border-red-500/30 text-red-400 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black shadow-[0_0_10px_rgba(239,68,68,0.15)] uppercase tracking-wider">
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_5px_currentColor]" /> LIVE
-                      </span>
+                      <MarketStatusBadge status={marketStatus} tone="red" />
                     </div>
                   </div>
                 </div>

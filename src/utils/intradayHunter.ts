@@ -174,13 +174,31 @@ export const scoreHunter = ({ change, rsAlpha, dayRangePos, price, vwap, rvol }:
   return { rsScore, rsTrend, hunterScore, confirmed };
 };
 
-/** NSE cash-market status in IST (weekday + session hours; exchange holidays not included). */
-export const getNseMarketStatus = (now: Date = new Date()): 'OPEN' | 'PRE-OPEN' | 'CLOSED' => {
-  const ist = new Date(now.getTime() + (now.getTimezoneOffset() * 60 + IST_OFFSET_SEC) * 1000);
+export type NseMarketStatus = 'OPEN' | 'OPENING' | 'CLOSED';
+
+const toIst = (now: Date) => new Date(now.getTime() + (now.getTimezoneOffset() * 60 + IST_OFFSET_SEC) * 1000);
+
+/** Today's date in IST as YYYY-MM-DD. */
+export const istDateString = (now: Date = new Date()): string => {
+  const ist = toIst(now);
+  return `${ist.getFullYear()}-${String(ist.getMonth() + 1).padStart(2, '0')}-${String(ist.getDate()).padStart(2, '0')}`;
+};
+
+/**
+ * NSE cash-market status in IST.
+ * 09:00-09:15 pre-open session -> OPENING, 09:15-15:30 -> OPEN, otherwise / weekends -> CLOSED.
+ * Exchange holidays are detected by the caller from data: pass the IST date of the latest
+ * traded session; if it is not today by 09:25 the market did not open (holiday).
+ */
+export const getNseMarketStatus = (now: Date = new Date(), latestSessionDate?: string | null): NseMarketStatus => {
+  const ist = toIst(now);
   const day = ist.getDay();
   if (day === 0 || day === 6) return 'CLOSED';
   const mins = ist.getHours() * 60 + ist.getMinutes();
-  if (mins >= 9 * 60 && mins < MARKET_OPEN_MIN) return 'PRE-OPEN';
-  if (mins >= MARKET_OPEN_MIN && mins < MARKET_CLOSE_MIN) return 'OPEN';
+  if (mins >= 9 * 60 && mins < MARKET_OPEN_MIN) return 'OPENING';
+  if (mins >= MARKET_OPEN_MIN && mins < MARKET_CLOSE_MIN) {
+    if (latestSessionDate && mins >= 9 * 60 + 25 && latestSessionDate !== istDateString(now)) return 'CLOSED';
+    return 'OPEN';
+  }
   return 'CLOSED';
 };
