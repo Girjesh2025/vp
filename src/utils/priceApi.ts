@@ -237,7 +237,8 @@ export const fetchHistoricalOHLCV = async (
     if (r.ok) {
       const data = await r.json();
       const result = data?.chart?.result?.[0];
-      if (result) {
+      // Never treat the proxy's synthetic fallback chart as real market data
+      if (result && !result.meta?.synthetic) {
         const timestamps: number[] = result.timestamp ?? [];
         const quote = result.indicators?.quote?.[0];
         const opens: Array<number | null> = quote?.open ?? [];

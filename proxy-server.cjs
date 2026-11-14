@@ -441,6 +441,7 @@ function generateSyntheticChart(symbol, range, interval) {
     chart: {
       result: [
         {
+          meta: { synthetic: true },
           timestamp,
           indicators: {
             quote: [

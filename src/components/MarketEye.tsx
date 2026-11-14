@@ -17,9 +17,11 @@ import {
   Star,
   Clock,
   Target,
-  X
+  X,
+  RefreshCw
 } from 'lucide-react';
 import { fetchStockPrice, fetchHistoricalOHLCV, fetchMultipleStockPrices, fetchIntradayPrices } from '../utils/priceApi';
+import { computeIntradayMetrics, scoreHunter, getNseMarketStatus } from '../utils/intradayHunter';
 import { stockDatabase } from '../stockDatabase';
 import { fetchMarketNews, type NewsItem } from '../utils/newsApi';
 import { TICKER_INDICES } from './MarketTicker';
@@ -60,6 +62,11 @@ interface MarketEyeData {
   rsScore: number;
   rsTrend: 'STRONG BUY' | 'OUTPERFORM' | 'NEUTRAL' | 'WEAK' | 'BREAKDOWN';
   hunterScore: number;
+  dayRangePos: number;
+  confirmed: boolean;
+  vwap?: number | null;   // real VWAP from 5m bars (undefined = not fetched)
+  rvol?: number | null;   // time-of-day relative volume
+  vwapSince?: string | null;
 
   // Breakout Gems
   breakoutType: '52W HIGH' | 'DAY HIGH' | 'DAY LOW' | 'STRONG SURGE' | 'HEAVY DROP' | 'RANGE BREAK' | 'MOMENTUM';
@@ -207,6 +214,10 @@ const MarketEye = () => {
   const [boostSearch, setBoostSearch] = useState('');
   const [boostFilter, setBoostFilter] = useState<'All Signals' | 'Bullish' | 'Bearish'>('All Signals');
   const [isBoostFilterOpen, setIsBoostFilterOpen] = useState(false);
+  const [hunterUpdatedAt, setHunterUpdatedAt] = useState<Date | null>(null);
+  const [benchmarkOk, setBenchmarkOk] = useState(true);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [weeklyBreakoutSearch, setWeeklyBreakoutSearch] = useState('');
   const [weeklyBreakdownSearch, setWeeklyBreakdownSearch] = useState('');
@@ -243,13 +254,15 @@ const MarketEye = () => {
   useEffect(() => {
     let isMounted = true;
     const loadData = async () => {
-      setLoading(true);
+      if (refreshTick === 0) setLoading(true); else setRefreshing(true);
       const results: MarketEyeData[] = [];
       const batchSize = 50; // Increased to 50 for Fyers API efficiency
       
       // Fetch Indices and News
       let baselineNiftyChange = 0;
       let baselineBankNiftyChange = 0;
+      let niftyOk = false;
+      let bankNiftyOk = false;
       try {
         const [niftyRes, bankNiftyRes, newsRes, niftyHist, bankNiftyHist, fiiDiiRes] = await Promise.all([
           fetchStockPrice('^NSEI'),
@@ -262,6 +275,8 @@ const MarketEye = () => {
         if (isMounted) {
           baselineNiftyChange = niftyRes?.change || 0;
           baselineBankNiftyChange = bankNiftyRes?.change || 0;
+          niftyOk = !!niftyRes;
+          bankNiftyOk = !!bankNiftyRes;
           setIndicesData({
             nifty50: niftyRes ? { 
               price: niftyRes.price, 
@@ -345,31 +360,14 @@ const MarketEye = () => {
               // 1. Pure Alpha vs Benchmark (Signed e.g. +3.47% or -5.57%)
               const rsAlpha = Number((stockChange - benchmarkChange).toFixed(2));
               
-              // 2. Intraday Day Range Position & VWAP Confluence
+              // 2. Position inside today's range (0 = day low, 1 = day high)
               const daySpread = dayHigh - dayLow;
               const dayRangePos = daySpread > 0 && currentPrice ? (currentPrice - dayLow) / daySpread : 0.5;
-              const vwapEst = (dayHigh + dayLow + currentPrice) / 3;
-              const isAboveVwap = currentPrice >= vwapEst;
-              
-              // 3. Institutional Intraday RS Score (1 to 99)
-              let rawScore = 50;
-              if (rsAlpha >= 0) {
-                rawScore = 50 + (rsAlpha * 8) + ((dayRangePos - 0.5) * 20) + (isAboveVwap ? 5 : -4);
-              } else {
-                rawScore = 50 + (rsAlpha * 8) + ((dayRangePos - 0.5) * 20) + (!isAboveVwap ? -5 : 4);
-              }
-              const rsScore = Math.min(99, Math.max(5, Math.round(rawScore)));
-              
-              // 4. RS Trend / Action signal
-              let rsTrend: MarketEyeData['rsTrend'] = 'NEUTRAL';
-              if (rsScore >= 78 && stockChange > 0 && isAboveVwap) rsTrend = 'STRONG BUY';
-              else if (rsScore >= 58 && stockChange > 0) rsTrend = 'OUTPERFORM';
-              else if (rsScore <= 22 && stockChange < 0 && !isAboveVwap) rsTrend = 'BREAKDOWN';
-              else if (rsScore <= 42 && stockChange < 0) rsTrend = 'WEAK';
-              else rsTrend = rsAlpha >= 0 ? 'OUTPERFORM' : 'WEAK';
 
-              // Composite Hunter Score
-              const hunterScore = (Math.abs(rsAlpha) * 2.5 + absChange * 1.5 + Math.abs(dayRangePos - 0.5) * 10) * (rsAlpha >= 0 ? 1.2 : 0.95);
+              // 3. Preliminary score (real VWAP / RVOL are added later for top candidates)
+              const { rsScore, rsTrend, hunterScore, confirmed } = scoreHunter({
+                change: stockChange, rsAlpha, dayRangePos, price: currentPrice, vwap: null, rvol: null
+              });
 
               // --- Breakout Type & Trigger Classification ---
               const dist52wH = high52 > 0 ? ((high52 - currentPrice) / high52) * 100 : 999;
@@ -399,23 +397,8 @@ const MarketEye = () => {
               const isBull = stockChange >= 0;
               const signalPct = absChange;
               
-              // Generate realistic breakout event timestamp
-              const now = new Date();
-              let hash = 0;
-              for (let j = 0; j < symbol.length; j++) hash = symbol.charCodeAt(j) + ((hash << 5) - hash);
-              const totalMinsNow = now.getHours() * 60 + now.getMinutes();
-              const startMins = 9 * 60 + 15;
-              const endMins = 15 * 60 + 30;
-              const currentMarketMins = Math.min(endMins, Math.max(startMins, totalMinsNow));
-              const elapsedMins = currentMarketMins - startMins;
-              const maxElapsedMins = Math.min(375, elapsedMins);
-              const recentOffset = Math.max(0, maxElapsedMins - 120);
-              const randomOffset = recentOffset + (Math.abs(hash) % Math.min(120, Math.max(1, maxElapsedMins)));
-              const eventMinsRaw = startMins + randomOffset;
-              const eventMins = Math.min(15 * 60 + 30, eventMinsRaw);
-              const hour = Math.floor(eventMins / 60);
-              const min = eventMins % 60;
-              const time = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+              // Event time is filled from real 5m bars for top candidates; unknown otherwise
+              const time = '--';
 
               results.push({
                 symbol,
@@ -432,6 +415,8 @@ const MarketEye = () => {
                 rsScore,
                 rsTrend,
                 hunterScore,
+                dayRangePos,
+                confirmed,
                 breakoutType,
                 breakoutTrigger,
                 signalPct,
@@ -448,73 +433,59 @@ const MarketEye = () => {
 
       if (!isMounted) return;
 
-      // Real Intraday Breakout calculation for top candidates
-      const sortedByAbsChange = [...results].sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
-      const candidates = sortedByAbsChange.slice(0, 20);
+      // Enrich top movers + top alpha names with real 5m bars:
+      // real VWAP, time-of-day RVOL, VWAP-cross time and move-start time.
+      const topByChange = [...results].sort((a, b) => Math.abs(b.change) - Math.abs(a.change)).slice(0, 20);
+      const topByAlpha = [...results].sort((a, b) => Math.abs(b.rsAlpha) - Math.abs(a.rsAlpha)).slice(0, 30);
+      const candidates = Array.from(new Set([...topByChange, ...topByAlpha]));
 
-      // Fetch intraday historical data in batches for top candidates to refine timestamps
-      const intradayPromise = async () => {
-        for (let i = 0; i < candidates.length; i += 5) {
+      const enrich = async () => {
+        for (let i = 0; i < candidates.length; i += 6) {
           if (!isMounted) return;
-          const batch = candidates.slice(i, i + 5);
+          const batch = candidates.slice(i, i + 6);
           await Promise.allSettled(
-            batch.map(async (candidate) => {
-              try {
-                const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500));
-                const intraday = await Promise.race([
-                  fetchIntradayPrices(candidate.symbol),
-                  timeoutPromise
-                ]);
-
-                if (intraday && Array.isArray(intraday) && intraday.length >= 5) {
-                  const prices = intraday;
-                  const currentPrice = candidate.price;
-                  const isBull = candidate.change >= 0;
-                  const recentPrices = prices.slice(-12);
-                  
-                  if (isBull) {
-                    const localMin = Math.min(...recentPrices);
-                    const minIndex = recentPrices.lastIndexOf(localMin);
-                    const totalIndex = Math.max(0, prices.length - 12 + minIndex);
-                    const eventMinsRaw = (9 * 60 + 15) + (totalIndex * 5);
-                    const eventMins = Math.min(15 * 60 + 30, eventMinsRaw);
-                    const hour = Math.floor(eventMins / 60);
-                    const min = eventMins % 60;
-                    candidate.time = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
-                  } else {
-                    const localMax = Math.max(...recentPrices);
-                    const maxIndex = recentPrices.lastIndexOf(localMax);
-                    const totalIndex = Math.max(0, prices.length - 12 + maxIndex);
-                    const eventMinsRaw = (9 * 60 + 15) + (totalIndex * 5);
-                    const eventMins = Math.min(15 * 60 + 30, eventMinsRaw);
-                    const hour = Math.floor(eventMins / 60);
-                    const min = eventMins % 60;
-                    candidate.time = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
-                  }
-                }
-              } catch (e) {
-                // Silently fail, fallback data is already set
-              }
+            batch.map(async (c) => {
+              const bars = await Promise.race([
+                fetchHistoricalOHLCV(`${c.symbol}.NS`, { range: '5d', interval: '5m' }),
+                new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000))
+              ]);
+              if (!bars || bars.length < 10) return;
+              const m = computeIntradayMetrics(bars, c.change >= 0);
+              c.vwap = m.vwap;
+              c.rvol = m.rvol;
+              c.vwapSince = m.vwapSince;
+              if (m.moveStart) c.time = m.moveStart;
+              const scored = scoreHunter({
+                change: c.change, rsAlpha: c.rsAlpha, dayRangePos: c.dayRangePos,
+                price: c.price, vwap: m.vwap, rvol: m.rvol
+              });
+              c.rsScore = scored.rsScore;
+              c.rsTrend = scored.rsTrend;
+              c.hunterScore = scored.hunterScore;
+              c.confirmed = scored.confirmed;
             })
           );
         }
       };
 
-      // Wait max 5 seconds for the intraday processing
+      // Wait max 10 seconds for enrichment; un-enriched rows keep their preliminary score
       await Promise.race([
-        intradayPromise(),
-        new Promise(resolve => setTimeout(resolve, 5000))
+        enrich(),
+        new Promise(resolve => setTimeout(resolve, 10000))
       ]);
       
       if (isMounted) {
-        setMarketData(results);
+        setMarketData(results.map(r => ({ ...r })));
+        setBenchmarkOk(niftyOk && bankNiftyOk);
+        setHunterUpdatedAt(new Date());
         setLoading(false);
+        setRefreshing(false);
       }
     };
     
     loadData();
     return () => { isMounted = false; };
-  }, []);
+  }, [refreshTick]);
 
   useEffect(() => {
     if (!marketData.length) return;
@@ -773,13 +744,14 @@ const MarketEye = () => {
       if (boostFilter === 'Bearish') return d.rsAlpha < 0 && d.change <= 0;
       return true;
     })
-    .sort((a, b) => {
-      if (boostFilter === 'Bullish') return b.rsAlpha - a.rsAlpha;
-      if (boostFilter === 'Bearish') return a.rsAlpha - b.rsAlpha;
-      // All Signals: Sort by largest absolute Alpha divergence
-      return Math.abs(b.rsAlpha) - Math.abs(a.rsAlpha);
-    })
+    // Confirmed signals (price action + VWAP agree with alpha, volume-weighted) rank first
+    .sort((a, b) => b.hunterScore - a.hunterScore)
     .slice(0, 8);
+
+  const hunterMarketStatus = getNseMarketStatus();
+  const hunterAsOf = hunterUpdatedAt
+    ? hunterUpdatedAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Kolkata' })
+    : '--';
 
   const filteredWeeklyBreakouts = weeklyBreakouts
     .filter(d => d.symbol.toLowerCase().includes(weeklyBreakoutSearch.toLowerCase()))
@@ -1522,12 +1494,26 @@ const MarketEye = () => {
                       <Droplets className="w-5 h-5 text-blue-400 fill-blue-400 drop-shadow-[0_0_12px_rgba(96,165,250,0.8)] animate-pulse" />
                     </div>
                     <div className="flex items-center gap-2.5 mt-1.5 text-xs sm:text-sm font-bold text-slate-400">
-                      <span className="flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/30 text-blue-400 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black shadow-[0_0_10px_rgba(59,130,246,0.2)] uppercase tracking-wider">
-                        <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse shadow-[0_0_5px_currentColor]" /> LIVE
-                      </span>
+                      {hunterMarketStatus === 'OPEN' ? (
+                        <span className="flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/30 text-blue-400 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black shadow-[0_0_10px_rgba(59,130,246,0.2)] uppercase tracking-wider">
+                          <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse shadow-[0_0_5px_currentColor]" /> LIVE
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1.5 bg-slate-700/30 border border-slate-600/50 text-slate-300 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider">
+                          <div className="w-1.5 h-1.5 rounded-full bg-slate-400" /> {hunterMarketStatus === 'PRE-OPEN' ? 'PRE-OPEN' : 'MARKET CLOSED'}
+                        </span>
+                      )}
                       <span className="text-[10px] text-slate-400 font-semibold bg-slate-800/60 px-2 py-0.5 rounded border border-slate-700/40">
-                        {boosters.length} Institutional Leads
+                        as of {hunterAsOf}
                       </span>
+                      <button
+                        onClick={() => setRefreshTick(t => t + 1)}
+                        disabled={refreshing}
+                        title="Refresh prices, VWAP and volume"
+                        className="p-1 rounded border border-slate-700/60 bg-slate-800/60 text-slate-300 hover:text-white hover:border-blue-500 disabled:opacity-50 transition-colors"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1570,9 +1556,15 @@ const MarketEye = () => {
                     </div>
                   )}
                 </div>
-                <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase hidden md:inline">
-                  Real Relative Strength vs NIFTY / BANKNIFTY
-                </span>
+                {benchmarkOk ? (
+                  <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase hidden md:inline">
+                    Relative Strength vs NIFTY / BANKNIFTY · VWAP + Volume confirmed
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold text-amber-400 tracking-wider uppercase">
+                    Index data unavailable · Alpha may be wrong
+                  </span>
+                )}
               </div>
 
               {/* Table */}
@@ -1615,6 +1607,26 @@ const MarketEye = () => {
                                 <span className="text-[10px] text-slate-400 font-medium font-mono">
                                   ₹{b.price ? b.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '--'}
                                 </span>
+                                {(b.vwap || b.rvol) ? (
+                                  <span className="text-[9px] font-mono font-semibold flex items-center gap-1.5 truncate">
+                                    {b.vwap ? (
+                                      <span
+                                        className={b.price >= b.vwap ? 'text-emerald-400' : 'text-red-400'}
+                                        title={`VWAP ₹${b.vwap.toFixed(2)}`}
+                                      >
+                                        {b.price >= b.vwap ? '▲' : '▼'} VWAP{b.vwapSince ? ` ${b.vwapSince}` : ''}
+                                      </span>
+                                    ) : null}
+                                    {b.rvol ? (
+                                      <span
+                                        className={b.rvol >= 1.5 ? 'text-amber-300' : 'text-slate-500'}
+                                        title="Volume vs average of previous days up to the same time"
+                                      >
+                                        RVOL {b.rvol.toFixed(1)}x
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                ) : null}
                               </div>
                             </div>
 
