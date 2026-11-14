@@ -1126,7 +1126,7 @@ const MarketEye = () => {
                           className="h-full bg-gradient-to-r from-emerald-600/80 to-emerald-400 flex items-center justify-end px-3 text-[10px] font-bold text-white rounded-lg transition-all duration-1000 shadow-[0_0_15px_rgba(16,185,129,0.4)] group-hover/row:brightness-110 min-w-max"
                           style={{ width: `${widthPct}%` }}
                         >
-                          <span className="whitespace-nowrap drop-shadow-md tracking-wide font-black">{s.price.toFixed(2)} <span className="text-emerald-200/70">/ {s.high52?.toFixed(2) || 'N/A'} · {isNew52High(s) ? 'NEW HIGH' : `−${away.toFixed(1)}%`}</span></span>
+                          <span className="whitespace-nowrap drop-shadow-md tracking-wide font-black">{s.price.toFixed(2)} <span className="text-emerald-200/70">/ {s.high52?.toFixed(2) || 'N/A'} · {isNew52High(s) ? 'NEW HIGH · ' : ''}−{away.toFixed(1)}%</span></span>
                         </div>
                       </div>
                     </div>
@@ -1162,7 +1162,7 @@ const MarketEye = () => {
                           className="h-full bg-gradient-to-r from-red-600/80 to-red-400 flex items-center justify-end px-3 text-[10px] font-bold text-white rounded-lg transition-all duration-1000 shadow-[0_0_15px_rgba(239,68,68,0.4)] group-hover/row:brightness-110 min-w-max"
                           style={{ width: `${widthPct}%` }}
                         >
-                          <span className="whitespace-nowrap drop-shadow-md tracking-wide font-black">{s.price.toFixed(2)} <span className="text-red-200/70">/ {s.low52?.toFixed(2) || 'N/A'} · {isNew52Low(s) ? 'NEW LOW' : `+${away.toFixed(1)}%`}</span></span>
+                          <span className="whitespace-nowrap drop-shadow-md tracking-wide font-black">{s.price.toFixed(2)} <span className="text-red-200/70">/ {s.low52?.toFixed(2) || 'N/A'} · {isNew52Low(s) ? 'NEW LOW · ' : ''}+{away.toFixed(1)}%</span></span>
                         </div>
                       </div>
                     </div>
@@ -1767,12 +1767,12 @@ const MarketEye = () => {
                     } else if (viewAllType === 'high52') {
                        const away = pctFrom52High(s);
                        widthPct = near52Width(away);
-                       displayValue = `${s.price.toFixed(2)} / ${s.high52?.toFixed(2) || 'N/A'} · ${isNew52High(s) ? 'NEW HIGH' : `−${away.toFixed(1)}%`}`;
+                       displayValue = `${s.price.toFixed(2)} / ${s.high52?.toFixed(2) || 'N/A'} · ${isNew52High(s) ? 'NEW HIGH · ' : ''}−${away.toFixed(1)}%`;
                        barColorClass = 'bg-gradient-to-r from-emerald-600/80 to-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.4)] text-right';
                     } else if (viewAllType === 'low52') {
                        const away = pctFrom52Low(s);
                        widthPct = near52Width(away);
-                       displayValue = `${s.price.toFixed(2)} / ${s.low52?.toFixed(2) || 'N/A'} · ${isNew52Low(s) ? 'NEW LOW' : `+${away.toFixed(1)}%`}`;
+                       displayValue = `${s.price.toFixed(2)} / ${s.low52?.toFixed(2) || 'N/A'} · ${isNew52Low(s) ? 'NEW LOW · ' : ''}+${away.toFixed(1)}%`;
                        barColorClass = 'bg-gradient-to-r from-red-600/80 to-red-400 shadow-[0_0_15px_rgba(239,68,68,0.4)] text-right';
                     }
 
