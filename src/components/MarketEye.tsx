@@ -84,6 +84,22 @@ interface MarketEyeData {
 }
 
 
+// 52-week proximity: % below the 52W high / % above the 52W low (0 = at the extreme)
+const NEAR_52W_PCT = 10;
+const pctFrom52High = (d: MarketEyeData) => (d.high52 ? ((d.high52 - d.price) / d.high52) * 100 : Infinity);
+const pctFrom52Low = (d: MarketEyeData) => (d.low52 ? ((d.price - d.low52) / d.low52) * 100 : Infinity);
+const near52Week = (rows: MarketEyeData[], side: 'high' | 'low', limit: number) => {
+  const dist = side === 'high' ? pctFrom52High : pctFrom52Low;
+  return rows
+    .filter(d => d.price > 0 && dist(d) <= NEAR_52W_PCT)
+    .sort((a, b) => dist(a) - dist(b))
+    .slice(0, limit);
+};
+// Bar width: at the extreme = 100%, NEAR_52W_PCT away = 10%
+const near52Width = (pct: number) => Math.max(10, Math.min(100, 100 - Math.max(0, pct) * (90 / NEAR_52W_PCT)));
+const isNew52High = (d: MarketEyeData) => !!(d.high52 && d.high && d.high >= d.high52 * 0.999);
+const isNew52Low = (d: MarketEyeData) => !!(d.low52 && d.low && d.low <= d.low52 * 1.001);
+
 // Rows that qualify for the Intraday Hunter card, strongest confirmed signal first
 const rankHunterRows = (rows: MarketEyeData[]) =>
   rows
@@ -595,20 +611,13 @@ const MarketEye = () => {
   });
 
   // Use global marketData for cards
-  const topGainers = [...marketData].sort((a, b) => b.change - a.change).slice(0, 5);
-  const topLosers = [...marketData].sort((a, b) => a.change - b.change).slice(0, 5);
+  // Only stocks actually up / down today (on a red day the gainers card can legitimately be short or empty)
+  const topGainers = marketData.filter(d => d.change > 0).sort((a, b) => b.change - a.change).slice(0, 5);
+  const topLosers = marketData.filter(d => d.change < 0).sort((a, b) => a.change - b.change).slice(0, 5);
   
-  // 52-week High/Low calculations
-  // We sort all stocks by proximity to their 52-week high/low and take the top 5.
-  const high52Stocks = [...marketData]
-    .filter(d => d.high52 !== undefined && d.high52 > 0)
-    .sort((a, b) => (b.price / (b.high52 || 1)) - (a.price / (a.high52 || 1)))
-    .slice(0, 5);
-
-  const low52Stocks = [...marketData]
-    .filter(d => d.low52 !== undefined && d.low52 > 0)
-    .sort((a, b) => (a.price / (a.low52 || 1)) - (b.price / (b.low52 || 1)))
-    .slice(0, 5);
+  // 52-week: only stocks within NEAR_52W_PCT of the extreme, closest first
+  const high52Stocks = near52Week(marketData, 'high', 5);
+  const low52Stocks = near52Week(marketData, 'low', 5);
   
   // Breakout Gems: real level breaks (52W > PDH/PDL > opening range), confirmed on a closed 5m candle
   const breakouts = marketData
@@ -1025,6 +1034,7 @@ const MarketEye = () => {
                 </button>
               </div>
               <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2 relative z-10">
+                {topGainers.length === 0 && <div className="text-center text-slate-500 text-sm py-4 font-medium">No tracked stock is up today</div>}
                 {topGainers.map(s => {
                   // Max width is 100%, we normalize based on the top gainer's change
                   const maxChange = topGainers[0]?.change || 1;
@@ -1062,6 +1072,7 @@ const MarketEye = () => {
                 </button>
               </div>
               <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2 relative z-10">
+                {topLosers.length === 0 && <div className="text-center text-slate-500 text-sm py-4 font-medium">No tracked stock is down today</div>}
                 {topLosers.map(s => {
                   const maxChange = Math.abs(topLosers[0]?.change || 1);
                   const widthPct = Math.max(10, Math.min(100, (Math.abs(s.change) / maxChange) * 100));
@@ -1102,8 +1113,8 @@ const MarketEye = () => {
               </div>
               <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2 relative z-10">
                 {high52Stocks.length > 0 ? high52Stocks.map(s => {
-                  const pctToHigh = s.high52 ? ((s.price / s.high52) * 100) : 100;
-                  const widthPct = Math.max(10, Math.min(100, pctToHigh));
+                  const away = pctFrom52High(s);
+                  const widthPct = near52Width(away);
                   return (
                     <div key={s.symbol} onClick={() => handleRowClick(s.symbol)} className="flex items-center gap-3 cursor-pointer group/row">
                       <div className="w-28 flex items-center gap-2.5 shrink-0">
@@ -1115,12 +1126,12 @@ const MarketEye = () => {
                           className="h-full bg-gradient-to-r from-emerald-600/80 to-emerald-400 flex items-center justify-end px-3 text-[10px] font-bold text-white rounded-lg transition-all duration-1000 shadow-[0_0_15px_rgba(16,185,129,0.4)] group-hover/row:brightness-110 min-w-max"
                           style={{ width: `${widthPct}%` }}
                         >
-                          <span className="whitespace-nowrap drop-shadow-md tracking-wide font-black">{s.price.toFixed(2)} <span className="text-emerald-200/70">/ {s.high52?.toFixed(2) || 'N/A'}</span></span>
+                          <span className="whitespace-nowrap drop-shadow-md tracking-wide font-black">{s.price.toFixed(2)} <span className="text-emerald-200/70">/ {s.high52?.toFixed(2) || 'N/A'} · {isNew52High(s) ? 'NEW HIGH' : `−${away.toFixed(1)}%`}</span></span>
                         </div>
                       </div>
                     </div>
                   );
-                }) : <div className="text-center text-slate-500 text-sm py-4 font-medium">No stocks near 52W High</div>}
+                }) : <div className="text-center text-slate-500 text-sm py-4 font-medium">No tracked stock within {NEAR_52W_PCT}% of its 52W high</div>}
               </div>
             </div>
 
@@ -1138,8 +1149,8 @@ const MarketEye = () => {
               </div>
               <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2 relative z-10">
                 {low52Stocks.length > 0 ? low52Stocks.map(s => {
-                  const pctToLow = s.low52 ? ((s.low52 / s.price) * 100) : 100;
-                  const widthPct = Math.max(10, Math.min(100, pctToLow));
+                  const away = pctFrom52Low(s);
+                  const widthPct = near52Width(away);
                   return (
                     <div key={s.symbol} onClick={() => handleRowClick(s.symbol)} className="flex items-center gap-3 cursor-pointer group/row">
                       <div className="w-28 flex items-center gap-2.5 shrink-0">
@@ -1151,12 +1162,12 @@ const MarketEye = () => {
                           className="h-full bg-gradient-to-r from-red-600/80 to-red-400 flex items-center justify-end px-3 text-[10px] font-bold text-white rounded-lg transition-all duration-1000 shadow-[0_0_15px_rgba(239,68,68,0.4)] group-hover/row:brightness-110 min-w-max"
                           style={{ width: `${widthPct}%` }}
                         >
-                          <span className="whitespace-nowrap drop-shadow-md tracking-wide font-black">{s.price.toFixed(2)} <span className="text-red-200/70">/ {s.low52?.toFixed(2) || 'N/A'}</span></span>
+                          <span className="whitespace-nowrap drop-shadow-md tracking-wide font-black">{s.price.toFixed(2)} <span className="text-red-200/70">/ {s.low52?.toFixed(2) || 'N/A'} · {isNew52Low(s) ? 'NEW LOW' : `+${away.toFixed(1)}%`}</span></span>
                         </div>
                       </div>
                     </div>
                   );
-                }) : <div className="text-center text-slate-500 text-sm py-4 font-medium">No stocks near 52W Low</div>}
+                }) : <div className="text-center text-slate-500 text-sm py-4 font-medium">No tracked stock within {NEAR_52W_PCT}% of its 52W low</div>}
               </div>
             </div>
           </div>
@@ -1733,15 +1744,9 @@ const MarketEye = () => {
                   } else if (viewAllType === 'losers') {
                     filteredData = [...marketData].sort((a, b) => a.change - b.change).filter(s => s.change < 0).slice(0, 20);
                   } else if (viewAllType === 'high52') {
-                    filteredData = [...marketData]
-                      .filter(d => d.high52 !== undefined && d.high52 > 0)
-                      .sort((a, b) => (b.price / (b.high52 || 1)) - (a.price / (a.high52 || 1)))
-                      .slice(0, 20);
+                    filteredData = near52Week(marketData, 'high', 20);
                   } else if (viewAllType === 'low52') {
-                    filteredData = [...marketData]
-                      .filter(d => d.low52 !== undefined && d.low52 > 0)
-                      .sort((a, b) => (a.price / (a.low52 || 1)) - (b.price / (b.low52 || 1)))
-                      .slice(0, 20);
+                    filteredData = near52Week(marketData, 'low', 20);
                   }
                   
                   if (filteredData.length === 0) {
@@ -1760,14 +1765,14 @@ const MarketEye = () => {
                        displayValue = `${s.change > 0 ? '+' : ''}${s.change.toFixed(2)}%`;
                        barColorClass = viewAllType === 'gainers' ? 'bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]';
                     } else if (viewAllType === 'high52') {
-                       const pctToHigh = s.high52 ? ((s.price / s.high52) * 100) : 100;
-                       widthPct = Math.max(10, Math.min(100, pctToHigh));
-                       displayValue = `${s.price.toFixed(2)} / ${s.high52?.toFixed(2) || 'N/A'}`;
+                       const away = pctFrom52High(s);
+                       widthPct = near52Width(away);
+                       displayValue = `${s.price.toFixed(2)} / ${s.high52?.toFixed(2) || 'N/A'} · ${isNew52High(s) ? 'NEW HIGH' : `−${away.toFixed(1)}%`}`;
                        barColorClass = 'bg-gradient-to-r from-emerald-600/80 to-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.4)] text-right';
                     } else if (viewAllType === 'low52') {
-                       const pctToLow = s.low52 ? ((s.low52 / s.price) * 100) : 100;
-                       widthPct = Math.max(10, Math.min(100, pctToLow));
-                       displayValue = `${s.price.toFixed(2)} / ${s.low52?.toFixed(2) || 'N/A'}`;
+                       const away = pctFrom52Low(s);
+                       widthPct = near52Width(away);
+                       displayValue = `${s.price.toFixed(2)} / ${s.low52?.toFixed(2) || 'N/A'} · ${isNew52Low(s) ? 'NEW LOW' : `+${away.toFixed(1)}%`}`;
                        barColorClass = 'bg-gradient-to-r from-red-600/80 to-red-400 shadow-[0_0_15px_rgba(239,68,68,0.4)] text-right';
                     }
 
