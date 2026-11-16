@@ -4,6 +4,8 @@ import { ResponsiveContainer, Treemap, Tooltip, AreaChart, Area, XAxis, YAxis, C
 import { createChart, CandlestickSeries, ColorType, CrosshairMode, type CandlestickData, type UTCTimestamp } from 'lightweight-charts';
 import { fetchStockPrice, fetchHistoricalPrices, fetchHistoricalOHLCV } from '../utils/priceApi';
 import StockLogo from './StockLogo';
+import { NIFTY50_WEIGHTS, NIFTY50_WEIGHTS_ASOF } from '../data/nifty50Weights';
+import { niftyContributions } from '../utils/indexMovers';
 
 export interface IndexMeta {
   id: string;
@@ -23,13 +25,8 @@ export const INDEX_CONFIG: Record<string, IndexMeta> = {
     title2: '50',
     yahooSymbol: '^NSEI',
     optionsSymbol: 'NIFTY',
-    symbols: [
-      'RELIANCE', 'TCS', 'HDFCBANK', 'ICICIBANK', 'INFY', 'ITC', 'SBIN', 'LT',
-      'BAJFINANCE', 'BHARTIARTL', 'KOTAKBANK', 'HINDUNILVR', 'AXISBANK',
-      'ASIANPAINT', 'MARUTI', 'HCLTECH', 'SUNPHARMA', 'TITAN', 'ULTRACEMCO',
-      'TATASTEEL', 'WIPRO', 'BAJAJFINSV', 'NESTLEIND', 'POWERGRID', 'M&M',
-      'NTPC', 'JSWSTEEL'
-    ]
+    // Official 50 constituents (niftyindices.com list, weights as of NIFTY50_WEIGHTS_ASOF)
+    symbols: NIFTY50_WEIGHTS.map(w => w.symbol)
   },
   'NSE:BANKNIFTY': {
     id: 'NSE:BANKNIFTY',
@@ -456,6 +453,7 @@ const OptionsPlayer = () => {
     percent: number;
   } | null>(null);
   const [liveMovers, setLiveMovers] = useState<any[]>([]);
+  const [moverCheck, setMoverCheck] = useState<{ model: number; actual: number; covered: number; mode: 'points' | 'percent' } | null>(null);
 
   const [chartMode, setChartMode] = useState<'internal' | 'tradingview'>('internal');
   const [internalSeries, setInternalSeries] = useState<Array<{ i: number; price: number }>>([]);
@@ -655,10 +653,14 @@ const OptionsPlayer = () => {
 
     const loadData = async () => {
       // 1. Fetch Live Selected Index Data
+      let indexPrevClose = 0;
+      let indexPts = 0;
       try {
         const idxQuote = await fetchStockPrice(targetConfig.yahooSymbol);
         if (idxQuote && isMounted) {
+          indexPrevClose = idxQuote.previousClose || 0;
           const pts = idxQuote.previousClose ? (idxQuote.price - idxQuote.previousClose) : (idxQuote.price * idxQuote.change / 100);
+          indexPts = pts;
           setIndexData({
             title1: targetConfig.title1,
             title2: targetConfig.title2,
@@ -703,6 +705,8 @@ const OptionsPlayer = () => {
                   size,
                   change: data.change,
                   pts: Number(pts.toFixed(2)),
+                  price: data.price,
+                  previousClose: data.previousClose,
                   fill
                 });
               }
@@ -763,22 +767,38 @@ const OptionsPlayer = () => {
           console.warn('Failed to fetch real Options Chain PCR', e);
         }
 
-        // Top Movers: Sort by absolute change points and take top 10
-        const sortedMovers = [...enrichedResults].sort((a, b) => Math.abs(b.change) - Math.abs(a.change)).slice(0, 10);
-        
-        const formattedMovers = sortedMovers.map(m => {
-          const isPos = m.change > 0;
-          // Generate a consistent icon color based on string length
-          const colors = ['text-rose-400', 'text-sky-400', 'text-amber-400', 'text-emerald-400', 'text-fuchsia-400'];
-          const logoColor = colors[m.name.length % colors.length];
-          return {
-            symbol: m.name,
-            pts: m.pts,
-            change: m.change,
-            color: isPos ? 'text-emerald-400' : 'text-rose-400',
-            logoColor
-          };
-        });
+        // Top Movers. NIFTY 50: index points each stock added/removed (weight × move).
+        // Other indices have no weight table yet, so they show the biggest % movers and their ₹ change.
+        let formattedMovers: any[];
+        if (targetConfig.id === 'NSE:NIFTY' && indexPrevClose > 0) {
+          const quotes: Record<string, { price: number; previousClose: number }> = {};
+          for (const r of results) if (r.price > 0 && r.previousClose > 0) quotes[r.name] = { price: r.price, previousClose: r.previousClose };
+          const contrib = niftyContributions(quotes, indexPrevClose);
+          setMoverCheck({ model: contrib.total, actual: indexPts, covered: contrib.covered, mode: 'points' });
+          formattedMovers = [...contrib.rows]
+            .sort((a, b) => Math.abs(b.pts) - Math.abs(a.pts))
+            .slice(0, 10)
+            .map(m => ({
+              symbol: m.symbol,
+              pts: Number(m.pts.toFixed(1)),
+              change: m.change,
+              weight: m.weight,
+              unit: 'pts',
+              color: m.pts >= 0 ? 'text-emerald-400' : 'text-rose-400',
+            }));
+        } else {
+          setMoverCheck({ model: 0, actual: indexPts, covered: results.length, mode: 'percent' });
+          formattedMovers = [...enrichedResults]
+            .sort((a, b) => Math.abs(b.change) - Math.abs(a.change))
+            .slice(0, 10)
+            .map(m => ({
+              symbol: m.name,
+              pts: m.pts,
+              change: m.change,
+              unit: '₹',
+              color: m.change > 0 ? 'text-emerald-400' : 'text-rose-400',
+            }));
+        }
         setLiveMovers(formattedMovers);
       }
     };
@@ -908,8 +928,20 @@ const OptionsPlayer = () => {
           {/* Indice Mover Section */}
           <div className="shrink-0">
             <div className="flex items-center gap-2 mb-3">
-              <h2 className="text-base font-bold text-white tracking-wide">Indice Mover</h2>
-              <Info className="w-4 h-4 text-slate-400" />
+              <h2 className="text-base font-bold text-white tracking-wide">Index Movers</h2>
+              <span title={moverCheck?.mode === 'points'
+                ? `Index points each stock added or removed today = weight × move. Weights: NSE factsheet ${NIFTY50_WEIGHTS_ASOF} (top 10 + sectors), rest by free float; drift with prices.`
+                : 'No weight table for this index yet: showing the biggest % movers and their ₹ price change.'}>
+                <Info className="w-4 h-4 text-slate-400" />
+              </span>
+              {moverCheck?.mode === 'points' && (
+                <span className="text-[10px] font-mono text-slate-400">
+                  Sum of {moverCheck.covered} stocks: {moverCheck.model >= 0 ? '+' : ''}{moverCheck.model.toFixed(1)} pts vs index {moverCheck.actual >= 0 ? '+' : ''}{moverCheck.actual.toFixed(1)}
+                </span>
+              )}
+              {moverCheck?.mode === 'percent' && (
+                <span className="text-[10px] font-mono text-slate-400">Top % movers · ₹ change (no index weights)</span>
+              )}
             </div>
             
             <div className="flex flex-col xl:flex-row gap-4">
@@ -938,7 +970,7 @@ const OptionsPlayer = () => {
                       <span className="text-[11px] font-bold text-slate-200 truncate">{mover.symbol}</span>
                       <div className="flex items-center gap-1.5">
                         <span className={`text-[11px] font-bold ${mover.color} drop-shadow-md`}>
-                          {mover.pts > 0 ? '+' : ''}{mover.pts}
+                          {mover.pts > 0 ? '+' : ''}{mover.unit === '₹' ? `₹${mover.pts}` : mover.pts}{mover.unit === 'pts' ? ' pts' : ''}
                         </span>
                         {typeof mover.change === 'number' && (
                           <span className={`text-[10px] font-medium opacity-80 ${mover.color}`}>
