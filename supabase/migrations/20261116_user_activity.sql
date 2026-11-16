@@ -55,25 +55,21 @@ create policy "admins read portfolios" on public.portfolios for select to authen
 drop policy if exists "admins read stocks" on public.stocks;
 create policy "admins read stocks" on public.stocks for select to authenticated using (public.is_admin());
 
--- 4. The users table was readable by anyone with the public (anon) key. Lock it down.
-alter table public.users enable row level security;
-do $$
-declare p record;
-begin
-  for p in select policyname from pg_policies where schemaname = 'public' and tablename = 'users' loop
-    execute format('drop policy %I on public.users', p.policyname);
-  end loop;
-end $$;
-create policy "users read self, admins read all" on public.users
-  for select to authenticated
-  using (public.is_admin() or lower(email) = lower(coalesce(auth.jwt() ->> 'email', '')));
-create policy "admins manage users" on public.users
-  for all to authenticated
-  using (public.is_admin()) with check (public.is_admin());
--- Keep sign-up working if a trigger on auth.users copies new accounts into public.users
-create policy "auth service inserts users" on public.users
-  for insert to supabase_auth_admin, service_role
-  with check (true);
+-- 4. public.users is a VIEW over the login accounts and was readable by anyone with the public (anon) key.
+--    Close it to the API; admins read it only through a function that checks is_admin().
+revoke all on public.users from anon, authenticated;
+
+create or replace function public.admin_list_users()
+returns setof public.users
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select * from public.users where public.is_admin();
+$$;
+revoke all on function public.admin_list_users() from public, anon;
+grant execute on function public.admin_list_users() to authenticated;
 
 -- 5. Optional housekeeping: delete activity older than 90 days (run manually, or schedule with pg_cron)
 -- delete from public.user_activity where created_at < now() - interval '90 days';

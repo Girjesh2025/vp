@@ -1,5 +1,5 @@
 // Builds the admin panel's user, session and analytics views from real rows in Supabase:
-// public.users, public.user_activity, public.portfolios, public.stocks (admin-readable via RLS, see
+// public.admin_list_users() (users view, admin-only), public.user_activity, public.portfolios, public.stocks (admin-readable via RLS, see
 // supabase/migrations/20261116_user_activity.sql).
 
 import { supabase } from '../lib/supabase';
@@ -173,7 +173,7 @@ export async function loadAdminData(): Promise<AdminData> {
   const since = new Date(Date.now() - ACTIVITY_WINDOW_DAYS * 86400 * 1000).toISOString();
 
   const [usersRes, actRes, pfRes, stRes] = await Promise.all([
-    supabase.from('users').select('*'),
+    supabase.rpc('admin_list_users'),
     supabase
       .from('user_activity')
       .select('user_id,email,session_id,event,page,query,user_agent,created_at')
