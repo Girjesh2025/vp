@@ -2409,7 +2409,7 @@ export default function AdminDashboard() {
                 <div className="flex items-center gap-2">
                   {settingsMessage && (
                     <span className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold animate-in fade-in flex items-center gap-1.5">
-                      <CheckCircle className="w-3.5 h-3.5" />
+                      <CheckCircle2 className="w-3.5 h-3.5" />
                       <span>{settingsMessage}</span>
                     </span>
                   )}

@@ -97,16 +97,6 @@ const GlobalMarket: React.FC = () => {
   const fetchLiveGlobalData = async (showRefreshAnimation = false) => {
     if (showRefreshAnimation) setIsRefreshing(true);
     try {
-      // First fetch NIFTY 50 to have reference for GIFT Nifty fallback if needed
-      let niftyRefPrice = 24800;
-      try {
-        const niftyData = await fetchStockPrice('^NSEI');
-        if (niftyData && niftyData.price > 0) {
-          niftyRefPrice = niftyData.price;
-        }
-      } catch (e) {
-        // ignore
-      }
 
       const results = await Promise.all(
         BASE_INDICES.map(async (idx) => {
@@ -134,19 +124,8 @@ const GlobalMarket: React.FC = () => {
                 // fall through
               }
 
-              // Fallback based on Nifty 50 close
-              const estPrice = niftyRefPrice ? Number((niftyRefPrice * 1.0025).toFixed(2)) : 24850;
-              return {
-                ...idx,
-                price: estPrice,
-                change: Number((estPrice - niftyRefPrice).toFixed(2)),
-                changePercent: Number((((estPrice - niftyRefPrice) / niftyRefPrice) * 100).toFixed(2)),
-                status: getMarketStatus(idx.category, idx.symbol),
-                lastUpdate: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                link: 'https://in.investing.com/indices/gift-nifty-50-c1-futures',
-                sourceNote: 'NSE IX proxy',
-                isEstimated: true,
-              };
+              // No live GIFT Nifty quote: show 'Data unavailable' rather than an estimate from Nifty
+              throw new Error('GIFT Nifty unavailable');
             }
 
             const data = await fetchStockPrice(idx.symbol);

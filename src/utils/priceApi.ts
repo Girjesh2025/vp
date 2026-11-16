@@ -45,25 +45,6 @@ export const isMarketOpen = (): boolean => {
 // Keep internal alias for backward compatibility within this file
 const isIndianMarketOpen = isMarketOpen;
 
-// Mock data for development when API is rate limited or fails
-const getMockPrice = (symbol: string): PriceData => {
-  // Use a seed based on symbol for consistent mock data
-  const seed = symbol.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  const random = (seed * 9301 + 49297) % 233280 / 233280; // Simple seeded random
-  
-  const basePrice = 100 + (random * 2000); // Price between 100-2100
-  
-  // Show price changes whether market is open or closed, so P&L doesn't disappear in the evening
-  const changePercent = (random - 0.5) * 10; // Change between -5% to +5%
-  const previousClose = basePrice / (1 + changePercent / 100);
-  
-  return {
-    price: Number(basePrice.toFixed(2)),
-    change: Number(changePercent.toFixed(2)),
-    previousClose: Number(previousClose.toFixed(2)),
-  };
-};
-
 const resolveBaseUrl = (): string => {
   const envBase = (import.meta as any)?.env?.VITE_API_BASE_URL;
   if (typeof envBase === 'string' && envBase.trim().length > 0) {
@@ -432,20 +413,8 @@ export const fetchSectorRawMonthly = async (symbol: string): Promise<SectorRawMo
     console.warn(`[Raw Monthly] Failed for ${symbol}:`, e);
   }
 
-  // 3️⃣ Seeded mock fallback — deterministic per symbol, covers 3 full years
-  console.warn(`⚠️ [RawMonthly] Using mock data for ${symbol}`);
-  const seed = symbol.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-  const timestamps: number[] = [];
-  const closes: number[] = [];
-  let price = 10000 + (seed % 10000);
-  const now = Math.floor(Date.now() / 1000);
-  for (let i = 35; i >= 0; i--) {
-    const rng = ((seed * 9301 + i * 49297 + 233280) % 233280) / 233280;
-    price = price * (1 + (rng - 0.5) * 0.06);
-    timestamps.push(now - i * 30 * 86400);
-    closes.push(Math.round(price));
-  }
-  return { timestamps, closes };
+  // No real data: fail so the caller leaves this sector out instead of charting made-up prices
+  throw new Error(`[RawMonthly] No monthly data for ${symbol}`);
 };
 
 // Convert to candidate symbols

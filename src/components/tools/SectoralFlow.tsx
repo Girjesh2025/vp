@@ -61,7 +61,7 @@ const fetchBatchStockData = async (
               totalPercentChange += pctChange;
               count++;
             }
-            const avgChange20D = count > 0 ? totalPercentChange / count : getMockAvgPercentChange20D(sym);
+            const avgChange20D = count > 0 ? totalPercentChange / count : 0; // 0 = no history, R.Fac not shown
 
             if (sym && (price > 0 || change !== 0)) {
               results[sym] = {
@@ -177,16 +177,6 @@ const getHeatmapGlow = (val: number): string => {
 
 const clamp = (value: number, min: number, max: number): number => {
   return Math.min(Math.max(value, min), max);
-};
-
-/** Deterministic mock Average % Change (last 20 days) for R.Fac calculation */
-const getMockAvgPercentChange20D = (symbol: string): number => {
-  let hash = 0;
-  for (let i = 0; i < symbol.length; i++) {
-    hash = symbol.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  // Generates an average daily percent change roughly between 0.8% and 2.5%
-  return 0.8 + (Math.abs(hash) % 100) / 60; 
 };
 
 type SectorMover = {
@@ -331,6 +321,7 @@ const SectoralFlow: React.FC = () => {
       let advances = 0;
       let declines = 0;
       let rfacSum = 0;
+      let rfacCount = 0;
       let absChangeSum = 0;
       const stockChanges: number[] = [];
       let topStock: SectorMover | null = null;
@@ -346,8 +337,10 @@ const SectoralFlow: React.FC = () => {
           if (stock.change >= 0) advances++;
           else declines++;
 
-          const avgChange20D = stock.avgChange20D || getMockAvgPercentChange20D(sym);
-          rfacSum += Math.abs(stock.change) / Math.max(avgChange20D, 0.1);
+          if (stock.avgChange20D > 0) {
+            rfacSum += Math.abs(stock.change) / Math.max(stock.avgChange20D, 0.1);
+            rfacCount++;
+          }
 
           if (!topStock || stock.change > topStock.change) {
             topStock = { symbol: sym, change: stock.change };
@@ -362,7 +355,7 @@ const SectoralFlow: React.FC = () => {
       const officialIndex = sector.symbol ? sectorIndexData[sector.symbol] : undefined;
       const displayChange = officialIndex?.change ?? avgChange;
       const breadth = count > 0 ? ((advances - declines) / count) * 100 : 0;
-      const avgRfac = count > 0 ? rfacSum / count : 0;
+      const avgRfac = rfacCount > 0 ? rfacSum / rfacCount : 0;
       const coverageRatio = sector.stocks.length > 0 ? count / sector.stocks.length : 0;
       const avgAbsChange = count > 0 ? absChangeSum / count : 0;
       const variance =
@@ -1041,11 +1034,12 @@ const SectoralFlow: React.FC = () => {
                               {(() => {
                                 const sortedStocks = [...sector.stocks]
                                   .map(stockSym => {
-                                    const stock = liveData[stockSym] || { price: 0, change: 0, avgChange20D: getMockAvgPercentChange20D(stockSym) };
+                                    const stock = liveData[stockSym] || { price: 0, change: 0, avgChange20D: 0 };
                                     const isPositive = stock.change >= 0;
-                                    const avgChange20D = stock.avgChange20D || getMockAvgPercentChange20D(stockSym);
-                                    const rFacNum = stock.price > 0 ? (Math.abs(stock.change) / avgChange20D) : 0;
-                                    const rFac = stock.price > 0 ? rFacNum.toFixed(2) : '-';
+                                    const avgChange20D = stock.avgChange20D;
+                                    const hasRfac = stock.price > 0 && avgChange20D > 0;
+                                    const rFacNum = hasRfac ? (Math.abs(stock.change) / avgChange20D) : 0;
+                                    const rFac = hasRfac ? rFacNum.toFixed(2) : '-';
                                     return { stockSym, stock, isPositive, rFacNum, rFac };
                                   })
                                   // Sort by descending R.Fac score (highest first)

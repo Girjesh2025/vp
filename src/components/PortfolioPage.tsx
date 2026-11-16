@@ -8,7 +8,6 @@ import {
 import type { Stock, Transaction, PriceData } from '../types';
 import StockLogo from './StockLogo';
 import BenchmarkComparison from './BenchmarkComparison';
-import { calculatePerformanceMetrics } from '../utils/performanceMetrics';
 import { getStockBySymbol } from '../stockDatabase';
 
 interface PortfolioStats {
@@ -196,13 +195,12 @@ const PortfolioPage: React.FC<PortfolioPageProps> = ({
       .sort((a, b) => b.value - a.value);
   }, [holdingsData, stats.totalCurrent]);
 
-  // Compute performance metrics for Benchmark Comparison
-  const perfMetrics = useMemo(() => {
-    return calculatePerformanceMetrics(stocks, transactions, stockPrices, (sym) => {
-      const info = getStockBySymbol(sym);
-      return info ? { sector: info.sector, name: info.name } : null;
-    });
-  }, [stocks, transactions, stockPrices]);
+  // Benchmark comparison uses only the transactions of stocks still in the portfolio
+  const holdingTransactions = useMemo(() => {
+    const clean = (s: string) => s.trim().toUpperCase().replace(/\.(NS|BO)$/i, '').split('-')[0];
+    const held = new Set(stocks.map((s) => clean(s.symbol)));
+    return transactions.filter((t) => held.has(clean(t.symbol)));
+  }, [stocks, transactions]);
 
   const gainersCount = holdingsData.filter((h) => h.pnl >= 0).length;
   const losersCount = holdingsData.filter((h) => h.pnl < 0).length;
@@ -713,7 +711,11 @@ const PortfolioPage: React.FC<PortfolioPageProps> = ({
           TAB 2: INTEGRATED BENCHMARK COMPARISON (Nifty 50, Sensex, Alpha)
           ────────────────────────────────────────────────────────────────────────── */}
       {activeTab === 'benchmark' && (
-        <BenchmarkComparison performanceMetrics={perfMetrics} />
+        <BenchmarkComparison
+          currentValue={stats.totalCurrent}
+          totalInvested={stats.totalInvested}
+          transactions={holdingTransactions}
+        />
       )}
 
       {/* ──────────────────────────────────────────────────────────────────────────

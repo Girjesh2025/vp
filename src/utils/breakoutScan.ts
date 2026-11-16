@@ -19,6 +19,7 @@ export interface BreakoutSignal {
 
 const BAR_SEC = 300;
 const OR_BARS = 3; // 09:15-09:30
+const MIN_BREAK_PCT = 0.1;
 
 export const BREAKOUT_PRIORITY: Record<BreakoutKind, number> = {
   '52W HIGH': 3, '52W LOW': 3, 'PDH BREAK': 2, 'PDL BREAK': 2, 'ORB HIGH': 1, 'ORB LOW': 1,
@@ -65,7 +66,8 @@ export const detectBreakout = (
 
   const found: BreakoutSignal[] = [];
   for (const c of candidates) {
-    const beyond = (v: number) => (c.isBull ? v > c.level : v < c.level);
+    // Require a 0.1% margin past the level so a tick through it (e.g. +0.01%) is not called a breakout
+    const beyond = (v: number) => (c.isBull ? v > c.level * (1 + MIN_BREAK_PCT / 100) : v < c.level * (1 - MIN_BREAK_PCT / 100));
     if (!beyond(price)) continue; // not holding the break now
     // Latest crossing: first closed candle of the current streak of closes beyond the level
     let idx = -1;
