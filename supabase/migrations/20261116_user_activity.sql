@@ -70,6 +70,10 @@ create policy "users read self, admins read all" on public.users
 create policy "admins manage users" on public.users
   for all to authenticated
   using (public.is_admin()) with check (public.is_admin());
+-- Keep sign-up working if a trigger on auth.users copies new accounts into public.users
+create policy "auth service inserts users" on public.users
+  for insert to supabase_auth_admin, service_role
+  with check (true);
 
 -- 5. Optional housekeeping: delete activity older than 90 days (run manually, or schedule with pg_cron)
 -- delete from public.user_activity where created_at < now() - interval '90 days';
