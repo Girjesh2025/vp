@@ -9,16 +9,11 @@ import {
   X, 
   Copy, 
   Check, 
-  BarChart2, 
-  Activity,
   Bookmark,
-  Zap,
   LayoutGrid,
   Table as TableIcon,
   ArrowUpDown,
   ShieldAlert,
-  Flame,
-  Crosshair,
   Compass,
   ArrowUpRight,
   TrendingDown
@@ -28,6 +23,7 @@ import {
   analyzeSwing, 
   SWING_SETUP_LABEL, 
   MAX_HOLD_DAYS, 
+  SWING_BACKTEST, 
   type SwingSetup, 
   type DailyBar 
 } from '../utils/swingScan';
@@ -152,6 +148,53 @@ const SWING_WATCHLIST_SYMBOLS = [
   'HAL', 'POLYCAB', 'DIXON', 'PERSISTENT', 'COFORGE',
   'DLF', 'JIOFIN', 'VEDL', 'SIEMENS', 'CHOLAFIN'
 ];
+
+// One hue per setup, used for the card's top edge, tag and rail dot
+const SETUP_TONE: Record<SwingSetup, { text: string; edge: string; tag: string }> = {
+  BO50: { text: 'text-emerald-300', edge: 'from-emerald-400/80', tag: 'bg-emerald-400/10 border-emerald-400/30 text-emerald-300' },
+  BO20: { text: 'text-cyan-300', edge: 'from-cyan-400/80', tag: 'bg-cyan-400/10 border-cyan-400/30 text-cyan-300' },
+  PB50: { text: 'text-violet-300', edge: 'from-violet-400/80', tag: 'bg-violet-400/10 border-violet-400/30 text-violet-300' },
+  PB20: { text: 'text-sky-300', edge: 'from-sky-400/80', tag: 'bg-sky-400/10 border-sky-400/30 text-sky-300' },
+  NONE: { text: 'text-slate-400', edge: 'from-slate-500/40', tag: 'bg-white/5 border-white/10 text-slate-400' },
+};
+
+const SETUP_SHORT: Record<SwingSetup, string> = {
+  BO50: '50D BREAKOUT', BO20: '20D BREAKOUT', PB50: '50-EMA DIP', PB20: '20-EMA DIP', NONE: 'NO SETUP',
+};
+
+const pctFrom = (v: number, base: number) => (base > 0 ? ((v - base) / base) * 100 : 0);
+
+/**
+ * The trade on one line: stop → entry → T1 (2R) → T2 (3R), drawn to scale in R.
+ * The white dot is the live price, so a tracked trade shows how far it has travelled.
+ */
+const TradeRail: React.FC<{ entry: number; stop: number; t1: number; t2: number; price: number }> = ({ entry, stop, t1, t2, price }) => {
+  const span = t2 - stop;
+  const at = (v: number) => `${Math.min(100, Math.max(0, ((v - stop) / span) * 100))}%`;
+  const fmt = (v: number) => `₹${v.toLocaleString('en-IN', { maximumFractionDigits: v >= 1000 ? 0 : 1 })}`;
+  return (
+    <div className="pt-1">
+      <div className="relative h-6">
+        <div className="absolute top-1/2 -translate-y-1/2 h-[3px] rounded-full bg-rose-500/60" style={{ left: 0, width: at(entry) }} />
+        <div className="absolute top-1/2 -translate-y-1/2 h-[3px] rounded-full bg-gradient-to-r from-emerald-500/40 to-emerald-400" style={{ left: at(entry), right: 0 }} />
+        {[stop, entry, t1, t2].map((v, i) => (
+          <div key={i} className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-[2px] h-3 rounded ${i === 0 ? 'bg-rose-400' : i === 1 ? 'bg-slate-300' : 'bg-emerald-300'}`} style={{ left: at(v) }} />
+        ))}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.7)] ring-2 ring-[#0a0e17] transition-[left] duration-500"
+          style={{ left: at(price) }}
+          title={`Now ${fmt(price)}`}
+        />
+      </div>
+      <div className="grid grid-cols-4 text-[10px] font-mono tabular-nums leading-tight">
+        <div className="text-rose-300">{fmt(stop)}<div className="text-rose-400/60">{pctFrom(stop, entry).toFixed(1)}%</div></div>
+        <div className="text-slate-200 text-center -translate-x-1/4">{fmt(entry)}<div className="text-slate-500">entry</div></div>
+        <div className="text-emerald-300 text-center translate-x-1/4">{fmt(t1)}<div className="text-emerald-400/60">+{pctFrom(t1, entry).toFixed(1)}%</div></div>
+        <div className="text-emerald-200 text-right">{fmt(t2)}<div className="text-emerald-400/60">+{pctFrom(t2, entry).toFixed(1)}%</div></div>
+      </div>
+    </div>
+  );
+};
 
 const SwingPlayer: React.FC = () => {
   const [marketData, setMarketData] = useState<SwingData[]>([]);
@@ -547,182 +590,146 @@ const SwingPlayer: React.FC = () => {
   return (
     <div className="space-y-4 animate-in fade-in duration-300 w-full max-w-[1700px] mx-auto pb-12">
 
-      {/* ── 1. Premium Institutional Cockpit Banner ─────────────────────────── */}
-      <div className="bg-[#0b0f17] border border-slate-800/90 rounded-2xl p-5 md:p-6 shadow-2xl relative overflow-hidden flex flex-col xl:flex-row items-start xl:items-center justify-between gap-5">
-        
-        {/* Left Branding & Live Status */}
-        <div className="flex items-start sm:items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-[0_0_24px_rgba(16,185,129,0.2)] shrink-0">
-            <Compass className="w-6 h-6 stroke-[2.2]" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-xl md:text-2xl font-black text-white tracking-tight">Pro Swing Radar</h1>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 text-[11px] font-bold font-mono">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                Delivery CNC · 3–15 Days
-              </span>
-              {lastBarDate && (
-                <span className="px-2 py-0.5 rounded-md bg-slate-800/80 text-slate-400 font-mono text-[10px] border border-slate-700/60">
-                  Daily Bar: {lastBarDate}
+      {/* ── 1. Radar strip: what closed into a setup today (same shape as Index Movers) ── */}
+      <section className="flex flex-col xl:flex-row gap-4">
+        <div className="w-full xl:w-64 shrink-0 relative overflow-hidden rounded-xl border border-white/10 bg-white/5 backdrop-blur-md p-5 shadow-[0_8px_32px_0_rgba(0,0,0,0.36)]">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent pointer-events-none" />
+          <div className="relative">
+            <div className="text-[10px] font-bold tracking-[0.2em] text-slate-400 uppercase">Swing Radar · CNC</div>
+            <div className="mt-2 flex items-baseline gap-2">
+              <span className="text-5xl font-black text-white tabular-nums leading-none">{loading ? '–' : setupCount}</span>
+              <span className="text-sm text-slate-400">setups of {marketData.length || '…'}</span>
+            </div>
+            <div className="mt-3 flex items-center gap-2 text-xs">
+              {niftyRegime ? (
+                <span className={`inline-flex items-center gap-1 font-bold ${niftyRegime.above200 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {niftyRegime.above200 ? <ArrowUpRight className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+                  Nifty {niftyRegime.pct >= 0 ? '+' : ''}{niftyRegime.pct.toFixed(1)}% vs 200-DMA
                 </span>
-              )}
+              ) : <span className="text-slate-500">Nifty trend loading…</span>}
             </div>
-            <p className="text-xs text-slate-400 mt-1 font-medium max-w-xl leading-relaxed">
-              Algorithmic breakout detection &amp; structural moving average pullbacks on verified NSE daily bars. Pre-calculated entry, stop loss, and 1:2 / 1:3 profit targets.
-            </p>
+            <div className="mt-1 text-[10px] font-mono text-slate-500">
+              {lastBarDate ? `Daily close ${lastBarDate}` : 'Daily bars'} · exit by day {MAX_HOLD_DAYS}
+            </div>
+            <button
+              onClick={() => loadData(true)}
+              disabled={isRefreshing || loading}
+              className="mt-4 w-full inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 px-3 py-2 text-xs font-bold text-slate-200 transition disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              {isRefreshing ? 'Scanning…' : 'Rescan'}
+            </button>
           </div>
         </div>
 
-        {/* Right Executive Stats & Refresh */}
-        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 w-full xl:w-auto justify-between xl:justify-end">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full sm:w-auto">
-            {/* Market Regime */}
-            <div className="bg-[#101622] border border-slate-800 rounded-xl px-3.5 py-2 min-w-[110px]">
-              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Nifty Trend</div>
-              <div className={`text-sm font-black font-mono mt-0.5 flex items-center gap-1 ${
-                niftyRegime?.above200 ? 'text-emerald-400' : 'text-rose-400'
-              }`}>
-                {niftyRegime?.above200 ? <ArrowUpRight className="w-4 h-4 stroke-[2.5]" /> : <TrendingDown className="w-4 h-4 stroke-[2.5]" />}
-                <span>{niftyRegime ? (niftyRegime.above200 ? 'Uptrend' : 'Pullback') : 'Loading'}</span>
-              </div>
-              <div className="text-[9px] text-slate-500 font-mono">
-                {niftyRegime ? `${niftyRegime.pct >= 0 ? '+' : ''}${niftyRegime.pct.toFixed(1)}% vs 200DMA` : '200-DMA'}
-              </div>
+        <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 content-start">
+          {loading ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-[68px] rounded-xl border border-white/10 bg-white/5 animate-pulse" />
+            ))
+          ) : marketData.filter(d => d.setupCategory !== 'NONE').length === 0 ? (
+            <div className="col-span-full rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-slate-400">
+              No stock closed into a breakout or EMA dip on the latest bar. Waiting is a position — open <button className="text-emerald-400 font-bold hover:underline" onClick={() => setActiveCategoryFilter('ALL')}>All stocks</button> to watch levels.
             </div>
-
-            {/* Setups Today */}
-            <div className="bg-[#101622] border border-emerald-500/20 rounded-xl px-3.5 py-2 min-w-[110px]">
-              <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Active Setups</div>
-              <div className="text-sm font-black text-emerald-400 font-mono mt-0.5">{setupCount} Today</div>
-              <div className="text-[9px] text-slate-400 font-medium">{marketData.length} universe stocks</div>
-            </div>
-
-            {/* Breakout vs Pullback */}
-            <div className="bg-[#101622] border border-sky-500/20 rounded-xl px-3.5 py-2 min-w-[110px]">
-              <div className="text-[10px] text-sky-400 font-bold uppercase tracking-wider">Breakout · Dip</div>
-              <div className="text-sm font-black text-sky-400 font-mono mt-0.5">{breakoutCount} · {pullbackCount}</div>
-              <div className="text-[9px] text-slate-400 font-medium">BO20/50 · EMA Dip</div>
-            </div>
-
-            {/* Tracked Watchlist */}
-            <div className="bg-[#101622] border border-slate-800 rounded-xl px-3.5 py-2 min-w-[110px]">
-              <div className="text-[10px] text-slate-300 font-bold uppercase tracking-wider">Watchlist</div>
-              <div className="text-sm font-black text-slate-200 font-mono mt-0.5">{savedWatchlist.length} Saved</div>
-              <div className="text-[9px] text-teal-400 font-medium">{targetHitCount} Target Done</div>
-            </div>
-          </div>
-
-          {/* Rescan Button */}
-          <button
-            onClick={() => loadData(true)}
-            disabled={isRefreshing || loading}
-            className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-bold transition select-none disabled:opacity-50 cursor-pointer shadow-lg shadow-emerald-600/20 shrink-0 w-full sm:w-auto"
-            title="Rescan universe"
-          >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span>Rescan</span>
-          </button>
+          ) : (
+            marketData.filter(d => d.setupCategory !== 'NONE').slice(0, 10).map(stock => {
+              const tone = SETUP_TONE[stock.setupCategory];
+              return (
+                <button
+                  key={stock.symbol}
+                  onClick={() => setSelectedStock(stock)}
+                  className="group text-left rounded-xl border border-white/10 bg-white/5 backdrop-blur-md p-3 flex items-center gap-3 shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] hover:bg-white/10 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+                >
+                  <StockLogo symbol={stock.symbol} className="w-10 h-10 shrink-0 group-hover:scale-105 transition-transform" />
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-bold text-slate-100 truncate">{stock.symbol}</div>
+                    <div className={`text-[10px] font-bold ${tone.text}`}>{SETUP_SHORT[stock.setupCategory]}</div>
+                    <div className={`text-[10px] font-mono ${stock.change >= 0 ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>
+                      {stock.change >= 0 ? '+' : ''}{stock.change.toFixed(1)}% · RS {stock.rs3m >= 0 ? '+' : ''}{stock.rs3m}%
+                    </div>
+                  </div>
+                </button>
+              );
+            })
+          )}
         </div>
+      </section>
+
+      {/* ── 1b. Evidence line: what these exact rules earned after costs ── */}
+      <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px]">
+        <span className="font-bold text-slate-300 inline-flex items-center gap-1.5">
+          <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+          Backtest {SWING_BACKTEST.period}, after costs
+        </span>
+        {SWING_BACKTEST.rows.map(r => (
+          <span key={r.setup} className="font-mono tabular-nums">
+            <span className={SETUP_TONE[r.setup].text}>{SETUP_SHORT[r.setup]}</span>{' '}
+            <span className={r.avg >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{r.avg >= 0 ? '+' : ''}{r.avg.toFixed(2)}%</span>
+          </span>
+        ))}
+        <span className="font-mono tabular-nums text-slate-400">
+          RANDOM <span className={SWING_BACKTEST.random.avg >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{SWING_BACKTEST.random.avg >= 0 ? '+' : ''}{SWING_BACKTEST.random.avg.toFixed(2)}%</span>
+        </span>
+        <span className="text-slate-500">per trade · no setup clearly beats a random entry, so use this as a watch list, not buy calls.</span>
       </div>
 
-      {/* ── 2. Interactive Filter Bar & Controls ─────────────────────────── */}
-      <div className="bg-[#0b0f17] border border-slate-800/80 rounded-2xl p-4 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 shadow-xl">
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {/* ── 2. Filters ── */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div className="flex items-center gap-1 p-1 rounded-xl border border-white/10 bg-white/5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {[
-            { id: 'SETUPS', label: `Active Setups (${setupCount})`, icon: Flame },
-            { id: 'BREAKOUT', label: `Breakouts (${breakoutCount})`, icon: Zap },
-            { id: 'PULLBACK', label: `EMA Pullbacks (${pullbackCount})`, icon: Crosshair },
-            { id: 'WATCHLIST', label: `My Watchlist (${savedWatchlist.length})`, icon: Bookmark },
-            { id: 'ALL', label: `Full Universe (${marketData.length})`, icon: Compass },
+            { id: 'SETUPS', label: 'Setups', n: setupCount },
+            { id: 'BREAKOUT', label: 'Breakouts', n: breakoutCount },
+            { id: 'PULLBACK', label: 'EMA dips', n: pullbackCount },
+            { id: 'WATCHLIST', label: 'Tracked', n: savedWatchlist.length },
+            { id: 'ALL', label: 'All stocks', n: marketData.length },
           ].map(tab => {
-            const Icon = tab.icon;
             const isActive = activeCategoryFilter === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveCategoryFilter(tab.id as any)}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer select-none ${
-                  isActive
-                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/25'
-                    : 'bg-[#101622] border border-slate-800/90 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${
+                  isActive ? 'bg-white/15 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-                <span>{tab.label}</span>
+                {tab.label} <span className={`ml-1 font-mono ${isActive ? 'text-emerald-300' : 'text-slate-500'}`}>{tab.n}</span>
               </button>
             );
           })}
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap justify-between lg:justify-end">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setHighConvictionOnly(prev => !prev)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition select-none cursor-pointer flex items-center gap-1.5 ${
-                highConvictionOnly
-                  ? 'bg-purple-500/20 text-purple-300 border-purple-500/40 shadow-sm'
-                  : 'bg-[#101622] text-slate-400 border-slate-800 hover:text-slate-300'
-              }`}
-            >
-              <BarChart2 className="w-3.5 h-3.5 text-purple-400" />
-              <span>RS &gt; Nifty</span>
-            </button>
-
-            <button
-              onClick={() => setHighVolumeOnly(prev => !prev)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition select-none cursor-pointer flex items-center gap-1.5 ${
-                highVolumeOnly
-                  ? 'bg-sky-500/20 text-sky-300 border-sky-500/40 shadow-sm'
-                  : 'bg-[#101622] text-slate-400 border-slate-800 hover:text-slate-300'
-              }`}
-            >
-              <Zap className="w-3.5 h-3.5 text-sky-400" />
-              <span>Vol &ge; 1.4x</span>
-            </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setHighConvictionOnly(prev => !prev)}
+            aria-pressed={highConvictionOnly}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${highConvictionOnly ? 'bg-violet-400/15 text-violet-200 border-violet-400/40' : 'bg-white/5 text-slate-400 border-white/10 hover:text-slate-200'}`}
+          >
+            Beats Nifty 3M
+          </button>
+          <button
+            onClick={() => setHighVolumeOnly(prev => !prev)}
+            aria-pressed={highVolumeOnly}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition ${highVolumeOnly ? 'bg-sky-400/15 text-sky-200 border-sky-400/40' : 'bg-white/5 text-slate-400 border-white/10 hover:text-slate-200'}`}
+          >
+            Volume ≥ 1.4×
+          </button>
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Symbol or sector"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="bg-white/5 border border-white/10 text-xs text-white rounded-lg pl-8 pr-3 py-1.5 w-40 focus:outline-none focus:border-emerald-400/60 placeholder-slate-500"
+            />
           </div>
-
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Search symbol / sector..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-[#101622] border border-slate-800 text-xs text-white rounded-xl pl-8 pr-3 py-2 w-36 sm:w-44 focus:outline-none focus:border-emerald-500 transition placeholder-slate-500 font-medium"
-              />
-            </div>
-
-            {/* View Mode Toggle: Cards vs Pro Table */}
-            <div className="flex items-center bg-[#101622] border border-slate-800 rounded-xl p-1 shadow-sm">
-              <button
-                type="button"
-                onClick={() => handleViewModeChange('grid')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 select-none ${
-                  viewMode === 'grid'
-                    ? 'bg-emerald-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-                }`}
-                title="Cards Grid View"
-              >
-                <LayoutGrid className="w-3.5 h-3.5" />
-                <span>Cards</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleViewModeChange('table')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 select-none ${
-                  viewMode === 'table'
-                    ? 'bg-emerald-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-                }`}
-                title="Pro Table View"
-              >
-                <TableIcon className="w-3.5 h-3.5" />
-                <span>Table</span>
-              </button>
-            </div>
+          <div className="flex items-center rounded-lg border border-white/10 bg-white/5 p-0.5">
+            <button type="button" onClick={() => handleViewModeChange('grid')} aria-label="Cards" className={`p-1.5 rounded-md transition ${viewMode === 'grid' ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-white'}`}>
+              <LayoutGrid className="w-3.5 h-3.5" />
+            </button>
+            <button type="button" onClick={() => handleViewModeChange('table')} aria-label="Table" className={`p-1.5 rounded-md transition ${viewMode === 'table' ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-white'}`}>
+              <TableIcon className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       </div>
@@ -796,191 +803,69 @@ const SwingPlayer: React.FC = () => {
           </p>
         </div>
       ) : viewMode === 'grid' ? (
-        /* ── CARDS GRID VIEW (Eye-Catching Modern Fintech Cards) ─────────────── */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        /* ── Cards: glass, one accent edge per setup, the trade rail as the centrepiece ── */
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
           {displayedSetups.map((stock) => {
             const metrics = getSwingMetrics(stock);
             const isWatchlisted = savedWatchlist.includes(stock.symbol);
-            const riskPct = ((Math.abs(stock.stopLoss - stock.entryPrice) / stock.entryPrice) * 100).toFixed(1);
-            const t1Pct = (((stock.target1 - stock.entryPrice) / stock.entryPrice) * 100).toFixed(1);
-            const t2Pct = (((stock.target2 - stock.entryPrice) / stock.entryPrice) * 100).toFixed(1);
-
-            const setupBadgeConfig: Record<SwingSetup, { bg: string; text: string; border: string; icon: any }> = {
-              BO50: { bg: 'bg-emerald-500/15', text: 'text-emerald-400', border: 'border-emerald-500/30', icon: Flame },
-              BO20: { bg: 'bg-cyan-500/15', text: 'text-cyan-400', border: 'border-cyan-500/30', icon: Zap },
-              PB50: { bg: 'bg-purple-500/15', text: 'text-purple-300', border: 'border-purple-500/30', icon: Crosshair },
-              PB20: { bg: 'bg-blue-500/15', text: 'text-blue-300', border: 'border-blue-500/30', icon: Compass },
-              NONE: { bg: 'bg-slate-800/80', text: 'text-slate-400', border: 'border-slate-700/80', icon: Activity },
-            };
-            const sBadge = setupBadgeConfig[stock.setupCategory];
-            const BadgeIcon = sBadge.icon;
-
+            const tone = SETUP_TONE[stock.setupCategory];
             return (
-              <div
+              <article
                 key={stock.symbol}
                 onClick={() => setSelectedStock(stock)}
-                className="bg-[#0b0f17] rounded-2xl p-4.5 flex flex-col justify-between transition-all duration-200 cursor-pointer group border border-slate-800/90 hover:border-emerald-500/40 hover:bg-[#0e1422] shadow-lg relative"
+                className="group relative overflow-hidden rounded-xl border border-white/10 bg-white/5 backdrop-blur-md p-4 shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] hover:bg-white/[0.08] hover:border-white/20 transition cursor-pointer"
               >
-                <div>
-                  {/* Card Top: Logo, Symbol, Price & Setup Badge */}
-                  <div className="flex items-start justify-between gap-2 mb-3">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <StockLogo symbol={stock.symbol} className="w-9 h-9 rounded-xl shrink-0 border border-slate-800 bg-[#101622]" />
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <h3 className="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors tracking-tight">
-                            {stock.symbol}
-                          </h3>
-                        </div>
-                        <div className="flex items-center gap-1.5 mt-0.5 font-mono">
-                          <span className="text-xs font-black text-slate-100">
-                            ₹{stock.price.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                          </span>
-                          <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
-                            stock.change >= 0 ? 'text-emerald-400 bg-emerald-500/10' : 'text-rose-400 bg-rose-500/10'
-                          }`}>
-                            {stock.change >= 0 ? '+' : ''}{stock.change.toFixed(2)}%
-                          </span>
-                        </div>
-                      </div>
-                    </div>
+                <div className={`absolute inset-x-0 top-0 h-px bg-gradient-to-r ${tone.edge} to-transparent`} />
 
-                    <span className={`px-2 py-1 rounded-lg text-[9px] font-mono font-bold uppercase tracking-wider border shrink-0 flex items-center gap-1 ${sBadge.bg} ${sBadge.text} ${sBadge.border}`}>
-                      <BadgeIcon className="w-2.5 h-2.5 stroke-[2.5]" />
-                      <span>{stock.setupTitle}</span>
-                    </span>
-                  </div>
-
-                  {/* Sector Rank & Meta Badges */}
-                  <div className="flex items-center gap-1.5 flex-wrap my-2.5 font-mono text-[10px]">
-                    <span className="px-2 py-0.5 rounded-md border border-slate-800 bg-[#101622] text-slate-300 font-medium">
-                      Rank #{stock.sectorRank} {stock.sector}
-                    </span>
-                    <span className={`px-1.5 py-0.5 rounded-md border font-bold ${
-                      stock.sectorTrend === 'UP'
-                        ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
-                        : 'text-rose-400 bg-rose-500/10 border-rose-500/30'
-                    }`}>
-                      {stock.sectorTrend === 'UP' ? '▲' : '▼'} {stock.sectorChange >= 0 ? '+' : ''}{stock.sectorChange.toFixed(1)}%
-                    </span>
-                    <span className={`px-2 py-0.5 rounded-md border font-medium ml-auto ${
-                      stock.rs3m >= 0 
-                        ? 'border-purple-500/30 bg-purple-500/10 text-purple-300' 
-                        : 'border-slate-800 bg-[#101622] text-slate-400'
-                    }`}>
-                      RS {stock.rs3m >= 0 ? '+' : ''}{stock.rs3m}%
-                    </span>
-                  </div>
-
-                  {/* What the Chart Shows / Rationale Box */}
-                  <div className="my-2 p-2.5 bg-[#101622] border border-slate-800/80 rounded-xl">
-                    <div className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider mb-0.5 flex items-center gap-1">
-                      <Zap className="w-2.5 h-2.5 text-emerald-400" />
-                      <span>Strategy Rationale</span>
-                    </div>
-                    <div className="text-[11px] text-slate-300 line-clamp-2 leading-relaxed font-sans font-medium">
-                      {stock.tradeReason}
-                    </div>
-                  </div>
-
-                  {/* Visual Trade Plan Bar (Centerpiece) */}
-                  <div className="my-2.5 p-3 bg-[#101622] border border-slate-800/90 rounded-xl space-y-2.5">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-slate-400 font-medium text-[10px] uppercase tracking-wider">Trade Plan</span>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border ${metrics.statusBg} ${metrics.statusColor}`}>
-                        {metrics.statusLabel}
-                      </span>
-                    </div>
-
-                    {/* 4 Levels Grid */}
-                    <div className="grid grid-cols-4 gap-1 text-[10px] font-mono pt-1 border-t border-slate-800/80">
-                      <div>
-                        <div className="text-slate-500 text-[9px] uppercase">Entry</div>
-                        <div className="font-bold text-slate-100">₹{stock.entryPrice.toFixed(1)}</div>
-                      </div>
-                      <div>
-                        <div className="text-rose-400 text-[9px] uppercase">SL (-{riskPct}%)</div>
-                        <div className="font-bold text-rose-400">₹{stock.stopLoss.toFixed(1)}</div>
-                      </div>
-                      <div>
-                        <div className="text-emerald-400 text-[9px] uppercase">T1 (+{t1Pct}%)</div>
-                        <div className="font-bold text-emerald-400">₹{stock.target1.toFixed(1)}</div>
-                      </div>
-                      <div>
-                        <div className="text-teal-300 text-[9px] uppercase">T2 (+{t2Pct}%)</div>
-                        <div className="font-bold text-teal-300">₹{stock.target2.toFixed(1)}</div>
-                      </div>
-                    </div>
-
-                    {/* Target 1 Progress Track */}
-                    <div className="space-y-1">
-                      <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-300 rounded-full" 
-                          style={{ width: `${Math.min(100, Math.max(6, metrics.target1Progress))}%` }} 
-                        />
-                      </div>
-                      <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono">
-                        <span>Target 1 Progress: {metrics.target1Progress}%</span>
-                        <span>Buffer: +{metrics.slBuffer.toFixed(1)}%</span>
+                <header className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <StockLogo symbol={stock.symbol} className="w-10 h-10 shrink-0 group-hover:scale-105 transition-transform" />
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-bold text-white truncate">{stock.symbol}</h3>
+                      <div className="font-mono tabular-nums text-xs">
+                        <span className="text-slate-100 font-bold">₹{stock.price.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>{' '}
+                        <span className={stock.change >= 0 ? 'text-emerald-400' : 'text-rose-400'}>{stock.change >= 0 ? '+' : ''}{stock.change.toFixed(2)}%</span>
                       </div>
                     </div>
                   </div>
-
-                  {/* Technical Confluence Badges */}
-                  <div className="grid grid-cols-3 gap-1.5 text-center font-mono text-[9px] my-1">
-                    <div className={`p-1 rounded-lg border ${
-                      stock.isAbove200Sma 
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                        : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                    }`}>
-                      {stock.isAbove200Sma ? '200-DMA ✅' : 'Below 200 ⚠️'}
-                    </div>
-                    <div className={`p-1 rounded-lg border ${
-                      stock.volMultiplier >= 1.4
-                        ? 'bg-sky-500/10 text-sky-300 border-sky-500/20'
-                        : 'bg-slate-800/80 text-slate-400 border-slate-700/60'
-                    }`}>
-                      {stock.volMultiplier}x Vol
-                    </div>
-                    <div className="p-1 rounded-lg border bg-slate-800/80 text-slate-300 border-slate-700/60">
-                      R:R {stock.riskReward}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Card Footer Actions */}
-                <div className="mt-3 pt-2.5 border-t border-slate-800/90 flex items-center justify-between">
-                  <span className="text-[10px] text-slate-400 font-mono">
-                    Horizon: {stock.expectedHolding} {isWatchlisted && <span className="text-emerald-400 ml-1">· Held {metrics.daysHeld}d</span>}
+                  <span className={`shrink-0 px-2 py-0.5 rounded-md border text-[9px] font-bold tracking-wider ${tone.tag}`}>
+                    {SETUP_SHORT[stock.setupCategory]}
                   </span>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleWatchlist(stock);
-                      }}
-                      className={`p-1.5 rounded-lg border transition cursor-pointer select-none ${
-                        isWatchlisted
-                          ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                          : 'bg-slate-800/60 text-slate-400 border-slate-700 hover:text-emerald-400 hover:bg-slate-800'
-                      }`}
-                      title={isWatchlisted ? 'Remove from Watchlist' : 'Add to Swing Watchlist'}
-                    >
-                      <Bookmark className={`w-3.5 h-3.5 ${isWatchlisted ? 'fill-emerald-400 text-emerald-400' : ''}`} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedStock(stock)}
-                      className="flex items-center gap-1 text-xs font-bold text-emerald-400 hover:text-emerald-300 px-2.5 py-1 rounded-lg hover:bg-emerald-500/10 transition"
-                    >
-                      <span>Setup</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                </header>
+
+                <div className="mt-3">
+                  <TradeRail
+                    entry={metrics.entryPrice}
+                    stop={metrics.stopLoss}
+                    t1={metrics.target1}
+                    t2={metrics.target2}
+                    price={metrics.currentPrice}
+                  />
                 </div>
-              </div>
+
+                <p className="mt-3 text-[11px] leading-relaxed text-slate-400 line-clamp-2">{stock.tradeReason}</p>
+
+                <footer className="mt-3 pt-3 border-t border-white/10 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-x-2.5 gap-y-1 flex-wrap text-[10px] font-mono tabular-nums text-slate-400">
+                    <span title={`Sector rank by 1-month return: ${stock.sector}`}>
+                      {stock.sector} <span className={stock.sectorTrend === 'UP' ? 'text-emerald-400' : 'text-rose-400'}>#{stock.sectorRank}</span>
+                    </span>
+                    <span title="3-month return minus Nifty's">RS <span className={stock.rs3m >= 0 ? 'text-violet-300' : 'text-slate-500'}>{stock.rs3m >= 0 ? '+' : ''}{stock.rs3m}%</span></span>
+                    <span title="Today's volume vs 20-day average">Vol <span className={stock.volMultiplier >= 1.4 ? 'text-sky-300' : 'text-slate-500'}>{stock.volMultiplier}×</span></span>
+                    {isWatchlisted && <span className={metrics.statusColor}>{metrics.statusLabel} · {metrics.daysHeld}d</span>}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); toggleWatchlist(stock); }}
+                    aria-label={isWatchlisted ? `Stop tracking ${stock.symbol}` : `Track ${stock.symbol}`}
+                    className={`shrink-0 p-1.5 rounded-lg border transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${
+                      isWatchlisted ? 'bg-emerald-400/15 text-emerald-300 border-emerald-400/40' : 'bg-white/5 text-slate-400 border-white/10 hover:text-emerald-300'
+                    }`}
+                  >
+                    <Bookmark className={`w-3.5 h-3.5 ${isWatchlisted ? 'fill-emerald-300' : ''}`} />
+                  </button>
+                </footer>
+              </article>
             );
           })}
         </div>

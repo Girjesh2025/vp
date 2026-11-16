@@ -30,6 +30,20 @@ export const SWING_SETUP_LABEL: Record<SwingSetup, string> = {
 
 export const MAX_HOLD_DAYS = 15;
 
+/** Backtest of exactly these rules (detectSetup + swingLevels): 40 large caps, entry next open, exit at stop,
+ *  3R target or day 15, 0.25% round-trip cost, 5-day cooldown. Random = non-setup days with the same exits.
+ *  Re-run after any rule change. Measured 2026-11-16 on 2021-11 → 2026-11 daily bars. */
+export const SWING_BACKTEST = {
+  period: '2021–26',
+  rows: [
+    { setup: 'BO50' as SwingSetup, trades: 726, avg: -0.29, win: 36 },
+    { setup: 'BO20' as SwingSetup, trades: 283, avg: 0.22, win: 42 },
+    { setup: 'PB50' as SwingSetup, trades: 1680, avg: 0.04, win: 39 },
+    { setup: 'PB20' as SwingSetup, trades: 1390, avg: 0.19, win: 39 },
+  ],
+  random: { trades: 8276, avg: 0.04, win: 42 },
+};
+
 export interface SwingIndicators {
   sma200: number[];
   ema50: number[];
@@ -117,6 +131,44 @@ export function detectSetup(bars: DailyBar[], ind: SwingIndicators, i: number): 
   return 'NONE';
 }
 
+/** Stop and targets for a setup on bar i (entry = bar i close). Shared by the live scan and the backtest. */
+export function swingLevels(bars: DailyBar[], ind: SwingIndicators, i: number, setup: SwingSetup) {
+  const b = bars[i];
+  const atr = ind.atr14[i];
+  const entry = b.close;
+  const ema20 = ind.ema20[i];
+  const ema50 = ind.ema50[i];
+  // Dynamic, structural Stop Loss and Target Calculation
+  let stopLoss: number;
+  if (setup === 'BO50' || setup === 'BO20') {
+    // Breakout SL: just below breakout candle or 1.6x ATR
+    stopLoss = Math.max(entry - 1.6 * atr, b.low * 0.992);
+  } else if (setup === 'PB50') {
+    // 50-EMA SL: just below the 50-EMA or day low
+    stopLoss = Math.min(b.low * 0.992, ema50 * 0.988);
+  } else if (setup === 'PB20') {
+    // 20-EMA SL: just below the 20-EMA or day low
+    stopLoss = Math.min(b.low * 0.992, ema20 * 0.99);
+  } else {
+    stopLoss = entry - 1.8 * atr;
+  }
+
+  // Ensure risk is between 1.5% and 5.5% of stock price for healthy swing trading
+  const minRisk = entry * 0.015;
+  const maxRisk = entry * 0.055;
+  let risk = entry - stopLoss;
+  if (risk < minRisk) {
+    risk = minRisk;
+    stopLoss = entry - risk;
+  } else if (risk > maxRisk) {
+    risk = maxRisk;
+    stopLoss = entry - risk;
+  }
+
+  return { stopLoss, risk, target1: entry + 2.0 * risk, target2: entry + 3.0 * risk };
+
+}
+
 export interface SwingAnalysis {
   setup: SwingSetup;
   price: number;
@@ -157,35 +209,7 @@ export function analyzeSwing(bars: DailyBar[]): SwingAnalysis | null {
   const ema50 = ind.ema50[i];
   const sma200 = ind.sma200[i];
 
-  // Dynamic, structural Stop Loss and Target Calculation
-  let stopLoss: number;
-  if (setup === 'BO50' || setup === 'BO20') {
-    // Breakout SL: just below breakout candle or 1.6x ATR
-    stopLoss = Math.max(entry - 1.6 * atr, b.low * 0.992);
-  } else if (setup === 'PB50') {
-    // 50-EMA SL: just below the 50-EMA or day low
-    stopLoss = Math.min(b.low * 0.992, ema50 * 0.988);
-  } else if (setup === 'PB20') {
-    // 20-EMA SL: just below the 20-EMA or day low
-    stopLoss = Math.min(b.low * 0.992, ema20 * 0.99);
-  } else {
-    stopLoss = entry - 1.8 * atr;
-  }
-
-  // Ensure risk is between 1.5% and 5.5% of stock price for healthy swing trading
-  const minRisk = entry * 0.015;
-  const maxRisk = entry * 0.055;
-  let risk = entry - stopLoss;
-  if (risk < minRisk) {
-    risk = minRisk;
-    stopLoss = entry - risk;
-  } else if (risk > maxRisk) {
-    risk = maxRisk;
-    stopLoss = entry - risk;
-  }
-
-  const target1 = entry + 2.0 * risk; // 1:2 R:R
-  const target2 = entry + 3.0 * risk; // 1:3 R:R
+  const { stopLoss, target1, target2 } = swingLevels(bars, ind, i, setup);
 
   let reason: string;
   if (setup === 'BO50') {
