@@ -42,8 +42,8 @@ const fetchBatchStockData = async (
                 ? validCloses[validCloses.length - 1]
                 : (responseNode?.meta?.regularMarketPrice ?? 0);
 
+            // range=1mo: chartPreviousClose is a month old, so fall back to yesterday's close
             const previousClose =
-              responseNode?.meta?.chartPreviousClose ??
               responseNode?.meta?.previousClose ??
               (validCloses.length >= 2 ? validCloses[validCloses.length - 2] : price);
 
@@ -141,17 +141,17 @@ const fetchSectorIndexData = async (
 
 // Define the core constituents we want to track for our sectoral flow proxy
 const SECTOR_DEFINITIONS = [
-  { title: 'DEFENCE', ext: 'NIFTY IND DEFENCE', symbol: '', stocks: ['HAL', 'BEL', 'MAZAGON', 'BDL', 'ASTRAMICRO', 'PARAS', 'MTARTECH', 'DATAPATTNS', 'BEML', 'GRSE', 'MIDHANI', 'SOLARIND', 'BHEL', 'APOLLOMICRO', 'ZENITHEXPO'] },
+  { title: 'DEFENCE', ext: 'NIFTY IND DEFENCE', symbol: '', stocks: ['HAL', 'BEL', 'MAZDOCK', 'BDL', 'ASTRAMICRO', 'PARAS', 'MTARTECH', 'DATAPATTNS', 'BEML', 'GRSE', 'MIDHANI', 'SOLARINDS', 'BHEL', 'APOLLO', 'ZENITHEXPO'] },
   { title: 'PSU BANK', ext: 'NIFTY PSU BANK', symbol: '^CNXPSUBANK', stocks: ['SBIN', 'PNB', 'BANKINDIA', 'CANBK', 'UNIONBANK', 'INDIANB', 'BANKBARODA', 'MAHABANK', 'PSB', 'CENTRALBK', 'IOB', 'UCOBANK'] },
-  { title: 'MEDIA', ext: 'NIFTY MEDIA', symbol: '^CNXMEDIA', stocks: ['ZEEL', 'NETWORK18', 'PVRINOX', 'NDTV', 'SUNTV', 'TV18BRDCST', 'DISHTV', 'HATHWAY', 'NAVKARCORP', 'DBCORP'] },
+  { title: 'MEDIA', ext: 'NIFTY MEDIA', symbol: '^CNXMEDIA', stocks: ['ZEEL', 'NETWORK18', 'PVRINOX', 'NDTV', 'SUNTV', 'DISHTV', 'HATHWAY', 'NAVKARCORP', 'DBCORP'] },
   { title: 'BANK', ext: 'NIFTY BANK', symbol: '^NSEBANK', stocks: ['HDFCBANK', 'ICICIBANK', 'SBIN', 'AXISBANK', 'KOTAKBANK', 'INDUSINDBK', 'PNB', 'AUBANK', 'BANKBARODA', 'FEDERALBNK', 'IDFCFIRSTB', 'BANDHANBNK'] },
   { title: 'REALTY', ext: 'NIFTY REALTY', symbol: '^CNXREALTY', stocks: ['DLF', 'GODREJPROP', 'OBEROIRLTY', 'PRESTIGE', 'LODHA', 'BRIGADE', 'SOBHA', 'MAHLIFE', 'PHOENIXLTD'] },
-  { title: 'METAL', ext: 'NIFTY METAL', symbol: '^CNXMETAL', stocks: ['TATASTEEL', 'HINDALCO', 'JSWSTEEL', 'COALINDIA', 'VEDL', 'SAIL', 'NMDC', 'JINDALSTEL', 'NATIONALUM', 'HINDZINC', 'APLALAPOLLO', 'WELCORP', 'RATNAMANI'] },
-  { title: 'IT', ext: 'NIFTY IT', symbol: '^CNXIT', stocks: ['TCS', 'INFY', 'HCLTECH', 'WIPRO', 'TECHM', 'LTIM', 'PERSISTENT', 'OFSS', 'COFORGE', 'MPHASIS'] },
-  { title: 'AUTO', ext: 'NIFTY AUTO', symbol: '^CNXAUTO', stocks: ['TATAMOTORS', 'M&M', 'MARUTI', 'BAJAJ-AUTO', 'EICHERMOT', 'HEROMOTOCO', 'TVSMOTOR', 'BOSCHLTD', 'ASHOKLEY', 'MRF', 'TIINDIA', 'MOTHERSON', 'SONACOMS', 'BALKRISIND', 'BHARATFORG'] },
-  { title: 'PHARMA', ext: 'NIFTY PHARMA', symbol: '^CNXPHARMA', stocks: ['SUNPHARMA', 'CIPLA', 'DRREDDY', 'DIVISLAB', 'LUPIN', 'AUROPHARMA', 'APOLLOHOSP', 'TORNTPHARM', 'ZYDUSLIFE', 'MANKIND', 'BIOCON', 'SYNGENE', 'ABBOTINDIA', 'IPCALAB', 'GLENMARK', 'AJANTPHARM', 'LAURUSLABS', 'NATCOPHARM', 'GRANULES', 'JBCHEPHARM'] },
+  { title: 'METAL', ext: 'NIFTY METAL', symbol: '^CNXMETAL', stocks: ['TATASTEEL', 'HINDALCO', 'JSWSTEEL', 'COALINDIA', 'VEDL', 'SAIL', 'NMDC', 'JINDALSTEL', 'NATIONALUM', 'HINDZINC', 'APLAPOLLO', 'WELCORP', 'RATNAMANI'] },
+  { title: 'IT', ext: 'NIFTY IT', symbol: '^CNXIT', stocks: ['TCS', 'INFY', 'HCLTECH', 'WIPRO', 'TECHM', 'LTM', 'PERSISTENT', 'OFSS', 'COFORGE', 'MPHASIS'] },
+  { title: 'AUTO', ext: 'NIFTY AUTO', symbol: '^CNXAUTO', stocks: ['TMPV', 'TMCV', 'M&M', 'MARUTI', 'BAJAJ-AUTO', 'EICHERMOT', 'HEROMOTOCO', 'TVSMOTOR', 'BOSCHLTD', 'ASHOKLEY', 'MRF', 'TIINDIA', 'MOTHERSON', 'SONACOMS', 'BALKRISIND', 'BHARATFORG'] },
+  { title: 'PHARMA', ext: 'NIFTY PHARMA', symbol: '^CNXPHARMA', stocks: ['SUNPHARMA', 'CIPLA', 'DRREDDY', 'DIVISLAB', 'LUPIN', 'AUROPHARMA', 'APOLLOHOSP', 'TORNTPHARM', 'ZYDUSLIFE', 'MANKIND', 'BIOCON', 'SYNGENE', 'ABBOTINDIA', 'IPCALAB', 'GLENMARK', 'AJANTPHARM', 'LAURUSLABS', 'NATCOPHARM', 'GRANULES'] },
   { title: 'FMCG', ext: 'NIFTY FMCG', symbol: '^CNXFMCG', stocks: ['ITC', 'HINDUNILVR', 'NESTLEIND', 'BRITANNIA', 'DABUR', 'GODREJCP', 'TATACONSUM', 'MARICO', 'VBL', 'COLPAL', 'UBL', 'PGHH', 'RADICO', 'EMAMILTD', 'BALRAMCHIN'] },
-  { title: 'ENERGY', ext: 'NIFTY ENERGY', symbol: '^CNXENERGY', stocks: ['RELIANCE', 'ONGC', 'NTPC', 'POWERGRID', 'BPCL', 'COALINDIA', 'TATAPOWER', 'IOC', 'HPCL', 'ADANIGREEN'] },
+  { title: 'ENERGY', ext: 'NIFTY ENERGY', symbol: '^CNXENERGY', stocks: ['RELIANCE', 'ONGC', 'NTPC', 'POWERGRID', 'BPCL', 'COALINDIA', 'TATAPOWER', 'IOC', 'HINDPETRO', 'ADANIGREEN'] },
   { title: 'INFRA', ext: 'NIFTY INFRA', symbol: '^CNXINFRA', stocks: ['LT', 'ADANIPORTS', 'ULTRACEMCO', 'GRASIM', 'AMBUJACEM', 'SHREECEM', 'BHARTIARTL', 'ACC', 'LODHA', 'PVRINOX', 'NTPC', 'POWERGRID', 'ONGC', 'IOC'] },
 ];
 
@@ -197,12 +197,11 @@ type SectorSnapshot = {
   stockCount: number;
   loadedCount: number;
   coveragePct: number;
-  momentumLift: number;
   convictionScore: number;
   participationScore: number;
   dominanceScore: number;
   consistencyScore: number;
-  tradeSetup: 'Long Continuation' | 'Short Pressure' | 'Long Watch' | 'Short Watch' | 'Mixed';
+  tradeSetup: 'Broad Rally' | 'Broad Selling' | 'Leaning Up' | 'Leaning Down' | 'Mixed';
   leader: SectorMover | null;
   laggard: SectorMover | null;
 };
@@ -256,13 +255,13 @@ const SectoralFlow: React.FC = () => {
         }
       }
 
-      // Failsafe watchdog timer to guarantee dashboard unlocks within 1500ms
+      // Failsafe: unlock the page if the data calls hang
       const watchdog = setTimeout(() => {
         if (isMounted) {
           setLoading(false);
           setRefreshing(false);
         }
-      }, 1500);
+      }, 10000);
 
       try {
         const sectorSymbols = SECTOR_DEFINITIONS.map((sector) => sector.symbol).filter(Boolean);
@@ -381,35 +380,20 @@ const SectoralFlow: React.FC = () => {
         0,
         1
       );
-      const breadthAdjustment = (breadth / 100) * Math.max(Math.abs(avgChange), 0.32) * 0.8;
-      const impulseAdjustment = directionalBias * impulseScore * 0.42;
-      const convictionAdjustment = directionalBias * convictionScore * Math.max(Math.abs(displayChange) * 0.42, 0.22);
-      const consistencyAdjustment = directionalBias * consistencyScore * 0.18;
-      const dominanceAdjustment = directionalBias * dominancePenalty * -0.16;
-      const coverageAdjustment = (coverageRatio - 1) * 0.18;
-      const momentumScore =
-        displayChange +
-        breadthAdjustment +
-        impulseAdjustment +
-        convictionAdjustment +
-        consistencyAdjustment +
-        dominanceAdjustment +
-        coverageAdjustment;
-      const momentumLift = momentumScore - displayChange;
       const tradeSetup: SectorSnapshot['tradeSetup'] =
         convictionScore >= 0.7 && directionalBias > 0 && breadth >= 18
-          ? 'Long Continuation'
+          ? 'Broad Rally'
           : convictionScore >= 0.7 && directionalBias < 0 && breadth <= -18
-            ? 'Short Pressure'
+            ? 'Broad Selling'
             : convictionScore >= 0.5 && directionalBias > 0 && breadth >= 5
-              ? 'Long Watch'
+              ? 'Leaning Up'
               : convictionScore >= 0.5 && directionalBias < 0 && breadth <= -5
-                ? 'Short Watch'
+                ? 'Leaning Down'
                 : 'Mixed';
 
       return { 
         name: sector.title, 
-        value: Number(momentumScore.toFixed(2)),
+        value: Number(displayChange.toFixed(2)), // the real move: official index % (equal-weight if no index)
         displayChange: Number(displayChange.toFixed(2)),
         indexPrice: officialIndex?.price ?? null,
         equalWeightValue: Number(avgChange.toFixed(2)),
@@ -420,7 +404,6 @@ const SectoralFlow: React.FC = () => {
         stockCount: sector.stocks.length,
         loadedCount: count,
         coveragePct: sector.stocks.length > 0 ? Math.round((count / sector.stocks.length) * 100) : 0,
-        momentumLift: Number(momentumLift.toFixed(2)),
         convictionScore: Number((convictionScore * 100).toFixed(0)),
         participationScore: Number((participationScore * 100).toFixed(0)),
         dominanceScore: Number((leaderDominance * 100).toFixed(0)),
@@ -429,7 +412,8 @@ const SectoralFlow: React.FC = () => {
         leader: topStock,
         laggard: laggardStock,
       };
-    }).sort((a, b) => a.displayChange - b.displayChange);
+    }).filter(s => s.loadedCount > 0 || s.indexPrice !== null)
+      .sort((a, b) => a.displayChange - b.displayChange);
   }, [liveData, sectorIndexData]);
 
   // Summary stats
@@ -492,7 +476,7 @@ const SectoralFlow: React.FC = () => {
           </span>
         </div>
         <div style={{ color: '#64748b', fontSize: '9px', marginTop: '5px', lineHeight: 1.4 }}>
-          Momentum {data.value >= 0 ? '+' : ''}{data.value}% | Breadth {data.breadth >= 0 ? '+' : ''}{data.breadth}%
+          Change {data.value >= 0 ? '+' : ''}{data.value}% | Breadth {data.breadth >= 0 ? '+' : ''}{data.breadth}%
         </div>
         <div style={{ display: 'flex', gap: '5px', marginTop: '7px', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '9px', color: '#dbeafe', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.16)', padding: '2px 6px', borderRadius: '999px' }}>
@@ -651,11 +635,11 @@ const SectoralFlow: React.FC = () => {
                   </div>
                   <div className="bg-[#0c1017] rounded-xl p-4 border border-slate-800/90">
                     <p className="text-[10px] text-violet-400 font-bold uppercase tracking-wider mb-1">Market Breadth</p>
-                    <p className="text-2xl font-black text-violet-300 font-mono">{positiveBreadthSectors} / 12</p>
-                    <p className="text-[10px] text-slate-400 mt-1">sectors advancing</p>
+                    <p className="text-2xl font-black text-violet-300 font-mono">{positiveBreadthSectors} / {sectoralFlowData.length}</p>
+                    <p className="text-[10px] text-slate-400 mt-1">sectors with more risers than fallers</p>
                   </div>
                   <div className="bg-[#0c1017] rounded-xl p-4 border border-slate-800/90 col-span-2 lg:col-span-1">
-                    <p className="text-[10px] text-amber-400 font-bold uppercase tracking-wider mb-1">Best Setup</p>
+                    <p className="text-[10px] text-amber-400 font-bold uppercase tracking-wider mb-1">Broadest Move</p>
                     <p className="text-lg font-black text-amber-300 truncate">{bestTradeSetup?.name || '-'}</p>
                     <p className="text-[10px] text-slate-400 mt-1 truncate">{bestTradeSetup?.tradeSetup || '-'}</p>
                   </div>
@@ -676,7 +660,7 @@ const SectoralFlow: React.FC = () => {
                     <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-[#101520]">
                       <div className="flex items-center gap-2.5">
                         <div className="w-2 h-2 rounded-full bg-[#00e676]" />
-                        <h3 className="text-xs font-black text-slate-200 uppercase tracking-[0.15em]">Sector Momentum (Live)</h3>
+                        <h3 className="text-xs font-black text-slate-200 uppercase tracking-[0.15em]">Sector Change Today</h3>
                       </div>
                       <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Conviction-adjusted score using move, breadth, impulse and participation</span>
                     </div>

@@ -1,104 +1,80 @@
-import React, { useState } from 'react';
+import React from 'react';
 import ProfessionalHeader from '../ProfessionalHeader';
 import ProfessionalSidebar from '../ProfessionalSidebar';
-import { 
+import {
   ArrowLeft, Wifi, ArrowUp, ArrowDown, Zap, ChevronDown, Repeat
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { 
+import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, LabelList,
-  AreaChart, Area, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis 
+  AreaChart, Area, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis
 } from 'recharts';
 
-import { fetchSectorRawMonthly } from '../../utils/priceApi';
+import { fetchHistoricalOHLCV } from '../../utils/priceApi';
+import {
+  type DailySeries, type RrgQuadrant, PERIOD_DAYS, alignTo, annualVol, monthlyReturns,
+  relativeRotation, seasonality, trailingReturn, yearRow,
+} from '../../utils/sectorStats';
 
+// All numbers come from real daily index closes (Yahoo, 10 years). A sector whose data
+// cannot be fetched is left out; nothing is estimated.
+const BENCH = { symbol: '^NSEI', name: 'Nifty 50' };
 const SECTORS = [
-  { symbol: '^CNXPSUBANK', name: 'PSU Bank', color: '#22c55e' },  // 740 pts ✅
-  { symbol: '^CNXMETAL',   name: 'Metals',   color: '#10b981' },  // 740 pts ✅
-  { symbol: '^CNXAUTO',    name: 'Auto',     color: '#3b82f6' },  // 740 pts ✅
-  { symbol: '^NSEBANK',    name: 'Bank',     color: '#6366f1' },  // 740 pts ✅
-  { symbol: '^CNXPHARMA',  name: 'Pharma',   color: '#f59e0b' },  // 740 pts ✅
-  { symbol: '^CNXIT',      name: 'IT',       color: '#f97316' },  // 740 pts ✅
-  { symbol: '^CNXFMCG',   name: 'FMCG',     color: '#ef4444' },  // 740 pts ✅
-  { symbol: '^CNXENERGY',  name: 'Energy',   color: '#f43f5e' },  // 740 pts ✅
-  { symbol: '^NIFTYINFRA', name: 'Infra',    color: '#8b5cf6' },  // tested ✅
-  { symbol: '^CNXMEDIA',   name: 'Media',    color: '#ec4899' },  // 740 pts ✅
+  { symbol: '^CNXPSUBANK', name: 'PSU Bank', color: '#22c55e', cyclical: true },
+  { symbol: '^CNXMETAL',   name: 'Metals',   color: '#10b981', cyclical: true },
+  { symbol: '^CNXAUTO',    name: 'Auto',     color: '#3b82f6', cyclical: true },
+  { symbol: '^NSEBANK',    name: 'Bank',     color: '#6366f1', cyclical: true },
+  { symbol: '^CNXPHARMA',  name: 'Pharma',   color: '#f59e0b', cyclical: false },
+  { symbol: '^CNXIT',      name: 'IT',       color: '#f97316', cyclical: false },
+  { symbol: '^CNXFMCG',    name: 'FMCG',     color: '#ef4444', cyclical: false },
+  { symbol: '^CNXENERGY',  name: 'Energy',   color: '#f43f5e', cyclical: true },
+  { symbol: '^CNXINFRA',   name: 'Infra',    color: '#8b5cf6', cyclical: true },
+  { symbol: '^CNXREALTY',  name: 'Realty',   color: '#ec4899', cyclical: true },
 ];
 
 const FULL_MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-const currentMonthIdx = new Date().getMonth();
-const trailingMonths: string[] = [];
-for (let i = 11; i >= 0; i--) {
-  let m = currentMonthIdx - i;
-  if (m < 0) m += 12;
-  trailingMonths.push(FULL_MONTHS[m]);
-}
 
-// ─── Status helper: 3-tier classification ───────────────────────────────────
-type SectorStatus = 'Prime' | 'Active' | 'Weak';
-
-const getStatus = (momentum: number): SectorStatus => {
-  if (momentum > 10)  return 'Prime';
-  if (momentum > -10) return 'Active';
-  return 'Weak';
+// Status = relative-rotation quadrant vs Nifty 50 (3-month relative strength and its 1-month change)
+type SectorStatus = RrgQuadrant;
+const QUADRANT_STYLE: Record<RrgQuadrant, string> = {
+  Leading: 'text-emerald-400', Improving: 'text-sky-400', Weakening: 'text-amber-400', Lagging: 'text-rose-400',
+};
+const QUADRANT_HELP: Record<RrgQuadrant, string> = {
+  Leading: 'Beating Nifty and gaining',
+  Weakening: 'Beating Nifty but losing steam',
+  Lagging: 'Behind Nifty and falling further',
+  Improving: 'Behind Nifty but catching up',
 };
 
-const statusStyle: Record<SectorStatus, string> = {
-  Prime:  'bg-emerald-900/50 text-emerald-400 border border-emerald-700/40',
-  Active: 'bg-orange-900/50  text-orange-400  border border-orange-700/40',
-  Weak:   'bg-red-900/50     text-red-400     border border-red-700/40',
-};
-
-// ─── KPI subValue colour helper ─────────────────────────────────────────────
 const subValueClass = (color: 'green' | 'red' | 'neutral') => ({
   green:   'text-emerald-400',
   red:     'text-red-400',
   neutral: 'text-slate-400',
 }[color]);
 
-// ─── helpers for raw→calendar heatmap ───────────────────────────────────────────────
-const getTrailingChanges = (ts: number[], cl: number[], n = 12): number[] => {
-  const ch: number[] = [];
-  for (let i = 1; i < cl.length; i++)
-    if (cl[i] > 0 && cl[i - 1] > 0)
-      ch.push(Number(((cl[i] - cl[i - 1]) / cl[i - 1] * 100).toFixed(2)));
-  while (ch.length < n) ch.unshift(0);
-  return ch.slice(-n);
-};
-
-const computeYearHeatmap = (rawArr: any[], year: number): any[] =>
-  rawArr.map(s => {
-    const months: (number | null)[] = new Array(12).fill(null);
-    const { timestamps, closes } = s;
-    for (let i = 1; i < timestamps.length; i++) {
-      if (!closes[i] || !closes[i - 1] || closes[i - 1] === 0) continue;
-      const d = new Date(timestamps[i] * 1000);
-      if (d.getFullYear() === year)
-        months[d.getMonth()] = Number(((closes[i] - closes[i - 1]) / closes[i - 1] * 100).toFixed(1));
-    }
-    return { sector: s.name, data: months };
-  });
-
-// ─── Component ───────────────────────────────────────────────────────────────
 type MetricKey = 'capitalFlow' | 'volatilityIndex' | 'momentumScore';
-
 const METRIC_LABELS: Record<MetricKey, string> = {
-  capitalFlow:    'Capital Flow %',
-  volatilityIndex:'Volatility Index',
-  momentumScore:  'Momentum Score',
+  capitalFlow:     '12M Return %',
+  volatilityIndex: 'Volatility (ann.)',
+  momentumScore:   'RS vs Nifty (6M)',
 };
+
+interface LoadedSector {
+  name: string; color: string; cyclical: boolean;
+  s: DailySeries; monthly: Map<string, number>;
+}
+
+const pctStr = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
 
 const SectorRotation: React.FC = () => {
   const navigate = useNavigate();
 
   const [isLoading, setIsLoading] = React.useState(true);
-  const [heatmapData, setHeatmapData]             = React.useState<any[]>([]);
-  const [performanceTrendsData, setPerformanceTrendsData] = React.useState<any[]>([]);
-  const [volatilityData, setVolatilityData]       = React.useState<any[]>([]);
-  const [momentumData, setMomentumData]           = React.useState<any[]>([]);
-  const [sectorRankings, setSectorRankings]       = React.useState<any[]>([]);
-  const [radarData, setRadarData]                 = React.useState<any[]>([]);
-  const [kpiData, setKpiData]                     = React.useState<any[]>([]);
+  const [loaded, setLoaded] = React.useState<LoadedSector[]>([]);
+  const [bench, setBench] = React.useState<DailySeries | null>(null);
+  const [asOf, setAsOf] = React.useState<string>('');
+  const [missing, setMissing] = React.useState<string[]>([]);
+
   const [selectedMetric, setSelectedMetric]       = React.useState<MetricKey>('capitalFlow');
   const [metricMenuOpen, setMetricMenuOpen]       = React.useState(false);
   const metricRef = React.useRef<HTMLDivElement>(null);
@@ -108,242 +84,55 @@ const SectorRotation: React.FC = () => {
   const periodRef = React.useRef<HTMLDivElement>(null);
 
   const CUR_YEAR = new Date().getFullYear();
-  const AVAILABLE_YEARS = [CUR_YEAR - 1, CUR_YEAR];
-  const [selectedYear, setSelectedYear]   = React.useState(CUR_YEAR - 1);
+  const AVAILABLE_YEARS = [CUR_YEAR - 2, CUR_YEAR - 1, CUR_YEAR];
+  const [selectedYear, setSelectedYear]   = React.useState(CUR_YEAR);
   const [yearMenuOpen, setYearMenuOpen]   = React.useState(false);
-  const rawDataRef = React.useRef<any[]>([]);
   const yearRef    = React.useRef<HTMLDivElement>(null);
-
-  // Close metric dropdown on outside click
-  React.useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (metricRef.current && !metricRef.current.contains(e.target as Node))
-        setMetricMenuOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  // Close year dropdown on outside click
-  React.useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (yearRef.current && !yearRef.current.contains(e.target as Node))
-        setYearMenuOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
 
   type ChartType = 'bar' | 'radar' | 'area';
   const [chartType, setChartType]                 = React.useState<ChartType>('bar');
   const [chartTypeMenuOpen, setChartTypeMenuOpen] = React.useState(false);
   const chartTypeRef = React.useRef<HTMLDivElement>(null);
 
-  // Close chart type dropdown on outside click
+  // Close any open dropdown on outside click
   React.useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (chartTypeRef.current && !chartTypeRef.current.contains(e.target as Node))
-        setChartTypeMenuOpen(false);
+      const t = e.target as Node;
+      if (metricRef.current && !metricRef.current.contains(t)) setMetricMenuOpen(false);
+      if (yearRef.current && !yearRef.current.contains(t)) setYearMenuOpen(false);
+      if (chartTypeRef.current && !chartTypeRef.current.contains(t)) setChartTypeMenuOpen(false);
+      if (periodRef.current && !periodRef.current.contains(t)) setPeriodMenuOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
-
-  // Close period dropdown on outside click
-  React.useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (periodRef.current && !periodRef.current.contains(e.target as Node))
-        setPeriodMenuOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  // Re-derive rankings when period changes
-  React.useEffect(() => {
-    if (rawDataRef.current.length > 0) {
-      let sr = rawDataRef.current.map(s => {
-        const periodData = s.data.slice(-selectedPeriod);
-        const totalChange = periodData.reduce((a: number, b: number) => a + b, 0);
-        const recentMomentum = s.data.slice(-3).reduce((a: number, b: number) => a + b, 0) * 3;
-        const status: SectorStatus = getStatus(recentMomentum);
-
-        return {
-          name:      s.name,
-          change:    totalChange >= 0 ? `+${totalChange.toFixed(1)}%` : `${totalChange.toFixed(1)}%`,
-          rawChange: totalChange,
-          momentum:  Math.min(100, Math.max(0, 50 + recentMomentum)),
-          status,
-          color:     s.color,
-        };
-      });
-      sr.sort((a, b) => b.rawChange - a.rawChange);
-      sr = sr.map((item, idx) => ({ ...item, rank: idx + 1 })).slice(0, 7);
-      setSectorRankings(sr);
-    }
-  }, [selectedPeriod]);
-
-  // Re-derive heatmap when year changes
-  React.useEffect(() => {
-    if (rawDataRef.current.length > 0)
-      setHeatmapData(computeYearHeatmap(rawDataRef.current, selectedYear));
-  }, [selectedYear]);
 
   React.useEffect(() => {
     let isMounted = true;
     (async () => {
       try {
-        // Fetch in parallel for instant loading
-        const settled = await Promise.allSettled(
-          SECTORS.map(async (s) => {
-            const { timestamps, closes } = await fetchSectorRawMonthly(s.symbol);
-            return {
-              ...s,
-              timestamps,
-              closes,
-              data: getTrailingChanges(timestamps, closes)
-            };
-          })
-        );
+        const all = [BENCH, ...SECTORS];
+        const settled = await Promise.allSettled(all.map(x => fetchHistoricalOHLCV(x.symbol, { range: '10y', interval: '1d' })));
         if (!isMounted) return;
-        const rawData = settled
-          .filter((res): res is PromiseFulfilledResult<any> => res.status === 'fulfilled')
-          .map(res => res.value);
-        rawDataRef.current = rawData;
-
-        // ── Heatmap (calendar year) ─────────────────────────────────────────────
-        const hd = computeYearHeatmap(rawData, CUR_YEAR - 1);
-
-        // ── Capital Flow bar data ─────────────────────────────────────────────
-        const pt = rawData.map(s => {
-          const capitalFlow = s.data.reduce((a: number, b: number) => a + b, 0);
-          return { name: s.name, value: Number(capitalFlow.toFixed(2)), color: s.color };
+        const toSeries = (i: number): DailySeries | null => {
+          const r = settled[i];
+          if (r.status !== 'fulfilled' || r.value.length < 300) return null;
+          const bars = [...r.value].sort((a, b) => a.timestamp - b.timestamp);
+          return { ts: bars.map(b => b.timestamp), close: bars.map(b => b.close) };
+        };
+        const b = toSeries(0);
+        const out: LoadedSector[] = [];
+        const miss: string[] = [];
+        SECTORS.forEach((sec, k) => {
+          const raw = toSeries(k + 1);
+          if (!raw) { miss.push(sec.name); return; }
+          const s = b ? alignTo(raw, b) : raw;
+          out.push({ name: sec.name, color: sec.color, cyclical: sec.cyclical, s, monthly: monthlyReturns(s) });
         });
-
-        // ── Volatility Index: mean absolute deviation of monthly returns ───────
-        const vd = rawData.map(s => {
-          const absReturns = s.data.map((v: number) => Math.abs(v));
-          const mad = absReturns.length > 0
-            ? absReturns.reduce((a: number, b: number) => a + b, 0) / absReturns.length
-            : 0;
-          return { name: s.name, value: Number(mad.toFixed(2)), color: s.color };
-        });
-
-        // ── Momentum Score: weighted sum (recent months get higher weight) ─────
-        const md = rawData.map(s => {
-          const weights = [1, 1, 1, 1, 1, 1, 1.5, 1.5, 2, 2, 3, 3];
-          let score = 0;
-          s.data.slice(-12).forEach((v: number, i: number) => { score += v * weights[i]; });
-          // Normalize to 0–100 range
-          const normalized = Math.min(100, Math.max(0, 50 + score));
-          return { name: s.name, value: Number(normalized.toFixed(1)), color: s.color };
-        });
-
-        // ── Sector Rankings ──────────────────────────────────────────────────
-        let sr = rawData.map(s => {
-          const totalChange = s.data.reduce((a: number, b: number) => a + b, 0);
-          // Momentum = weighted recent-3m score
-          const recentMomentum = s.data.slice(-3).reduce((a: number, b: number) => a + b, 0) * 3;
-          const status: SectorStatus = getStatus(recentMomentum);
-
-          return {
-            name:      s.name,
-            change:    totalChange >= 0 ? `+${totalChange.toFixed(1)}%` : `${totalChange.toFixed(1)}%`,
-            rawChange: totalChange,
-            momentum:  Math.min(100, Math.max(0, 50 + recentMomentum)),
-            status,
-            color:     s.color,
-          };
-        });
-        sr.sort((a, b) => b.rawChange - a.rawChange);
-        sr = sr.map((item, idx) => ({ ...item, rank: idx + 1 })).slice(0, 7);
-
-        // ── Radar ────────────────────────────────────────────────────────────
-        const rd = rawData.slice(0, 6).map(s => {
-          const longTerm  = s.data.reduce((a: number, b: number) => a + b, 0);
-          const shortTerm = s.data.slice(-6).reduce((a: number, b: number) => a + (-b), 0) * 1.5;
-          return {
-            subject:  s.name,
-            A:        Math.max(50, 100 + longTerm),
-            B:        Math.max(50, 100 + shortTerm),
-            fullMark: 150,
-          };
-        });
-
-        // ── KPIs ─────────────────────────────────────────────────────────────
-        const topPerformer  = sr[0];
-        const primeCount    = sr.filter(s => s.status === 'Prime').length;
-        const activeCount   = sr.filter(s => s.status === 'Active').length;
-        const weakCount     = sr.filter(s => s.status === 'Weak').length;
-        const bullishCount  = primeCount + activeCount;       // Prime + Active = bullish
-        const bearishCount  = weakCount;
-
-        // Dynamic avg volatility: mean of absolute monthly returns across all sectors
-        const allMonthlyReturns = rawData.flatMap(s => s.data.map((v: number) => Math.abs(v)));
-        const avgVol = allMonthlyReturns.length > 0
-          ? (allMonthlyReturns.reduce((a: number, b: number) => a + b, 0) / allMonthlyReturns.length).toFixed(1)
-          : '9.0';
-        const volNum = parseFloat(avgVol);
-        const volLabel = volNum < 8 ? 'Low' : volNum < 15 ? 'Normal' : 'Elevated';
-
-        // Rotation signal
-        const rotSignal    = primeCount >= 3 ? 'Risk-On' : primeCount <= 1 ? 'Risk-Off' : 'Neutral';
-        const rotSubLabel  = primeCount >= 3 ? 'Strong rotation'  : primeCount <= 1 ? 'Defensive posture' : 'Mixed rotation';
-        const rotColor: 'green' | 'red' | 'neutral' = primeCount >= 3 ? 'green' : primeCount <= 1 ? 'red' : 'neutral';
-
-        // Bullish sub-text
-        const bullSubLabel = bullishCount >= 6 ? 'Strong market' : bullishCount >= 4 ? 'Moderate breadth' : 'Selective weakness';
-        const bullColor: 'green' | 'red' | 'neutral' = bullishCount >= 6 ? 'green' : bullishCount >= 4 ? 'neutral' : 'red';
-
-        // Bearish sub-text
-        const bearSubLabel = bearishCount === 0 ? 'No weak sectors' : `${bearishCount} sector${bearishCount > 1 ? 's' : ''} lagging`;
-        const bearColor: 'green' | 'red' | 'neutral' = bearishCount === 0 ? 'green' : 'red';
-
-        const kpis = [
-          {
-            label:     'TOP PERFORMER',
-            value:     topPerformer?.name || '-',
-            subValue:  `${topPerformer?.change || ''} YTD`,
-            subColor:  'green' as const,
-            icon:      <Wifi className="w-4 h-4 text-emerald-500" />,
-          },
-          {
-            label:     'BULLISH SECTORS',
-            value:     String(bullishCount),
-            subValue:  bullSubLabel,
-            subColor:  bullColor,
-            icon:      <ArrowUp className="w-4 h-4 text-emerald-500" />,
-          },
-          {
-            label:     'BEARISH SECTORS',
-            value:     String(bearishCount),
-            subValue:  bearSubLabel,
-            subColor:  bearColor,
-            icon:      <ArrowDown className="w-4 h-4 text-red-400" />,
-          },
-          {
-            label:     'AVG VOLATILITY',
-            value:     `${avgVol}%`,
-            subValue:  volLabel,
-            subColor:  volNum < 15 ? 'green' as const : 'red' as const,
-            icon:      <Zap className="w-4 h-4 text-emerald-500" />,
-          },
-          {
-            label:     'ROTATION SIGNAL',
-            value:     rotSignal,
-            subValue:  rotSubLabel,
-            subColor:  rotColor,
-            icon:      <Repeat className="w-4 h-4 text-slate-400" />,
-          },
-        ];
-
-        setHeatmapData(hd);
-        setPerformanceTrendsData(pt);
-        setVolatilityData(vd);
-        setMomentumData(md);
-        setSectorRankings(sr);
-        setRadarData(rd);
-        setKpiData(kpis);
+        setBench(b);
+        setLoaded(out);
+        setMissing(miss);
+        if (b) setAsOf(new Date(b.ts[b.ts.length - 1] * 1000).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }));
       } catch (err) {
         console.error(err);
       } finally {
@@ -353,17 +142,99 @@ const SectorRotation: React.FC = () => {
     return () => { isMounted = false; };
   }, []);
 
+  // ── Bar chart metrics ───────────────────────────────────────────────────────
+  const metricRow = (fn: (x: LoadedSector) => number | null) =>
+    loaded.map(x => ({ name: x.name, color: x.color, v: fn(x) }))
+      .filter((r): r is { name: string; color: string; v: number } => r.v !== null)
+      .map(r => ({ name: r.name, color: r.color, value: Number(r.v.toFixed(1)) }));
+  const performanceTrendsData = React.useMemo(() => metricRow(x => trailingReturn(x.s, 252)), [loaded]);
+  const volatilityData = React.useMemo(() => metricRow(x => annualVol(x.s, 252)), [loaded]);
+  const momentumData = React.useMemo(() => {
+    const b6 = bench ? trailingReturn(bench, 126) : null;
+    return metricRow(x => { const r = trailingReturn(x.s, 126); return r === null || b6 === null ? null : r - b6; });
+  }, [loaded, bench]);
+
+  // ── Relative rotation per sector ───────────────────────────────────────────
+  const rrg = React.useMemo(() => {
+    if (!bench) return [];
+    return loaded.map(x => ({ name: x.name, color: x.color, cyclical: x.cyclical, r: relativeRotation(x.s, bench) }))
+      .filter((x): x is typeof x & { r: NonNullable<typeof x.r> } => x.r !== null)
+      .sort((a, b) => b.r.rs - a.r.rs);
+  }, [loaded, bench]);
+
+  // ── Rankings for the selected period ───────────────────────────────────────
+  const sectorRankings = React.useMemo(() => {
+    const days = PERIOD_DAYS[selectedPeriod];
+    const bRet = bench ? trailingReturn(bench, days) : null;
+    const quad = new Map(rrg.map(x => [x.name, x.r.quadrant]));
+    return loaded
+      .map(x => ({ x, ret: trailingReturn(x.s, days) }))
+      .filter((r): r is { x: LoadedSector; ret: number } => r.ret !== null)
+      .sort((a, b) => b.ret - a.ret)
+      .map(({ x, ret }, i) => {
+        const rs = bRet === null ? 0 : ret - bRet;
+        return {
+          rank: i + 1,
+          name: x.name,
+          color: x.color,
+          change: pctStr(ret),
+          rawChange: ret,
+          rs,
+          // 0-100 bar: 50 = same as Nifty, ±10% relative = full / empty
+          momentum: Math.min(100, Math.max(0, 50 + rs * 5)),
+          status: (quad.get(x.name) ?? 'Lagging') as SectorStatus,
+        };
+      });
+  }, [loaded, bench, rrg, selectedPeriod]);
+
+  // ── Heatmap ────────────────────────────────────────────────────────────────
+  const heatmapData = React.useMemo(
+    () => loaded.map(x => ({ sector: x.name, data: yearRow(x.monthly, selectedYear) })),
+    [loaded, selectedYear]
+  );
+
+  // ── Seasonality of the current calendar month ─────────────────────────────
+  const curMonth = new Date().getMonth() + 1;
+  const seasonal = React.useMemo(() => loaded
+    .map(x => ({ name: x.name, color: x.color, st: seasonality(x.monthly, curMonth, CUR_YEAR) }))
+    .filter((x): x is typeof x & { st: NonNullable<typeof x.st> } => x.st !== null)
+    .sort((a, b) => b.st.avg - a.st.avg), [loaded, curMonth, CUR_YEAR]);
+
+  // ── KPIs ───────────────────────────────────────────────────────────────────
+  const kpiData = React.useMemo(() => {
+    if (!loaded.length) return [];
+    const top12 = [...performanceTrendsData].sort((a, b) => b.value - a.value)[0];
+    const beating = rrg.filter(x => x.r.rs >= 0).length;
+    const lagging = rrg.length - beating;
+    const vols = volatilityData.map(v => v.value);
+    const avgVol = vols.length ? vols.reduce((a, v) => a + v, 0) / vols.length : null;
+    const volLabel = avgVol === null ? '' : avgVol < 15 ? 'Low' : avgVol < 22 ? 'Normal' : 'Elevated';
+    const avgRs = (cyc: boolean) => {
+      const xs = rrg.filter(x => x.cyclical === cyc).map(x => x.r.rs);
+      return xs.length ? xs.reduce((a, v) => a + v, 0) / xs.length : null;
+    };
+    const cyc = avgRs(true), def = avgRs(false);
+    const spread = cyc !== null && def !== null ? cyc - def : null;
+    const rot = spread === null ? 'n/a' : spread > 2 ? 'Risk-On' : spread < -2 ? 'Risk-Off' : 'Neutral';
+    return [
+      { label: 'TOP PERFORMER (12M)', value: top12?.name ?? '-', subValue: top12 ? pctStr(top12.value) : '', subColor: (top12 && top12.value >= 0 ? 'green' : 'red') as 'green' | 'red', icon: <Wifi className="w-4 h-4 text-emerald-500" /> },
+      { label: 'BEATING NIFTY (3M)', value: String(beating), subValue: `of ${rrg.length} sectors`, subColor: (beating >= rrg.length / 2 ? 'green' : 'neutral') as 'green' | 'neutral', icon: <ArrowUp className="w-4 h-4 text-emerald-500" /> },
+      { label: 'LAGGING NIFTY (3M)', value: String(lagging), subValue: lagging === 0 ? 'None lagging' : `${lagging} behind Nifty`, subColor: (lagging === 0 ? 'green' : 'red') as 'green' | 'red', icon: <ArrowDown className="w-4 h-4 text-red-400" /> },
+      { label: 'AVG VOLATILITY (ANN.)', value: avgVol === null ? '-' : `${avgVol.toFixed(1)}%`, subValue: volLabel, subColor: (avgVol !== null && avgVol < 22 ? 'green' : 'red') as 'green' | 'red', icon: <Zap className="w-4 h-4 text-emerald-500" /> },
+      { label: 'ROTATION SIGNAL', value: rot, subValue: spread === null ? '' : `Cyclicals vs defensives ${pctStr(spread)} (3M)`, subColor: (rot === 'Risk-On' ? 'green' : rot === 'Risk-Off' ? 'red' : 'neutral') as 'green' | 'red' | 'neutral', icon: <Repeat className="w-4 h-4 text-slate-400" /> },
+    ];
+  }, [loaded, performanceTrendsData, volatilityData, rrg]);
+
   // ── Heatmap cell helpers ──────────────────────────────────────────────────
   const getHeatmapColor = (val: number | null): string => {
     if (val === null)  return 'bg-[#111827] text-slate-700 border-transparent';
-    if (val >= 5)      return 'bg-[#193828] text-emerald-300 border-emerald-900/30';
-    if (val >= -2)     return 'bg-[#1a2538] text-slate-400  border-slate-700/30';
+    if (val >= 2)      return 'bg-[#193828] text-emerald-300 border-emerald-900/30';
+    if (val > -2)      return 'bg-[#1a2538] text-slate-400  border-slate-700/30';
     return                    'bg-[#3b1822] text-red-400    border-red-900/30';
   };
   const fmtCell = (val: number | null): string => {
     if (val === null) return '—';
-    const r = Math.round(val);
-    return r >= 0 ? `+${r}` : `${r}`;
+    return `${val >= 0 ? '+' : ''}${val.toFixed(1)}`;
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -428,7 +299,7 @@ const SectorRotation: React.FC = () => {
                       Sector Performance Trends
                     </h2>
                     <p className="text-[10px] text-slate-400 mt-1 ml-2.5">
-                      12-month capital flow, volatility &amp; momentum analysis
+                      12-month return, volatility and 6-month strength vs Nifty 50 · daily closes{asOf ? ` to ${asOf}` : ''}
                     </p>
                   </div>
                   <div className="flex gap-2">
@@ -501,18 +372,17 @@ const SectorRotation: React.FC = () => {
                 <div className="flex gap-4 mb-3 ml-0.5">
                   {selectedMetric === 'capitalFlow' && (
                     <>
-                      <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold"><span className="w-2 h-2 rounded-full bg-[#00e676]" /> Positive Flow</span>
-                      <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold"><span className="w-2 h-2 rounded-full bg-[#ff1744]" /> Negative Flow</span>
+                      <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold"><span className="w-2 h-2 rounded-full bg-[#00e676]" /> Up over 12 months</span>
+                      <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold"><span className="w-2 h-2 rounded-full bg-[#ff1744]" /> Down over 12 months</span>
                     </>
                   )}
                   {selectedMetric === 'volatilityIndex' && (
-                    <span className="text-[10px] text-slate-400 font-medium">Mean absolute deviation of monthly returns — higher = more volatile</span>
+                    <span className="text-[10px] text-slate-400 font-medium">Annualised standard deviation of daily returns, last 12 months — higher = more volatile</span>
                   )}
                   {selectedMetric === 'momentumScore' && (
                     <>
-                      <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold"><span className="w-2 h-2 rounded-full bg-[#00e676]" /> Bullish (&gt;60)</span>
-                      <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold"><span className="w-2 h-2 rounded-full bg-amber-400" /> Neutral (40–60)</span>
-                      <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold"><span className="w-2 h-2 rounded-full bg-[#ff1744]" /> Bearish (&lt;40)</span>
+                      <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold"><span className="w-2 h-2 rounded-full bg-[#00e676]" /> Beat Nifty (6M return − Nifty 6M return)</span>
+                      <span className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold"><span className="w-2 h-2 rounded-full bg-[#ff1744]" /> Lagged Nifty</span>
                     </>
                   )}
                 </div>
@@ -532,28 +402,25 @@ const SectorRotation: React.FC = () => {
                       selectedMetric === 'volatilityIndex'? volatilityData :
                       momentumData;
 
-                    const isAllPositive = selectedMetric !== 'capitalFlow';
+                    const isAllPositive = selectedMetric === 'volatilityIndex';
 
                     // Y-axis config per metric
-                    const yDomain: [number,number] =
-                      selectedMetric === 'capitalFlow'     ? [-35, 35] as [number,number] :
-                      selectedMetric === 'volatilityIndex' ? [0, 20]  as [number,number] :
-                      [0, 100] as [number,number];
-
-                    const yTicks =
-                      selectedMetric === 'capitalFlow'     ? [-30,-20,-10,0,10,20,30] :
-                      selectedMetric === 'volatilityIndex' ? [0,5,10,15,20] :
-                      [0,25,50,75,100];
+                    // Fit the axis to the real values so no bar is clipped
+                    const vals = chartData.map((d: any) => d.value as number);
+                    const hiV = Math.max(0, ...vals), loV = Math.min(0, ...vals);
+                    const step = Math.max(5, Math.ceil((hiV - loV) / 6 / 5) * 5);
+                    const yDomain: [number,number] = [Math.floor(loV / step) * step, Math.ceil(hiV / step) * step || step];
+                    const yTicks: number[] = [];
+                    for (let t = yDomain[0]; t <= yDomain[1]; t += step) yTicks.push(t);
 
                     const tooltipSuffix =
                       selectedMetric === 'capitalFlow'     ? '%' :
-                      selectedMetric === 'volatilityIndex' ? '%' :
-                      ' pts';
+                      '%';
 
                     const tooltipLabel =
-                      selectedMetric === 'capitalFlow'     ? 'Capital Flow' :
+                      selectedMetric === 'capitalFlow'     ? '12M Return' :
                       selectedMetric === 'volatilityIndex' ? 'Volatility' :
-                      'Momentum';
+                      'vs Nifty (6M)';
 
                     if (chartType === 'radar') {
                       return (
@@ -696,12 +563,10 @@ const SectorRotation: React.FC = () => {
                             />
                             {chartData.map((entry: any, index: number) => {
                               let fill = 'url(#neonGreenRot)';
-                              if (selectedMetric === 'capitalFlow') {
-                                fill = entry.value >= 0 ? 'url(#neonGreenRot)' : 'url(#neonRedRot)';
-                              } else if (selectedMetric === 'volatilityIndex') {
+                              if (selectedMetric === 'volatilityIndex') {
                                 fill = entry.color;
                               } else {
-                                fill = entry.value >= 60 ? '#00e676' : entry.value >= 40 ? '#f59e0b' : '#ff1744';
+                                fill = entry.value >= 0 ? 'url(#neonGreenRot)' : 'url(#neonRedRot)';
                               }
                               return <Cell key={`cell-${index}`} fill={fill} style={{ cursor: 'pointer' }} />;
                             })}
@@ -720,7 +585,7 @@ const SectorRotation: React.FC = () => {
                     <h2 className="text-sm font-black text-white flex items-center gap-2 border-l-2 border-emerald-500 pl-2">
                       Sector Rankings
                     </h2>
-                    <p className="text-[10px] text-slate-400 mt-1 ml-2.5">Performance ranking by period</p>
+                    <p className="text-[10px] text-slate-400 mt-1 ml-2.5">Return over the period · bar = vs Nifty · status = rotation (3M)</p>
                   </div>
                   <div className="relative" ref={periodRef}>
                     <div 
@@ -757,7 +622,7 @@ const SectorRotation: React.FC = () => {
 
                 {isLoading ? (
                   <div className="space-y-2">
-                    {Array.from({ length: 7 }).map((_, i) => (
+                    {Array.from({ length: 10 }).map((_, i) => (
                       <div key={i} className="h-9 bg-[#1e293b] rounded-lg animate-pulse" />
                     ))}
                   </div>
@@ -768,8 +633,8 @@ const SectorRotation: React.FC = () => {
                       <div className="w-8 text-center">#</div>
                       <div className="flex-1">Sector</div>
                       <div className="w-16 text-right">Change</div>
-                      <div className="w-20 text-center">Momentum</div>
-                      <div className="w-14 text-right">Status</div>
+                      <div className="w-20 text-center">vs Nifty</div>
+                      <div className="w-20 text-right">Status</div>
                     </div>
 
                     {/* Rows */}
@@ -807,7 +672,7 @@ const SectorRotation: React.FC = () => {
                           </div>
 
                           {/* Momentum bar */}
-                          <div className="w-20 px-3 flex items-center">
+                          <div className="w-20 px-3 flex items-center" title={`${row.rs >= 0 ? '+' : ''}${row.rs.toFixed(1)}% vs Nifty`}>
                             <div className="flex w-full gap-1">
                                <div className="h-1 flex-1 rounded-full transition-colors" style={{ backgroundColor: row.momentum > 20 ? row.color : '#1e293b' }} />
                                <div className="h-1 flex-1 rounded-full transition-colors" style={{ backgroundColor: row.momentum > 50 ? row.color : '#1e293b' }} />
@@ -816,12 +681,8 @@ const SectorRotation: React.FC = () => {
                           </div>
 
                           {/* Status badge */}
-                          <div className="w-14 flex justify-end">
-                            <span className={`text-[11px] font-black uppercase tracking-wide ${
-                               row.status === 'Prime' ? 'text-emerald-400' :
-                               row.status === 'Active' ? 'text-orange-400' :
-                               'text-rose-400'
-                            }`}>
+                          <div className="w-20 flex justify-end">
+                            <span title={QUADRANT_HELP[row.status as SectorStatus]} className={`text-[11px] font-black uppercase tracking-wide ${QUADRANT_STYLE[row.status as SectorStatus]}`}>
                               {row.status}
                             </span>
                           </div>
@@ -843,7 +704,7 @@ const SectorRotation: React.FC = () => {
                     Monthly Performance Heatmap
                   </h2>
                   <p className="text-[10px] text-slate-400 mt-1 ml-2.5">
-                    Sector strength across 12 months · Most recent month highlighted
+                    Monthly % change (month-end closes) · current month is month-to-date
                   </p>
                 </div>
 
@@ -924,132 +785,92 @@ const SectorRotation: React.FC = () => {
               <div className="flex items-center justify-center gap-6 mt-4 text-[10px] font-bold text-slate-400">
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-sm bg-[#193828] border border-emerald-900/40" />
-                  Strong (+5% to +15%)
+                  Up 2% or more
                 </div>
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-sm bg-[#1a2538] border border-slate-700/30" />
-                  Neutral (−2% to +5%)
+                  Between −2% and +2%
                 </div>
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded-sm bg-[#3b1822] border border-red-900/30" />
-                  Weak (−15% to −2%)
+                  Down 2% or more
                 </div>
               </div>
             </div>
 
-            {/* ── 4. Market Cycle + Radar ─────────────────────────────────────── */}
+            {/* ── 4. Seasonality + Relative Rotation ──────────────────────────── */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pb-8">
 
-              {/* Market Cycle + Seasonal */}
-              <div className="space-y-4">
-                <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-5">
-                  <h2 className="text-sm font-black text-white flex items-center gap-2 border-l-2 border-emerald-500 pl-2 mb-1">
-                    Market Cycle &amp; Sector Rotation
-                  </h2>
-                  <p className="text-[10px] text-slate-400 ml-2.5 mb-5">Current economic phase and favored sectors</p>
-
-                  <div className="grid grid-cols-4 gap-2">
-                    {[
-                      { label: 'Early Cycle',   detail: 'Financials, Consumer Disc., Real Estate', active: true },
-                      { label: 'Mid Cycle',     detail: 'Technology, Industrials, Materials',      active: false },
-                      { label: 'Late Cycle',    detail: 'Energy, Healthcare, Utilities',           active: false  },
-                      { label: 'Defensive',     detail: 'Utilities, Consumer Staples, Healthcare', active: false },
-                    ].map(({ label, detail, active }) => (
-                      <div
-                        key={label}
-                        className={`p-3 rounded-xl border flex flex-col items-center justify-center text-center h-24 relative overflow-hidden transition-all ${
-                          active
-                            ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
-                            : 'border-slate-800 bg-[#101520] opacity-50'
-                        }`}
-                      >
-                        <div className={`text-xs font-black mb-1 ${active ? 'text-white' : 'text-slate-400'}`}>{label}</div>
-                        <div className={`text-[9px] leading-tight ${active ? 'text-emerald-200' : 'text-slate-500'}`}>{detail}</div>
+              {/* Seasonality: this calendar month in past years */}
+              <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-5">
+                <h2 className="text-sm font-black text-white flex items-center gap-2 border-l-2 border-emerald-500 pl-2 mb-1">
+                  {FULL_MONTHS[curMonth - 1]} Seasonality
+                </h2>
+                <p className="text-[10px] text-slate-400 ml-2.5 mb-4">
+                  Average {FULL_MONTHS[curMonth - 1]} return in past years · history is not a forecast
+                </p>
+                {isLoading ? (
+                  <div className="space-y-2">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-10 bg-[#1e293b] rounded-lg animate-pulse" />)}</div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <div className="flex text-[10px] font-bold text-slate-500 uppercase tracking-widest px-3">
+                      <div className="flex-1">Sector</div>
+                      <div className="w-20 text-right">Avg</div>
+                      <div className="w-24 text-right">Up years</div>
+                    </div>
+                    {seasonal.map(x => (
+                      <div key={x.name} className="flex items-center text-xs px-3 py-2 rounded-lg border border-slate-800 bg-[#101520]">
+                        <div className="flex-1 flex items-center gap-2 font-bold text-slate-200">
+                          <div className="w-2.5 h-2.5 rounded-full" style={{ background: x.color }} />{x.name}
+                        </div>
+                        <div className={`w-20 text-right font-mono font-bold ${x.st.avg >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{pctStr(x.st.avg)}</div>
+                        <div className="w-24 text-right font-mono text-slate-400">{x.st.upYears} of {x.st.years}</div>
                       </div>
                     ))}
+                    {!seasonal.length && <p className="text-xs text-slate-500 px-3">No history available</p>}
                   </div>
-                </div>
-
-                {/* Seasonal Strength – derived from rankings */}
-                <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-5">
-                  <h2 className="text-sm font-black text-white flex items-center gap-2 border-l-2 border-emerald-500 pl-2 mb-1">
-                    Seasonal Sector Strength
-                  </h2>
-                  <p className="text-[10px] text-slate-400 ml-2.5 mb-5">Active sectors this month based on historical patterns</p>
-
-                  <div className="space-y-2">
-                    {sectorRankings.slice(0, 4).map((s) => (
-                      <div
-                        key={s.name}
-                        className="flex items-center justify-between p-3 rounded-xl border border-slate-800 bg-[#101520]"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-2.5 h-2.5 rounded-full" style={{ background: s.color }} />
-                          <span className="text-[13px] font-black text-white">{s.name}</span>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                            s.status === 'Prime' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                            s.status === 'Active' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                            'bg-orange-500/10 text-orange-400 border border-orange-500/20'
-                          }`}>
-                            {s.status === 'Prime' ? 'PRIME' : 'ACTIVE'}
-                          </span>
-                          <span className={`text-xs font-mono font-bold w-14 text-right ${s.change.startsWith('+') ? 'text-emerald-400' : 'text-rose-400'}`}>
-                            {s.change}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-
-                    {sectorRankings.slice(4).map((s) => (
-                      <div
-                        key={s.name}
-                        className="flex items-center justify-between p-3 rounded-xl border border-slate-800/80 bg-[#0c1017] opacity-80"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-2.5 h-2.5 rounded-full" style={{ background: s.color }} />
-                          <span className="text-[13px] font-bold text-slate-400">{s.name}</span>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-400">
-                            OFF
-                          </span>
-                          <span className={`text-xs font-mono font-bold w-14 text-right ${s.change.startsWith('+') ? 'text-emerald-400' : 'text-rose-400'}`}>
-                            {s.change}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                )}
               </div>
 
-              {/* Radar Chart */}
-              <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-5 flex flex-col">
+              {/* Relative Rotation vs Nifty 50 */}
+              <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-5">
                 <h2 className="text-sm font-black text-white flex items-center gap-2 border-l-2 border-emerald-500 pl-2 mb-1">
-                  Sector Analysis Radar
+                  Relative Rotation vs Nifty 50
                 </h2>
-                <p className="text-[10px] text-slate-400 ml-2.5 mb-2">Momentum vs Volatility comparison</p>
-
-                <div className="flex-1 w-full min-h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
-                      <PolarGrid stroke="#334155" />
-                      <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                      <PolarRadiusAxis angle={30} domain={[0, 150]} tick={false} axisLine={false} />
-                      <Radar name="Momentum"   dataKey="A" stroke="#6366f1" fill="#6366f1" fillOpacity={0.1} dot={{ r: 4, fill: '#6366f1', stroke: '#6366f1' }} />
-                      <Radar name="Volatility" dataKey="B" stroke="#ef4444" fill="none" dot={{ r: 4, fill: '#0f1520', stroke: '#ef4444', strokeWidth: 2 }} />
-                    </RadarChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div className="flex justify-center gap-6 text-[10px] text-slate-400 pb-2">
-                  <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-[#6366f1] rounded-full" /> Momentum</div>
-                  <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full border-2 border-[#ef4444] bg-[#0f1520]" /> Volatility</div>
-                </div>
+                <p className="text-[10px] text-slate-400 ml-2.5 mb-4">
+                  RS = sector 3M return − Nifty 3M return · Trend = change in RS over the last month
+                </p>
+                {isLoading ? (
+                  <div className="space-y-2">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-10 bg-[#1e293b] rounded-lg animate-pulse" />)}</div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <div className="flex text-[10px] font-bold text-slate-500 uppercase tracking-widest px-3">
+                      <div className="flex-1">Sector</div>
+                      <div className="w-16 text-right">RS</div>
+                      <div className="w-16 text-right">Trend</div>
+                      <div className="w-24 text-right">Quadrant</div>
+                    </div>
+                    {rrg.map(x => (
+                      <div key={x.name} title={QUADRANT_HELP[x.r.quadrant]} className="flex items-center text-xs px-3 py-2 rounded-lg border border-slate-800 bg-[#101520]">
+                        <div className="flex-1 flex items-center gap-2 font-bold text-slate-200">
+                          <div className="w-2.5 h-2.5 rounded-full" style={{ background: x.color }} />{x.name}
+                          <span className="text-[9px] font-normal text-slate-500">{x.cyclical ? 'cyclical' : 'defensive'}</span>
+                        </div>
+                        <div className={`w-16 text-right font-mono font-bold ${x.r.rs >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{pctStr(x.r.rs)}</div>
+                        <div className={`w-16 text-right font-mono ${x.r.rsMomentum >= 0 ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>{x.r.rsMomentum >= 0 ? '▲' : '▼'} {Math.abs(x.r.rsMomentum).toFixed(1)}</div>
+                        <div className={`w-24 text-right font-black uppercase text-[11px] ${QUADRANT_STYLE[x.r.quadrant]}`}>{x.r.quadrant}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
+
+            {missing.length > 0 && (
+              <div className="text-center text-[11px] text-amber-300/80">
+                No data right now for: {missing.join(', ')} — left out instead of estimated.
+              </div>
+            )}
 
             {/* Footer disclaimer */}
             <div className="text-center text-[10px] text-slate-600 py-4 italic">

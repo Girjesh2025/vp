@@ -55,6 +55,52 @@ const BASE_INDICES: Omit<GlobalIndex, 'price' | 'change' | 'changePercent' | 'st
   { symbol: '^TNX', name: 'US 10Y Yield', category: 'Macro', type: 'BOND', country: 'UNITED STATES (%)', flag: '📈' },
 ];
 
+// Regular trading hours in each exchange's own time zone (DST handled by Intl).
+// Exchange holidays are not detected.
+type Session = { tz: string; open: string; close: string; lunch?: [string, string] };
+const CME_GLOBEX = 'GLOBEX';
+const SESSIONS: Record<string, Session | typeof CME_GLOBEX> = {
+  '^NSEI': { tz: 'Asia/Kolkata', open: '09:15', close: '15:30' },
+  '^BSESN': { tz: 'Asia/Kolkata', open: '09:15', close: '15:30' },
+  '^NSEBANK': { tz: 'Asia/Kolkata', open: '09:15', close: '15:30' },
+  'GIFT_NIFTY_MOCK': { tz: 'Asia/Kolkata', open: '06:30', close: '23:50' },
+  '^DJI': { tz: 'America/New_York', open: '09:30', close: '16:00' },
+  '^IXIC': { tz: 'America/New_York', open: '09:30', close: '16:00' },
+  '^GSPC': { tz: 'America/New_York', open: '09:30', close: '16:00' },
+  '^TNX': { tz: 'America/New_York', open: '08:00', close: '17:00' },
+  '^N225': { tz: 'Asia/Tokyo', open: '09:00', close: '15:30', lunch: ['11:30', '12:30'] },
+  '^HSI': { tz: 'Asia/Hong_Kong', open: '09:30', close: '16:00', lunch: ['12:00', '13:00'] },
+  '^KS11': { tz: 'Asia/Seoul', open: '09:00', close: '15:30' },
+  '^TWII': { tz: 'Asia/Taipei', open: '09:00', close: '13:30' },
+  '^GDAXI': { tz: 'Europe/Berlin', open: '09:00', close: '17:30' },
+  '^FCHI': { tz: 'Europe/Paris', open: '09:00', close: '17:30' },
+  '^FTSE': { tz: 'Europe/London', open: '08:00', close: '16:30' },
+  'YM=F': CME_GLOBEX, 'NQ=F': CME_GLOBEX, 'ES=F': CME_GLOBEX, 'GC=F': CME_GLOBEX, 'BZ=F': CME_GLOBEX, 'DX-Y.NYB': CME_GLOBEX,
+};
+
+const localParts = (tz: string, now = new Date()) => {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(now);
+  const get = (t: string) => parts.find(p => p.type === t)?.value ?? '';
+  return { wd: get('weekday'), hm: `${get('hour').replace('24', '00')}:${get('minute')}` };
+};
+
+const marketStatusFor = (symbol: string, now = new Date()): 'open' | 'closed' => {
+  const s = SESSIONS[symbol];
+  if (!s) return 'closed';
+  if (s === CME_GLOBEX) {
+    // Sunday 17:00 – Friday 16:00 Chicago time, daily break 16:00–17:00
+    const { wd, hm } = localParts('America/Chicago', now);
+    if (wd === 'Sat') return 'closed';
+    if (wd === 'Sun') return hm >= '17:00' ? 'open' : 'closed';
+    if (wd === 'Fri') return hm < '16:00' ? 'open' : 'closed';
+    return hm >= '16:00' && hm < '17:00' ? 'closed' : 'open';
+  }
+  const { wd, hm } = localParts(s.tz, now);
+  if (wd === 'Sat' || wd === 'Sun') return 'closed';
+  if (s.lunch && hm >= s.lunch[0] && hm < s.lunch[1]) return 'closed';
+  return hm >= s.open && hm < s.close ? 'open' : 'closed';
+};
+
 const GlobalMarket: React.FC = () => {
   const navigate = useNavigate();
   const [indices, setIndices] = useState<GlobalIndex[]>([]);
@@ -63,36 +109,7 @@ const GlobalMarket: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<'All' | 'India' | 'US' | 'Asia' | 'Europe' | 'Macro'>('All');
   const [lastUpdatedTime, setLastUpdatedTime] = useState<string>('');
 
-  const getMarketStatus = (category: string, symbol: string): 'open' | 'closed' => {
-    const now = new Date();
-    const day = now.getUTCDay(); // 0 = Sunday, 6 = Saturday
-    if (day === 0 || day === 6) return 'closed';
-
-    const utcHour = now.getUTCHours();
-    const utcMin = now.getUTCMinutes();
-    const timeInMinutes = utcHour * 60 + utcMin;
-
-    switch (category) {
-      case 'US':
-        if (symbol === 'YM=F' || symbol === 'NQ=F' || symbol === 'ES=F') return 'open';
-        return timeInMinutes >= 870 && timeInMinutes <= 1260 ? 'open' : 'closed';
-      case 'Europe':
-        return timeInMinutes >= 480 && timeInMinutes <= 990 ? 'open' : 'closed';
-      case 'Asia':
-        return timeInMinutes >= 0 && timeInMinutes <= 480 ? 'open' : 'closed';
-      case 'India':
-        if (symbol === 'GIFT_NIFTY_MOCK') {
-          if (timeInMinutes >= 60 && timeInMinutes <= 610) return 'open';
-          if (timeInMinutes >= 665 && timeInMinutes <= 1275) return 'open';
-          return 'closed';
-        }
-        return timeInMinutes >= 225 && timeInMinutes <= 600 ? 'open' : 'closed';
-      case 'Macro':
-        return 'open';
-      default:
-        return 'closed';
-    }
-  };
+  const getMarketStatus = (_category: string, symbol: string): 'open' | 'closed' => marketStatusFor(symbol);
 
   const fetchLiveGlobalData = async (showRefreshAnimation = false) => {
     if (showRefreshAnimation) setIsRefreshing(true);
@@ -176,9 +193,10 @@ const GlobalMarket: React.FC = () => {
     : indices.filter(i => i.category === activeFilter);
 
   // Key KPI Calculations
-  const validIndices = indices.filter(i => i.price > 0);
+  // Breadth counts cash equity indices only (no futures duplicates, no dollar/oil/gold/yields)
+  const validIndices = indices.filter(i => i.price > 0 && i.type === 'INDEX');
   const advancingCount = validIndices.filter(i => i.changePercent >= 0).length;
-  const advancingPct = validIndices.length > 0 ? Math.round((advancingCount / validIndices.length) * 100) : 50;
+  const advancingPct = validIndices.length > 0 ? Math.round((advancingCount / validIndices.length) * 100) : 0;
 
   const giftNifty = indices.find(i => i.symbol === 'GIFT_NIFTY_MOCK');
   const nifty50 = indices.find(i => i.symbol === '^NSEI');
@@ -190,7 +208,10 @@ const GlobalMarket: React.FC = () => {
   let gapOpeningPoints = 0;
   let gapOpeningText = 'Flat';
   let gapTone = 'neutral';
-  if (giftNifty && nifty50 && giftNifty.price > 0 && nifty50.price > 0) {
+  const nseOpen = marketStatusFor('^NSEI') === 'open';
+  if (nseOpen) {
+    gapOpeningText = 'NSE is open';
+  } else if (giftNifty && nifty50 && giftNifty.price > 0 && nifty50.price > 0) {
     gapOpeningPoints = Math.round(giftNifty.price - nifty50.price);
     if (gapOpeningPoints >= 40) {
       gapOpeningText = `Gap Up (+${gapOpeningPoints} pts)`;
@@ -234,7 +255,7 @@ const GlobalMarket: React.FC = () => {
                   <div className="flex items-center gap-2.5">
                     <h1 className="text-xl md:text-2xl font-black text-white tracking-tight">Global Market Pulse</h1>
                     <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-[10px] font-black text-emerald-400 flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> LIVE STREAM
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> AUTO-REFRESH 60s
                     </span>
                   </div>
                   <p className="text-xs text-slate-400 mt-0.5">
@@ -287,7 +308,7 @@ const GlobalMarket: React.FC = () => {
                     {gapOpeningText}
                   </div>
                   <div className="text-[11px] text-slate-400 mt-0.5 font-medium">
-                    GIFT Nifty vs NIFTY Close
+                    {nseOpen ? 'Opening cue shows before 09:15 / after 15:30' : giftNifty && giftNifty.price > 0 ? 'GIFT Nifty vs NIFTY close' : 'GIFT Nifty unavailable · from US futures'}
                   </div>
                 </div>
               </div>
@@ -309,7 +330,7 @@ const GlobalMarket: React.FC = () => {
                     {advancingPct}% <span className="text-xs text-slate-400 font-normal">in Green</span>
                   </div>
                   <div className="text-[11px] text-slate-400 mt-0.5 font-medium">
-                    {advancingCount} of {validIndices.length} benchmarks advancing
+                    {advancingCount} of {validIndices.length} equity indices up today
                   </div>
                 </div>
               </div>
@@ -330,12 +351,12 @@ const GlobalMarket: React.FC = () => {
                 </div>
                 <div>
                   <div className="text-xl font-black text-white leading-tight font-mono">
-                    {dxy && dxy.price > 0 ? dxy.price.toFixed(2) : '103.40'}
+                    {dxy && dxy.price > 0 ? dxy.price.toFixed(2) : '—'}
                   </div>
                   <div className={`text-[11px] font-bold mt-0.5 ${
                     dxy && dxy.changePercent < 0 ? 'text-emerald-400' : 'text-rose-400'
                   }`}>
-                    {dxy && dxy.price > 0 ? `${dxy.changePercent >= 0 ? '+' : ''}${dxy.changePercent.toFixed(2)}%` : '−0.15% (Softening)'}
+                    {dxy && dxy.price > 0 ? `${dxy.changePercent >= 0 ? '+' : ''}${dxy.changePercent.toFixed(2)}%` : 'Data unavailable'}
                   </div>
                 </div>
               </div>
@@ -356,12 +377,12 @@ const GlobalMarket: React.FC = () => {
                 </div>
                 <div>
                   <div className="text-xl font-black text-white leading-tight font-mono">
-                    ${crude && crude.price > 0 ? crude.price.toFixed(2) : '78.50'}
+                    {crude && crude.price > 0 ? `$${crude.price.toFixed(2)}` : '—'}
                   </div>
                   <div className={`text-[11px] font-bold mt-0.5 ${
                     crude && crude.changePercent <= 0 ? 'text-emerald-400' : 'text-rose-400'
                   }`}>
-                    {crude && crude.price > 0 ? `${crude.changePercent >= 0 ? '+' : ''}${crude.changePercent.toFixed(2)}%` : '+0.25% today'}
+                    {crude && crude.price > 0 ? `${crude.changePercent >= 0 ? '+' : ''}${crude.changePercent.toFixed(2)}%` : 'Data unavailable'}
                   </div>
                 </div>
               </div>
@@ -372,11 +393,11 @@ const GlobalMarket: React.FC = () => {
             <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1">
               {[
                 { id: 'All', label: `All (${indices.length})` },
-                { id: 'India', label: '🇮🇳 India & Futures (4)' },
-                { id: 'US', label: '🇺🇸 US & Tech Futures (6)' },
-                { id: 'Asia', label: '🌏 Asia-Pacific (4)' },
-                { id: 'Europe', label: '🇪🇺 European Giants (3)' },
-                { id: 'Macro', label: '🛢️ Macro & Yields (4)' },
+                { id: 'India', label: `🇮🇳 India & Futures (${indices.filter(i => i.category === 'India').length})` },
+                { id: 'US', label: `🇺🇸 US & Tech Futures (${indices.filter(i => i.category === 'US').length})` },
+                { id: 'Asia', label: `🌏 Asia-Pacific (${indices.filter(i => i.category === 'Asia').length})` },
+                { id: 'Europe', label: `🇪🇺 European Giants (${indices.filter(i => i.category === 'Europe').length})` },
+                { id: 'Macro', label: `🛢️ Macro & Yields (${indices.filter(i => i.category === 'Macro').length})` },
               ].map(tab => (
                 <button
                   key={tab.id}
@@ -403,7 +424,7 @@ const GlobalMarket: React.FC = () => {
                   <span className="text-[10px] text-slate-400 font-medium">({filteredIndices.length} Instruments)</span>
                 </div>
                 <div className="text-[10px] text-slate-400 font-mono">
-                  Real-time quotes with auto-ticking
+                  Refreshes every 60 s · exchange delays may apply
                 </div>
               </div>
 
@@ -506,7 +527,7 @@ const GlobalMarket: React.FC = () => {
 
             {/* ── 5. Market Cues Disclaimer ──────────────────────────────────── */}
             <div className="p-3 bg-[#0c1017] border border-slate-800/80 rounded-xl text-center text-[11px] text-slate-400 font-medium">
-              Global market quotes &amp; US index futures update continuously. Pre-market gap predictions are computed from GIFT Nifty (NSE IX) differentials.
+              Quotes refresh every 60 seconds. LIVE/CLOSED uses each exchange's regular hours in its own time zone (holidays not detected). Opening cue = GIFT Nifty minus Nifty's last price, shown only while NSE is closed.
             </div>
 
           </div>

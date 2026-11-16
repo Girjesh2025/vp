@@ -42,8 +42,6 @@ export const isMarketOpen = (): boolean => {
   return currentTime >= marketOpen && currentTime <= marketClose;
 };
 
-// Keep internal alias for backward compatibility within this file
-const isIndianMarketOpen = isMarketOpen;
 
 const resolveBaseUrl = (): string => {
   const envBase = (import.meta as any)?.env?.VITE_API_BASE_URL;
@@ -300,122 +298,7 @@ export const fetchIntradayPrices = async (symbol: string): Promise<number[]> => 
   return [];
 };
 
-/**
- * Fetch precisely 12-month historical performance for an index or stock using Yahoo's 1mo interval.
- * Outputs an array of 12 numbers representing MoM percentage changes.
- */
-export const fetchMonthlySectorPerformance = async (symbol: string): Promise<number[]> => {
-  const yahooSymbol = symbol.startsWith('^') ? symbol : toYahooSymbol(symbol);
-  
-  try {
-    const baseUrl = resolveBaseUrl();
-    // Use the backend proxy (which avoids all CORS / Cloudflare blocking from external proxies)
-    const apiUrl = `${baseUrl}/api/stock/${encodeURIComponent(yahooSymbol)}?historical=true&range=18mo&interval=1mo`;
-    
-    const r = await fetch(apiUrl);
-    if (!r.ok) throw new Error(`Proxy historical API failed with status ${r.status}`);
-    
-    const data = await r.json();
-    const result = data?.chart?.result?.[0];
-    if (result) {
-      const closes: number[] = result.indicators?.quote?.[0]?.close ?? [];
-      const validCloses = closes.filter((c: number | null) => typeof c === 'number' && c > 0) as number[];
 
-      if (validCloses.length >= 2) {
-        const monthlyChanges = [];
-        for (let i = 1; i < validCloses.length; i++) {
-           const change = ((validCloses[i] - validCloses[i-1]) / validCloses[i-1]) * 100;
-           monthlyChanges.push(Number(change.toFixed(2)));
-        }
-        while (monthlyChanges.length < 12) {
-          monthlyChanges.unshift(0);
-        }
-        return monthlyChanges.slice(-12);
-      }
-    }
-  } catch (e) {
-    console.warn(`[Historical Monthly] Proxy failed for ${symbol}:`, e);
-  }
-  
-  return Array(12).fill(0);
-};
-
-/**
- * Fetch 2 years of monthly raw close prices + timestamps for a sector index.
- * Use this to build calendar-year heatmaps without re-fetching on year change.
- */
-export interface SectorRawMonthly {
-  timestamps: number[];
-  closes: number[];
-}
-
-export const fetchSectorRawMonthly = async (symbol: string): Promise<SectorRawMonthly> => {
-  const yahooSymbol = symbol.startsWith('^') ? symbol : toYahooSymbol(symbol);
-
-  // Helper: aggregate daily closes → last close of each month
-  const aggregateToMonthly = (ts: number[], rawCloses: (number | null)[]): SectorRawMonthly => {
-    // Map: "YYYY-M" → { timestamp of last day in month, last close }
-    const monthMap = new Map<string, { timestamp: number; close: number }>();
-    for (let i = 0; i < ts.length; i++) {
-      const close = rawCloses[i];
-      if (typeof close !== 'number' || close <= 0) continue;
-      const d = new Date(ts[i] * 1000);
-      const key = `${d.getFullYear()}-${d.getMonth()}`;
-      // Keep updating so the last entry in each month wins
-      monthMap.set(key, { timestamp: ts[i], close });
-    }
-    const sorted = Array.from(monthMap.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([, v]) => v);
-    return {
-      timestamps: sorted.map(e => e.timestamp),
-      closes:     sorted.map(e => e.close),
-    };
-  };
-
-  try {
-    const baseUrl = resolveBaseUrl();
-
-    // 1️⃣ Try daily data first — gives full coverage even for newer index symbols
-    const dailyUrl = `${baseUrl}/api/stock/${encodeURIComponent(yahooSymbol)}?historical=true&range=3y&interval=1d`;
-    const rd = await fetch(dailyUrl);
-    if (rd.ok) {
-      const data = await rd.json();
-      const result = data?.chart?.result?.[0];
-      if (result) {
-        const ts: number[] = result.timestamp ?? [];
-        const rawCloses: (number | null)[] = result.indicators?.quote?.[0]?.close ?? [];
-        const agg = aggregateToMonthly(ts, rawCloses);
-        if (agg.timestamps.length >= 12) {
-          console.log(`✅ [RawMonthly] ${symbol}: ${agg.timestamps.length} months from daily data`);
-          return agg;
-        }
-      }
-    }
-
-    // 2️⃣ Fallback to monthly interval (faster, but shorter history for some symbols)
-    const moUrl = `${baseUrl}/api/stock/${encodeURIComponent(yahooSymbol)}?historical=true&range=3y&interval=1mo`;
-    const rm = await fetch(moUrl);
-    if (rm.ok) {
-      const data = await rm.json();
-      const result = data?.chart?.result?.[0];
-      if (result) {
-        const timestamps: number[] = result.timestamp ?? [];
-        const rawCloses: (number | null)[] = result.indicators?.quote?.[0]?.close ?? [];
-        const closes = rawCloses.map((c: number | null) => (typeof c === 'number' && c > 0 ? c : 0));
-        if (timestamps.length >= 2) {
-          console.log(`✅ [RawMonthly] ${symbol}: ${timestamps.length} months from monthly interval`);
-          return { timestamps, closes };
-        }
-      }
-    }
-  } catch (e) {
-    console.warn(`[Raw Monthly] Failed for ${symbol}:`, e);
-  }
-
-  // No real data: fail so the caller leaves this sector out instead of charting made-up prices
-  throw new Error(`[RawMonthly] No monthly data for ${symbol}`);
-};
 
 // Convert to candidate symbols
 const toEODHDSymbols = (symbol: string): string[] => {
