@@ -1235,7 +1235,7 @@ export default function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {usersList.slice(0, 5).map((u, idx) => (
+                      {usersList.map((u, idx) => (
                         <tr key={u.id} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
                           <td className="py-3 px-4 font-mono font-bold text-slate-500">{idx + 1}</td>
                           <td className="py-3 px-4">
