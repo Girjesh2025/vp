@@ -14,6 +14,8 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { trackPageView, startPresenceHeartbeat } from '../../utils/activityTracker';
+import UserSessionsTable from './UserSessionsTable';
+import { loadAdminData, summarizeUser, buildAnalytics, formatIst, formatDuration, ACTIVITY_WINDOW_DAYS, type SessionSummary } from '../../utils/adminActivity';
 
 export interface PageVisitItem {
   page: string;
@@ -55,6 +57,7 @@ export interface UserRecord {
   portfoliosList?: PortfolioDetailItem[];
   device?: string;
   city?: string;
+  sessions?: SessionSummary[];
 }
 
 
@@ -186,6 +189,7 @@ export default function AdminDashboard() {
   // Analytics State
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [adminErrors, setAdminErrors] = useState<string[]>([]);
   const [analyticsTimeRange, setAnalyticsTimeRange] = useState<'today' | '7d' | '30d' | 'all'>('today');
 
   // Platform Settings State
@@ -233,177 +237,59 @@ export default function AdminDashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch Real Users from Supabase Database API
+  // Admin API calls carry the signed-in admin's Supabase token (checked server-side with is_admin())
+  const adminFetch = async (url: string, init: RequestInit = {}) => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    return fetch(url, { ...init, headers: { ...(init.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+  };
+
+  // Users + real activity (public.user_activity) + real portfolio sizes, all read with the admin's own login (RLS)
   const fetchUsers = async () => {
     setUsersLoading(true);
-    let loadedFromApi = false;
     try {
-      const res = await fetch('/api/admin/users');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.users && Array.isArray(data.users)) {
-          setUsersList(data.users);
-          loadedFromApi = true;
-        }
-      }
-
-      // If API failed or was empty, fallback to direct Supabase users query with enriched metrics
-      if (!loadedFromApi && supabase) {
-        try {
-          const { data: sbUsers } = await supabase.from('users').select('*');
-          if (sbUsers && Array.isArray(sbUsers) && sbUsers.length > 0) {
-            const BASELINE_METRICS: Record<string, any> = {
-              'girjesh.ai25@gmail.com': {
-                portfoliosCount: 6,
-                portfolioCapital: '₹2.05 Cr',
-                holdingsCount: 38,
-                portfoliosList: [
-                  { name: 'Stock portfolio', holdingsCount: 28, capital: '₹1.82 Cr' },
-                  { name: 'ETF portfolio', holdingsCount: 4, capital: '₹14.8L' },
-                  { name: 'marketmojo', holdingsCount: 4, capital: '₹6.2L' },
-                  { name: 'testing 123', holdingsCount: 2, capital: '₹2.1L' }
-                ],
-                device: 'macOS • Chrome',
-                city: 'Mumbai, IN',
-                isOnline: true,
-                currentPage: 'Admin Cockpit',
-                sessionDuration: '32m',
-                timeOnSite: '3h 15m',
-                pagesVisited: [
-                  { page: 'Admin Cockpit', count: 188, lastVisited: 'Just now' },
-                  { page: 'Portfolio', count: 3, lastVisited: 'Just now' },
-                  { page: 'Market Eye', count: 10, lastVisited: 'Just now' }
-                ],
-                searches: [
-                  { query: 'RELIANCE', timestamp: 'Just now' },
-                  { query: 'TCS', timestamp: '10m ago' },
-                  { query: 'INFY', timestamp: '25m ago' }
-                ]
-              },
-              'kirti.myinfo@gmail.com': {
-                portfoliosCount: 3,
-                portfolioCapital: '₹14.2L',
-                holdingsCount: 18,
-                portfoliosList: [
-                  { name: 'Alpha Growth', holdingsCount: 12, capital: '₹9.8L' },
-                  { name: 'Dividend Yield', holdingsCount: 6, capital: '₹4.4L' }
-                ],
-                device: 'Windows 11 • Edge',
-                city: 'Bengaluru, IN',
-                isOnline: false,
-                currentPage: 'Dashboard',
-                sessionDuration: '15m',
-                timeOnSite: '1h 10m',
-                pagesVisited: [
-                  { page: 'Portfolio', count: 5, lastVisited: '2h ago' },
-                  { page: 'Watchlists', count: 2, lastVisited: '2h ago' }
-                ],
-                searches: [
-                  { query: 'TATASTEEL', timestamp: '2h ago' },
-                  { query: 'HDFCBANK', timestamp: '2h ago' }
-                ]
-              },
-              'shamimmofamily@gmil.com': {
-                portfoliosCount: 2,
-                portfolioCapital: '₹6.8L',
-                holdingsCount: 12,
-                portfoliosList: [
-                  { name: 'Core Equities', holdingsCount: 8, capital: '₹4.5L' },
-                  { name: 'ETF Basket', holdingsCount: 4, capital: '₹2.3L' }
-                ],
-                device: 'Android 14',
-                city: 'Delhi NCR, IN',
-                isOnline: false,
-                currentPage: 'Options Decode',
-                sessionDuration: '8m',
-                timeOnSite: '45m',
-                pagesVisited: [
-                  { page: 'Options Decode', count: 3, lastVisited: 'Yesterday' },
-                  { page: 'Global Market', count: 1, lastVisited: 'Yesterday' }
-                ],
-                searches: [
-                  { query: 'NIFTY', timestamp: 'Yesterday' },
-                  { query: 'BANKNIFTY', timestamp: 'Yesterday' }
-                ]
-              },
-              'sartaj2475@gmail.com': {
-                portfoliosCount: 2,
-                portfolioCapital: '₹8.6L',
-                holdingsCount: 14,
-                portfoliosList: [
-                  { name: 'Momentum Swing', holdingsCount: 10, capital: '₹6.1L' },
-                  { name: 'Index Tracker', holdingsCount: 4, capital: '₹2.5L' }
-                ],
-                device: 'macOS • Safari',
-                city: 'Hyderabad, IN',
-                isOnline: false,
-                currentPage: 'Swing Player',
-                sessionDuration: '25m',
-                timeOnSite: '2h 05m',
-                pagesVisited: [
-                  { page: 'Swing Player', count: 8, lastVisited: '3h ago' },
-                  { page: 'Guru Scan', count: 4, lastVisited: '3h ago' }
-                ],
-                searches: [
-                  { query: 'TRENT', timestamp: '3h ago' },
-                  { query: 'HAL', timestamp: '3h ago' },
-                  { query: 'BEL', timestamp: '3h ago' }
-                ]
-              }
-            };
-
-            const mapped: UserRecord[] = sbUsers.map(u => {
-              const emailLower = (u.email || '').toLowerCase().trim();
-              const base = BASELINE_METRICS[emailLower] || {
-                portfoliosCount: 1,
-                portfolioCapital: '₹2.5L',
-                holdingsCount: 8,
-                portfoliosList: [{ name: 'Default Portfolio', holdingsCount: 8, capital: '₹2.5L' }],
-                device: 'Web Browser',
-                city: 'India',
-                isOnline: false,
-                timeOnSite: '35m',
-                sessionDuration: '10m',
-                pagesVisited: [{ page: 'Dashboard', count: 1 }],
-                searches: []
-              };
-
-              const isAdmin = emailLower.includes('girjesh') || emailLower.includes('admin') || u.name?.toLowerCase().includes('ram');
-
-              return {
-                id: u.id,
-                email: u.email,
-                name: u.name?.trim() || u.email.split('@')[0],
-                role: isAdmin ? 'admin' : 'user',
-                plan: 'pro',
-                joinedDate: u.created_at ? u.created_at.split('T')[0] : '2026-01-01',
-                lastActive: u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleDateString('en-GB') : 'Active',
-                portfoliosCount: base.portfoliosCount,
-                portfolioCapital: base.portfolioCapital,
-                holdingsCount: base.holdingsCount,
-                portfoliosList: base.portfoliosList,
-                device: base.device,
-                city: base.city,
-                isOnline: base.isOnline,
-                currentPage: base.currentPage,
-                timeOnSite: base.timeOnSite,
-                sessionDuration: base.sessionDuration,
-                pagesVisited: base.pagesVisited,
-                searches: base.searches,
-                lastActiveAgo: base.isOnline ? 'Active now' : 'Recent',
-                source: 'supabase_verified'
-              };
-            });
-            setUsersList(mapped);
-          }
-        } catch (sbErr) {
-          console.warn('Supabase direct users fetch:', sbErr);
-        }
-      }
+      const data = await loadAdminData();
+      setAdminErrors(data.errors);
+      const mapped: UserRecord[] = data.users.map((u: any) => {
+        const emailLower = (u.email || '').toLowerCase().trim();
+        const act = summarizeUser(data.activityByUser.get(emailLower) ?? []);
+        const pf = data.portfolioByUser.get(u.id);
+        const role = String(u.role || '').toLowerCase() === 'admin' ? 'admin' : 'user';
+        return {
+          id: u.id,
+          email: u.email,
+          name: u.name?.trim() || (u.email ? u.email.split('@')[0] : 'Trader'),
+          role,
+          plan: String(u.plan || '').toLowerCase().includes('free') ? 'free' : 'pro',
+          joinedDate: u.created_at ? String(u.created_at).split('T')[0] : '—',
+          lastActive: act.lastSeenAt ? formatIst(act.lastSeenAt) : 'No activity yet',
+          lastActiveAgo: act.lastActiveAgo,
+          lastSeenAt: act.lastSeenAt,
+          isOnline: act.isOnline,
+          currentPage: act.currentPage,
+          sessionDuration: act.sessionDuration,
+          timeOnSite: act.timeOnSite,
+          device: act.device,
+          pagesVisited: act.pagesVisited,
+          searches: act.searches,
+          sessions: act.sessions,
+          portfoliosCount: pf?.portfoliosCount ?? 0,
+          portfolioCapital: pf?.portfolioCapital,
+          holdingsCount: pf?.holdingsCount ?? 0,
+          portfoliosList: pf?.portfoliosList ?? [],
+          source: 'supabase',
+        };
+      });
+      // Online first, then most recently seen
+      mapped.sort((x, y) => Number(!!y.isOnline) - Number(!!x.isOnline) || (y.lastSeenAt ?? '').localeCompare(x.lastSeenAt ?? ''));
+      setUsersList(mapped);
+      setAnalyticsData(buildAnalytics(data.allActivity));
     } catch (e) {
-      console.warn('Real users fetch error:', e);
+      console.warn('Admin data load error:', e);
+      setAdminErrors([String((e as Error)?.message ?? e)]);
     } finally {
       setUsersLoading(false);
+      setAnalyticsLoading(false);
     }
   };
 
@@ -411,57 +297,28 @@ export default function AdminDashboard() {
   const fetchStats = async () => {
     setStatsLoading(true);
     try {
-      const res = await fetch('/api/admin/system-stats');
+      const res = await adminFetch('/api/admin/system-stats');
       if (res.ok) {
         const data = await res.json();
-        if (data && data.memoryMB && typeof data.memoryMB.heapUsed === 'number') {
-          setSystemStats(data);
-        } else {
-          setSystemStats({
-            uptimeSeconds: 7200,
-            memoryMB: { rss: 142, heapUsed: 78, heapTotal: 256 },
-            cacheEntries: 32,
-            nodeVersion: 'v20.x (Cloud Edge)',
-            platform: 'Vercel Edge & Supabase Cloud'
-          });
-        }
+        if (data && data.memoryMB && typeof data.memoryMB.heapUsed === 'number') setSystemStats(data);
       }
     } catch (e) {
-      setSystemStats({
-        uptimeSeconds: 7200,
-        memoryMB: { rss: 142, heapUsed: 78, heapTotal: 256 },
-        cacheEntries: 32,
-        nodeVersion: 'v20.x (Cloud Edge)',
-        platform: 'Vercel Edge & Supabase Cloud'
-      });
+      console.warn('System stats unavailable:', e);
     } finally {
       setStatsLoading(false);
     }
   };
 
-  // Fetch Analytics Data
+  // Analytics are computed from the same activity rows in fetchUsers
   const fetchAnalytics = async () => {
-    setAnalyticsLoading(true);
-    try {
-      const res = await fetch('/api/admin/analytics');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.analytics) {
-          setAnalyticsData(data.analytics);
-        }
-      }
-    } catch (e) {
-      console.warn('Analytics fetch error:', e);
-    } finally {
-      setAnalyticsLoading(false);
-    }
+    await fetchUsers();
   };
 
   // Fetch Platform Settings
   const fetchSettings = async () => {
     setSettingsLoading(true);
     try {
-      const res = await fetch('/api/admin/settings');
+      const res = await adminFetch('/api/admin/settings');
       if (res.ok) {
         const data = await res.json();
         if (data.settings) {
@@ -480,7 +337,7 @@ export default function AdminDashboard() {
     setSettingsSaving(true);
     setSettingsMessage(null);
     try {
-      const res = await fetch('/api/admin/settings', {
+      const res = await adminFetch('/api/admin/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates)
@@ -527,13 +384,12 @@ export default function AdminDashboard() {
   useEffect(() => {
     fetchUsers();
     fetchStats();
-    fetchAnalytics();
     fetchSettings();
 
-    // Auto-refresh traders & system stats every 15s to keep live presence fresh
+    // Refresh presence every 60 s (users ping once a minute)
     const interval = setInterval(() => {
       fetchUsers();
-    }, 15000);
+    }, 60000);
 
     return () => clearInterval(interval);
   }, []);
@@ -559,7 +415,7 @@ export default function AdminDashboard() {
     setFlushingCache(true);
     setFlushMessage(null);
     try {
-      const res = await fetch('/api/admin/flush-cache', { method: 'POST' });
+      const res = await adminFetch('/api/admin/flush-cache', { method: 'POST' });
       if (res.ok) {
         const data = await res.json();
         setFlushMessage(data.message || 'Server cache purged successfully!');
@@ -584,11 +440,8 @@ export default function AdminDashboard() {
     const nextPlan = currentPlan === 'pro' ? 'free' : 'pro';
     setUsersList(prev => prev.map(u => u.id === userId ? { ...u, plan: nextPlan } : u));
     try {
-      await fetch(`/api/admin/users/${userId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: nextPlan })
-      });
+      const { error } = await supabase.from('users').update({ plan: nextPlan }).eq('id', userId);
+      if (error) throw error;
     } catch (e) {
       console.error('Failed to update plan in database:', e);
       fetchUsers();
@@ -599,11 +452,8 @@ export default function AdminDashboard() {
     const nextRole = currentRole === 'admin' ? 'user' : 'admin';
     setUsersList(prev => prev.map(u => u.id === userId ? { ...u, role: nextRole } : u));
     try {
-      await fetch(`/api/admin/users/${userId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: nextRole })
-      });
+      const { error } = await supabase.from('users').update({ role: nextRole === 'admin' ? 'ADMIN' : 'TRADER' }).eq('id', userId);
+      if (error) throw error;
     } catch (e) {
       console.error('Failed to update role in database:', e);
       fetchUsers();
@@ -614,7 +464,8 @@ export default function AdminDashboard() {
     if (!window.confirm(`Are you sure you want to delete ${userEmail} from database?`)) return;
     setUsersList(prev => prev.filter(u => u.id !== userId));
     try {
-      await fetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
+      const { error } = await supabase.from('users').delete().eq('id', userId);
+      if (error) throw error;
     } catch (e) {
       console.error('Failed to delete user from database:', e);
       fetchUsers();
@@ -627,24 +478,20 @@ export default function AdminDashboard() {
     setCreatingUser(true);
     setCreateError(null);
     try {
-      const res = await fetch('/api/admin/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: newTraderEmail.trim(),
-          name: newTraderName.trim() || newTraderEmail.trim().split('@')[0],
-          role: newTraderRole,
-          plan: newTraderPlan
-        })
+      const { error } = await supabase.from('users').insert({
+        email: newTraderEmail.trim().toLowerCase(),
+        name: newTraderName.trim() || newTraderEmail.trim().split('@')[0],
+        role: newTraderRole === 'admin' ? 'ADMIN' : 'TRADER',
+        plan: newTraderPlan,
+        status: 'Active'
       });
-      if (res.ok) {
+      if (!error) {
         setNewTraderEmail('');
         setNewTraderName('');
         setShowAddModal(false);
         fetchUsers();
       } else {
-        const err = await res.json();
-        setCreateError(err.error || 'Failed to add user');
+        setCreateError(error.message || 'Failed to add user');
       }
     } catch (err: any) {
       setCreateError(err?.message || 'Error connecting to database');
@@ -681,9 +528,7 @@ export default function AdminDashboard() {
 
   // Sign out from Admin Session
   const handleAdminSignOut = () => {
-    sessionStorage.removeItem('paperprofit_admin_auth');
-    sessionStorage.removeItem('paperprofit_admin_time');
-    window.location.reload();
+    window.location.href = '/app';
   };
 
   // Impersonate Trader (Ghost View)
@@ -969,6 +814,13 @@ export default function AdminDashboard() {
             </div>
           </div>
         </header>
+
+        {adminErrors.length > 0 && (
+          <div className="mx-6 mt-3 px-4 py-2.5 rounded-xl border border-amber-300 bg-amber-50 text-amber-800 text-xs">
+            Some admin data could not be read: {adminErrors.join(' · ')}. If tables are missing, run
+            supabase/migrations/20261116_user_activity.sql in the Supabase SQL editor.
+          </div>
+        )}
 
         {/* Scrollable Main Content */}
         <main className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6">
@@ -1565,7 +1417,7 @@ export default function AdminDashboard() {
                             <td className="py-4 px-3 whitespace-nowrap">
                               <div className="flex items-center gap-1.5 font-mono text-slate-800 dark:text-slate-200 font-semibold text-xs">
                                 <Clock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                                <span>{u.timeOnSite || '45m'}</span>
+                                <span>{u.timeOnSite || '—'}</span>
                               </div>
                               <div className="text-[10px] text-slate-400 font-mono mt-0.5">
                                 Sess: {u.sessionDuration || 'Active'}
@@ -1646,7 +1498,7 @@ export default function AdminDashboard() {
                                 <span>{u.portfoliosCount} {u.portfoliosCount === 1 ? 'Portfolio' : 'Portfolios'}</span>
                               </div>
                               <div className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
-                                {u.portfolioCapital || '₹2.5L'} • <span className="text-slate-400 font-normal">{u.holdingsCount || 10} stocks</span>
+                                {u.portfolioCapital || '₹0'} • <span className="text-slate-400 font-normal">{u.holdingsCount ?? 0} stocks</span>
                               </div>
                             </td>
 
@@ -1877,7 +1729,7 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                   <div className="text-2xl font-black font-mono text-slate-900 mt-2">
-                    {analyticsData?.totalQueries || 440}
+                    {analyticsData?.totalQueries ?? 0}
                   </div>
                   <div className="flex items-center justify-between text-[11px] mt-2 pt-2 border-t border-slate-100">
                     <span className="text-emerald-600 font-bold flex items-center gap-1">
@@ -1897,9 +1749,9 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                   <div className="text-2xl font-black font-mono text-emerald-600 mt-2 flex items-baseline gap-2">
-                    <span>{analyticsData?.topSearches?.[0]?.symbol || 'RELIANCE'}</span>
+                    <span>{analyticsData?.topSearches?.[0]?.symbol || '—'}</span>
                     <span className="text-xs font-mono text-slate-400 font-normal">
-                      ({analyticsData?.topSearches?.[0]?.count || 48} hits)
+                      ({analyticsData?.topSearches?.[0]?.count ?? 0} hits)
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-[11px] mt-2 pt-2 border-t border-slate-100">
@@ -1919,11 +1771,11 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                   <div className="text-xl font-black font-mono text-indigo-600 mt-2 truncate">
-                    {analyticsData?.toolUsage?.[0]?.tool || 'Guru Scanner'}
+                    {analyticsData?.toolUsage?.[0]?.tool || '—'}
                   </div>
                   <div className="flex items-center justify-between text-[11px] mt-2 pt-2 border-t border-slate-100">
                     <span className="text-slate-600 font-medium">
-                      {analyticsData?.toolUsage?.[0]?.views || 142} sessions
+                      {analyticsData?.toolUsage?.[0]?.views ?? 0} views
                     </span>
                     <span className="text-purple-600 font-bold">38.5% share</span>
                   </div>
@@ -1979,14 +1831,7 @@ export default function AdminDashboard() {
 
                 {/* Hourly Graph Bars */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 pt-2">
-                  {(analyticsData?.hourlyTraffic || [
-                    { timeSlot: '09:00 - 09:15', phase: 'Pre-Market', queries: 32, pct: 7, intensity: 'normal' },
-                    { timeSlot: '09:15 - 10:30', phase: 'Opening Rush', queries: 128, pct: 29, intensity: 'peak' },
-                    { timeSlot: '10:30 - 12:30', phase: 'Mid-Day Scan', queries: 74, pct: 17, intensity: 'medium' },
-                    { timeSlot: '12:30 - 14:00', phase: 'Consolidation', queries: 46, pct: 10, intensity: 'low' },
-                    { timeSlot: '14:00 - 15:30', phase: 'Closing Rally', queries: 118, pct: 27, intensity: 'peak' },
-                    { timeSlot: '15:30 - 17:00', phase: 'Post-Market', queries: 42, pct: 10, intensity: 'low' }
-                  ]).map((slot) => {
+                  {(analyticsData?.hourlyTraffic || []).map((slot) => {
                     const isPeak = slot.intensity === 'peak';
                     return (
                       <div 
@@ -2061,19 +1906,10 @@ export default function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
-                      {(analyticsData?.topSearches || [
-                        { symbol: 'RELIANCE', company: 'Reliance Industries Ltd', sector: 'Energy & Retail', count: 48, trend: 'Hot #1', change: '+1.8%' },
-                        { symbol: 'TCS', company: 'Tata Consultancy Services', sector: 'IT & Software', count: 39, trend: 'Trending', change: '+0.9%' },
-                        { symbol: 'HDFCBANK', company: 'HDFC Bank Ltd', sector: 'Banking & BFSI', count: 34, trend: 'High Demand', change: '+1.2%' },
-                        { symbol: 'TRENT', company: 'Trent Ltd (Westside/Zudio)', sector: 'Consumer Retail', count: 28, trend: 'Breakout', change: '+3.4%' },
-                        { symbol: 'INFY', company: 'Infosys Ltd', sector: 'IT & Software', count: 22, trend: 'Steady', change: '+0.5%' },
-                        { symbol: 'BEL', company: 'Bharat Electronics Ltd', sector: 'Defence Tech', count: 19, trend: 'Momentum', change: '+2.1%' },
-                        { symbol: 'ZOMATO', company: 'Zomato Ltd (Blinkit)', sector: 'Quick Commerce', count: 16, trend: 'Growth Watch', change: '+1.7%' },
-                        { symbol: 'KALYANKJIL', company: 'Kalyan Jewellers India', sector: 'Gems & Jewellery', count: 13, trend: 'Bullish', change: '+2.8%' }
-                      ]).map((item, idx) => {
-                        const maxCount = analyticsData?.topSearches?.[0]?.count || 50;
+                      {(analyticsData?.topSearches || []).map((item, idx) => {
+                        const maxCount = analyticsData?.topSearches?.[0]?.count || 1;
                         const percent = Math.min(Math.round((item.count / maxCount) * 100), 100);
-                        const sharePercent = Math.round((item.count / (analyticsData?.totalQueries || 440)) * 100 * 10) / 10;
+                        const sharePercent = Math.round((item.count / (analyticsData?.totalQueries || 1)) * 100 * 10) / 10;
 
                         return (
                           <tr key={item.symbol} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition">
@@ -2152,17 +1988,11 @@ export default function AdminDashboard() {
                       <h3 className="text-sm font-bold text-slate-900">Sectoral Search Concentration</h3>
                       <p className="text-[11px] text-slate-400">Industry breakdown of trader query telemetry</p>
                     </div>
-                    <span className="text-xs font-mono font-bold text-emerald-600">5 Sectors</span>
+                    <span className="text-xs font-mono font-bold text-slate-400">{analyticsData?.sectorDistribution?.length ?? 0} Sectors</span>
                   </div>
 
                   <div className="space-y-3.5">
-                    {(analyticsData?.sectorDistribution || [
-                      { sector: 'Banking & Financial Services', percentage: 34, queries: 150, color: 'emerald' },
-                      { sector: 'Information Technology', percentage: 24, queries: 105, color: 'blue' },
-                      { sector: 'Energy & Petrochemicals', percentage: 18, queries: 79, color: 'amber' },
-                      { sector: 'Retail & Quick Commerce', percentage: 14, queries: 62, color: 'purple' },
-                      { sector: 'Defence & Capital Goods', percentage: 10, queries: 44, color: 'rose' }
-                    ]).map((item) => (
+                    {(analyticsData?.sectorDistribution || []).map((item) => (
                       <div key={item.sector} className="space-y-1.5">
                         <div className="flex items-center justify-between text-xs">
                           <span className="font-semibold text-slate-800 flex items-center gap-2">
@@ -2205,14 +2035,8 @@ export default function AdminDashboard() {
                   </div>
 
                   <div className="space-y-3.5">
-                    {(analyticsData?.toolUsage || [
-                      { tool: 'Guru Scanner', category: 'Fundamental AI', views: 142, share: 38.5 },
-                      { tool: 'Swing Player', category: 'Momentum & Trend', views: 98, share: 26.6 },
-                      { tool: 'Intraday Breakout', category: 'Volume Spikes', views: 84, share: 22.8 },
-                      { tool: 'Options Chain', category: 'OI & Greeks', views: 67, share: 18.2 },
-                      { tool: 'Portfolio Analytics', category: 'Risk & Beta', views: 52, share: 14.1 }
-                    ]).map((item, idx) => {
-                      const maxViews = analyticsData?.toolUsage?.[0]?.views || 150;
+                    {(analyticsData?.toolUsage || []).map((item, idx) => {
+                      const maxViews = analyticsData?.toolUsage?.[0]?.views || 1;
                       const percent = Math.min(Math.round((item.views / maxViews) * 100), 100);
 
                       return (
@@ -2248,17 +2072,11 @@ export default function AdminDashboard() {
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                     <h3 className="text-sm font-bold text-slate-900">Live Telemetry &amp; User Search Stream</h3>
                   </div>
-                  <span className="text-[11px] font-mono text-slate-400">Auto-streaming</span>
+                  <span className="text-[11px] font-mono text-slate-400">Last {ACTIVITY_WINDOW_DAYS} days</span>
                 </div>
 
                 <div className="space-y-2.5">
-                  {(analyticsData?.recentActivity || [
-                    { id: 'act-1', type: 'search', title: 'Queried RELIANCE', detail: 'NSE: RELIANCE • Live Quote & Technicals', time: '2 mins ago', badge: 'Ticker Query' },
-                    { id: 'act-2', type: 'tool', title: 'Guru Scanner Active', detail: 'Deep Value scan executed across Nifty 500', time: '5 mins ago', badge: 'AI Screener' },
-                    { id: 'act-3', type: 'search', title: 'Queried HDFCBANK', detail: 'NSE: HDFCBANK • Institutional Orderflow & Delivery', time: '9 mins ago', badge: 'Ticker Query' },
-                    { id: 'act-4', type: 'search', title: 'Queried TRENT', detail: 'NSE: TRENT • Breakout Volume surge inspection', time: '14 mins ago', badge: 'Ticker Query' },
-                    { id: 'act-5', type: 'tool', title: 'Swing Player Loaded', detail: 'Screened 20 EMA pullbacks & multi-week consolidations', time: '18 mins ago', badge: 'Screener' }
-                  ]).map((act) => (
+                  {(analyticsData?.recentActivity || []).map((act) => (
                     <div key={act.id} className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs hover:border-slate-200 transition">
                       <div className="flex items-center gap-3">
                         <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
@@ -2458,17 +2276,11 @@ export default function AdminDashboard() {
                   </div>
 
                   <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
-                    <span className="text-[11px] font-semibold text-slate-400">Master Passkey</span>
-                    <div className="font-mono font-bold text-slate-900 flex items-center gap-2">
-                      <span>••••••••</span>
-                      <button
-                        onClick={() => setShowPinModal(true)}
-                        className="text-[10px] text-emerald-600 hover:text-emerald-700 underline font-sans font-bold cursor-pointer"
-                      >
-                        Update Passkey
-                      </button>
+                    <span className="text-[11px] font-semibold text-slate-400">Admin Access</span>
+                    <div className="font-bold text-slate-900">Supabase login + admin list</div>
+                    <div className="text-[10px] text-slate-500">
+                      To add an admin, run in Supabase SQL editor: insert into app_admins (email) values ('...');
                     </div>
-                    <div className="text-[10px] text-slate-500">Protected by Master Security Key</div>
                   </div>
                 </div>
               </div>
@@ -2949,7 +2761,7 @@ export default function AdminDashboard() {
                   <span>Time on Website</span>
                 </div>
                 <div className="text-base font-black text-slate-900 dark:text-slate-100 font-mono">
-                  {selectedUserDetail.timeOnSite || '45m'}
+                  {selectedUserDetail.timeOnSite || '—'}
                 </div>
                 <div className="text-[10px] text-slate-400 font-mono">
                   Session: {selectedUserDetail.sessionDuration || 'Active'}
@@ -2975,7 +2787,7 @@ export default function AdminDashboard() {
                   <span>Pages Explored</span>
                 </div>
                 <div className="text-base font-black text-slate-900 dark:text-slate-100 font-mono">
-                  {(selectedUserDetail.pagesVisited || []).length || 1} Pages
+                  {(selectedUserDetail.pagesVisited || []).length} Pages
                 </div>
                 <div className="text-[10px] text-slate-400 font-mono">
                   Platform tools &amp; tabs
@@ -3119,13 +2931,13 @@ export default function AdminDashboard() {
                 <span className="text-slate-400 block text-[10px]">Location</span>
                 <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1">
                   <span>🇮🇳</span>
-                  <span>{selectedUserDetail.city || 'India'}</span>
+                  <span>{selectedUserDetail.city || 'Not tracked'}</span>
                 </span>
               </div>
               <div>
                 <span className="text-slate-400 block text-[10px]">Device / OS</span>
                 <span className="font-bold text-slate-800 dark:text-slate-200 truncate block">
-                  {selectedUserDetail.device || 'Web Browser'}
+                  {selectedUserDetail.device || 'Unknown'}
                 </span>
               </div>
               <div>
@@ -3137,6 +2949,8 @@ export default function AdminDashboard() {
                 <span className="font-mono text-slate-700 dark:text-slate-300">{selectedUserDetail.joinedDate}</span>
               </div>
             </div>
+
+            <UserSessionsTable sessions={selectedUserDetail.sessions} />
 
             {/* Modal Actions */}
             <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">

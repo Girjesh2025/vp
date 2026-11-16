@@ -1,105 +1,80 @@
-// Activity Tracker Utility for Real-time User Presence & Analytics Tracking
+// Real user-activity tracking → Supabase table public.user_activity (see supabase/migrations/20261116_user_activity.sql).
+// Rows are written with the signed-in user's own token; row-level security only lets a user insert their own rows
+// and only admins read them. Nothing is sent when nobody is signed in.
 
-const SESSION_START_KEY = 'paperprofit_session_start';
-const LAST_PAGE_KEY = 'paperprofit_last_page';
+import { supabase } from '../lib/supabase';
 
-export const getSessionStartTime = (): number => {
-  if (typeof window === 'undefined') return Date.now();
-  let start = sessionStorage.getItem(SESSION_START_KEY);
-  if (!start) {
-    start = String(Date.now());
-    sessionStorage.setItem(SESSION_START_KEY, start);
-  }
-  return parseInt(start, 10) || Date.now();
-};
+const SESSION_ID_KEY = 'pp_activity_session_id';
+const SESSION_LAST_KEY = 'pp_activity_last_at';
+const SESSION_IDLE_MS = 30 * 60 * 1000; // a gap longer than 30 min starts a new session
+export const PING_INTERVAL_MS = 60 * 1000;
 
-export const getSessionDurationSeconds = (): number => {
-  const start = getSessionStartTime();
-  return Math.max(1, Math.floor((Date.now() - start) / 1000));
-};
+type ActivityEvent = 'session_start' | 'page' | 'search' | 'ping' | 'session_end';
 
-export interface TrackUserPayload {
-  userId?: string;
+interface TrackUser {
+  id?: string;
   email?: string;
   name?: string;
-  page?: string;
-  search?: string;
 }
 
-export const sendActivityPing = async (payload: TrackUserPayload) => {
-  if (typeof window === 'undefined') return;
-  const email = payload.email || localStorage.getItem('paperprofit_user_email') || '';
-  const userId = payload.userId || localStorage.getItem('paperprofit_user_id') || '';
-  const name = payload.name || localStorage.getItem('paperprofit_user_name') || '';
+const newId = () =>
+  (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
-  if (!email && !userId) return;
-
-  const duration = getSessionDurationSeconds();
-  const page = payload.page || sessionStorage.getItem(LAST_PAGE_KEY) || 'Dashboard';
-  if (payload.page) {
-    sessionStorage.setItem(LAST_PAGE_KEY, payload.page);
-  }
-
+/** Per-tab session id; a new one after 30 min of no activity. Returns [id, isNew]. */
+const currentSession = (): [string, boolean] => {
   try {
-    await fetch('/api/analytics/heartbeat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId,
-        email,
-        name,
-        page,
-        search: payload.search,
-        sessionDuration: duration
-      })
-    });
-  } catch (err) {
-    // Non-blocking fail-safe
+    const now = Date.now();
+    const id = sessionStorage.getItem(SESSION_ID_KEY);
+    const last = Number(sessionStorage.getItem(SESSION_LAST_KEY) || 0);
+    if (id && now - last < SESSION_IDLE_MS) {
+      sessionStorage.setItem(SESSION_LAST_KEY, String(now));
+      return [id, false];
+    }
+    const fresh = newId();
+    sessionStorage.setItem(SESSION_ID_KEY, fresh);
+    sessionStorage.setItem(SESSION_LAST_KEY, String(now));
+    return [fresh, true];
+  } catch {
+    return [newId(), true];
   }
 };
 
-export const trackPageView = (pageName: string, user?: { id?: string; email?: string; name?: string }) => {
-  sendActivityPing({
-    userId: user?.id,
-    email: user?.email,
-    name: user?.name,
-    page: pageName
-  });
-};
-
-export const trackStockSearch = (query: string, user?: { id?: string; email?: string; name?: string }) => {
-  if (!query || typeof query !== 'string' || query.trim().length === 0) return;
-  sendActivityPing({
-    userId: user?.id,
-    email: user?.email,
-    name: user?.name,
-    search: query.trim()
-  });
-};
-
-export const startPresenceHeartbeat = (
-  getUser: () => { id?: string; email?: string; name?: string } | null,
-  getPage: () => string
-) => {
-  if (typeof window === 'undefined') return () => {};
-
-  const send = () => {
-    const user = getUser();
-    if (!user || !user.email) return;
-    const page = getPage();
-    sendActivityPing({
-      userId: user.id,
-      email: user.email,
-      name: user.name,
-      page
-    });
+const insert = async (user: TrackUser | null | undefined, event: ActivityEvent, extra: { page?: string; query?: string } = {}) => {
+  if (typeof window === 'undefined' || !user?.id || !user.email) return;
+  const [sessionId, isNew] = currentSession();
+  const base = {
+    user_id: user.id,
+    email: user.email.toLowerCase(),
+    session_id: sessionId,
+    user_agent: navigator.userAgent.slice(0, 300),
   };
+  const rows: Record<string, unknown>[] = [];
+  if (isNew && event !== 'session_start') rows.push({ ...base, event: 'session_start', page: extra.page ?? null });
+  rows.push({ ...base, event, page: extra.page ?? null, query: extra.query ?? null });
+  try {
+    await supabase.from('user_activity').insert(rows);
+  } catch {
+    // tracking must never break the app
+  }
+};
 
-  // Immediate ping on mount
-  send();
+export const trackPageView = (pageName: string, user?: TrackUser | null) => insert(user, 'page', { page: pageName });
 
-  // Ping every 30 seconds
-  const interval = setInterval(send, 30000);
+export const trackStockSearch = (query: string, user?: TrackUser | null, page?: string) => {
+  const q = typeof query === 'string' ? query.trim().slice(0, 60) : '';
+  if (!q) return;
+  void insert(user, 'search', { query: q, page });
+};
 
+/** Presence: one ping per minute while the tab is visible. */
+export const startPresenceHeartbeat = (getUser: () => TrackUser | null, getPage: () => string) => {
+  if (typeof window === 'undefined') return () => {};
+  const send = () => {
+    if (document.visibilityState !== 'visible') return;
+    void insert(getUser(), 'ping', { page: getPage() });
+  };
+  const interval = setInterval(send, PING_INTERVAL_MS);
   return () => clearInterval(interval);
 };
