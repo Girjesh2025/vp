@@ -19,9 +19,8 @@ as $$
     select 1 from public.app_admins a
     where lower(a.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
   )
-  or lower(coalesce(auth.jwt() ->> 'email', '')) in ('girjesh.ai25@gmail.com', 'girjesh.kitty@gmail.com')
-  or lower(coalesce(auth.jwt() ->> 'email', '')) like 'girjesh%'
-  or lower(coalesce(auth.jwt() ->> 'email', '')) like '%admin%';
+  -- exact matches only; never pattern-match emails (anyone can register "xadmin@..." or "girjesh123@...")
+  or lower(coalesce(auth.jwt() ->> 'email', '')) in ('girjesh.ai25@gmail.com', 'girjesh.kitty@gmail.com');
 $$;
 grant execute on function public.is_admin() to anon, authenticated;
 
