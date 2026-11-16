@@ -27,3 +27,7 @@ dist-ssr
 .dbg
 *.tsbuildinfo
 
+
+# Runtime user/analytics data (personal info, never commit)
+data/users.json
+data/analytics.json

@@ -26,7 +26,6 @@ import OptionsWatch  from './components/OptionsWatch';
 import ErrorBoundary from './components/ErrorBoundary';
 import { trackPageView, startPresenceHeartbeat } from './utils/activityTracker';
 
-import StockRecommendations from './components/StockRecommendations';
 import HelpAndSupport from './components/HelpAndSupport';
 import TradingPsychology from './components/TradingPsychology';
 import PortfolioPage from './components/PortfolioPage';
@@ -155,7 +154,6 @@ const StockPortfolioApp: React.FC<StockPortfolioAppProps> = ({ defaultTab }) => 
       'options-watch': 'Options Watch',
       'options-decode': 'Options Decode',
       'trading-tools': 'Calculators',
-      'stock-recommendations': 'Recommendations',
       'trading-psychology': 'Psychology',
       alerts: 'Price Alerts',
       settings: 'Settings',
@@ -1448,7 +1446,6 @@ const StockPortfolioApp: React.FC<StockPortfolioAppProps> = ({ defaultTab }) => 
           {activeTab === 'trading-tools' && (
             <ToolsDashboard />
           )}
-              {activeTab === 'stock-recommendations' && <StockRecommendations />}
           {activeTab === 'trading-psychology' && (
             <TradingPsychology />
           )}
