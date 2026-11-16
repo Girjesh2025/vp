@@ -210,8 +210,8 @@ export async function loadAdminData(): Promise<AdminData> {
   if (stRes.error) errors.push(`stocks: ${stRes.error.message}`);
 
   let users = (usersRes.data ?? []) as any[];
-  if ((!users || users.length === 0) && usersRes.error) {
-    // Fallback to direct users view if RPC is not yet created
+  if (!users || users.length === 0) {
+    // Fallback to direct users view if RPC returns empty or fails
     try {
       const fb = await supabase.from('users').select('*');
       if (fb.data && fb.data.length > 0) users = fb.data;
