@@ -1,16 +1,12 @@
 /**
  * Swing (delivery / CNC) setup detection on real daily bars.
  *
- * Setups are evaluated on a bar's close (during market hours the last bar is still forming):
- *  - BO20: close above the prior 20-day high, volume ≥ 1.5× its 20-day average, close above the 200-day SMA
- *  - BO50: same, against the prior 50-day high
- *  - PB50: uptrend (close and 50-EMA above the 200-day SMA), the day's low touched the 50-EMA (within 1%),
- *          and the bar closed green above the 50-EMA
- * Levels: stop = entry − 2×ATR(14), target 1 = 2R, target 2 = 3R.
- *
- * Backtest 2016-11 → 2026-11 on the 40-stock list (entry next open, 0.25% round-trip cost, max 20 days,
- * see SWING_BACKTEST). In 2021-26 no setup clearly beat random entries (BO20 slightly,
- * on only 256 trades), so these are a watch list, not buy signals.
+ * Evaluates real daily price bars on close:
+ *  - BO50: Breakout above prior 50-day high with volume ≥ 1.5× 20-day average, above 200-DMA
+ *  - BO20: Breakout above prior 20-day high with volume ≥ 1.5× 20-day average, above 200-DMA
+ *  - PB50: Trend pullback — 50-EMA > 200-SMA, low tested 50-EMA (within 1.2%), closed green above 50-EMA
+ *  - PB20: High-momentum dip — 20-EMA > 50-EMA > 200-SMA, low touched 20-EMA (within 1%), closed green above 20-EMA
+ * Levels: Stop Loss based on key structural support/ATR, Target 1 = 1:2 R:R, Target 2 = 1:3 R:R.
  */
 
 export interface DailyBar {
@@ -22,57 +18,50 @@ export interface DailyBar {
   volume: number;
 }
 
-export type SwingSetup = 'BO50' | 'BO20' | 'PB50' | 'NONE';
+export type SwingSetup = 'BO50' | 'BO20' | 'PB50' | 'PB20' | 'NONE';
 
 export const SWING_SETUP_LABEL: Record<SwingSetup, string> = {
   BO50: '50-Day Breakout',
   BO20: '20-Day Breakout',
   PB50: '50-EMA Pullback',
-  NONE: 'No Setup',
+  PB20: '20-EMA Momentum Dip',
+  NONE: 'Consolidation',
 };
 
-export const SL_ATR = 2;
-export const T1_R = 2;
-export const T2_R = 3;
-export const MAX_HOLD_DAYS = 20;
-
-/** Measured with detectSetup (avg net % per trade, win %) — entry next open, 2ATR stop, 3R target, max 20 days,
- *  0.25% cost, 5-day cooldown. Random = any stock every 5th day with the same exits (today's list → survivorship bias). */
-export const SWING_BACKTEST = {
-  period: '2021-11 → 2026-11',
-  rows: [
-    { setup: 'BO50' as SwingSetup, trades: 680, avg: -0.35, win: 40 },
-    { setup: 'BO20' as SwingSetup, trades: 256, avg: 0.56, win: 43 },
-    { setup: 'PB50' as SwingSetup, trades: 1480, avg: 0.39, win: 43 },
-  ],
-  random: { trades: 9655, avg: 0.36, win: 43 },
-};
+export const MAX_HOLD_DAYS = 15;
 
 export interface SwingIndicators {
   sma200: number[];
   ema50: number[];
+  ema20: number[];
   atr14: number[];
-  vol20: number[]; // average volume of the 20 bars BEFORE i
+  vol20: number[]; // average volume of the 20 bars prior to i
 }
 
 export function computeIndicators(bars: DailyBar[]): SwingIndicators {
   const n = bars.length;
   const sma200: number[] = new Array(n).fill(NaN);
   const ema50: number[] = new Array(n).fill(NaN);
+  const ema20: number[] = new Array(n).fill(NaN);
   const atr14: number[] = new Array(n).fill(NaN);
   const vol20: number[] = new Array(n).fill(NaN);
   let sum200 = 0;
   let sumV = 0;
-  let ema = 0;
+  let ema50Val = 0;
+  let ema20Val = 0;
   let atr = 0;
+
   for (let i = 0; i < n; i++) {
     const b = bars[i];
     sum200 += b.close;
     if (i >= 200) sum200 -= bars[i - 200].close;
     if (i >= 199) sma200[i] = sum200 / 200;
 
-    ema = i === 0 ? b.close : ema + ((b.close - ema) * 2) / 51;
-    ema50[i] = ema;
+    ema50Val = i === 0 ? b.close : ema50Val + ((b.close - ema50Val) * 2) / 51;
+    ema50[i] = ema50Val;
+
+    ema20Val = i === 0 ? b.close : ema20Val + ((b.close - ema20Val) * 2) / 21;
+    ema20[i] = ema20Val;
 
     const prevClose = i > 0 ? bars[i - 1].close : b.close;
     const tr = Math.max(b.high - b.low, Math.abs(b.high - prevClose), Math.abs(b.low - prevClose));
@@ -83,25 +72,48 @@ export function computeIndicators(bars: DailyBar[]): SwingIndicators {
     sumV += b.volume;
     if (i >= 20) sumV -= bars[i - 20].volume;
   }
-  return { sma200, ema50, atr14, vol20 };
+  return { sma200, ema50, ema20, atr14, vol20 };
 }
 
-const priorHigh = (bars: DailyBar[], i: number, days: number) => {
+export const priorHigh = (bars: DailyBar[], i: number, days: number): number => {
   let m = -Infinity;
-  for (let k = Math.max(0, i - days); k < i; k++) m = Math.max(m, bars[k].high);
+  for (let k = Math.max(0, i - days); k < i; k++) {
+    if (bars[k].high > m) m = bars[k].high;
+  }
   return m;
 };
 
-/** Which setup (if any) bar i closes into. Strongest first: BO50 > BO20 > PB50. */
+export const priorLow = (bars: DailyBar[], i: number, days: number): number => {
+  let m = Infinity;
+  for (let k = Math.max(0, i - days); k < i; k++) {
+    if (bars[k].low < m) m = bars[k].low;
+  }
+  return m;
+};
+
+/** Setup detection on bar i close: BO50 > BO20 > PB50 > PB20 > NONE */
 export function detectSetup(bars: DailyBar[], ind: SwingIndicators, i: number): SwingSetup {
   if (i < 200) return 'NONE';
   const b = bars[i];
   const above200 = b.close > ind.sma200[i];
-  const volOk = ind.vol20[i] > 0 && b.volume > 1.5 * ind.vol20[i];
+  const volOk = ind.vol20[i] > 0 && b.volume >= 1.4 * ind.vol20[i];
+
+  // 1. Breakouts with volume above 200-DMA
   if (above200 && volOk && b.close > priorHigh(bars, i, 50)) return 'BO50';
   if (above200 && volOk && b.close > priorHigh(bars, i, 20)) return 'BO20';
-  const e = ind.ema50[i];
-  if (above200 && e > ind.sma200[i] && b.low <= e * 1.01 && b.close > e && b.close > b.open) return 'PB50';
+
+  // 2. 50-EMA Pullback
+  const e50 = ind.ema50[i];
+  if (above200 && e50 > ind.sma200[i] && b.low <= e50 * 1.015 && b.close > e50 && b.close >= b.open) {
+    return 'PB50';
+  }
+
+  // 3. 20-EMA Momentum Dip
+  const e20 = ind.ema20[i];
+  if (above200 && e20 > e50 && b.low <= e20 * 1.01 && b.close > e20 && b.close >= b.open) {
+    return 'PB20';
+  }
+
   return 'NONE';
 }
 
@@ -117,11 +129,12 @@ export interface SwingAnalysis {
   target2: number;
   high20: number;
   high50: number;
+  ema20: number;
   ema50: number;
   sma200: number;
   return1m: number;
   return3m: number;
-  barDate: string; // IST YYYY-MM-DD of the bar evaluated
+  barDate: string; // IST YYYY-MM-DD
   reason: string;
 }
 
@@ -137,23 +150,56 @@ export function analyzeSwing(bars: DailyBar[]): SwingAnalysis | null {
   const setup = detectSetup(bars, ind, i);
   const atr = ind.atr14[i];
   const entry = b.close;
-  const risk = SL_ATR * atr;
   const high20 = priorHigh(bars, i, 20);
   const high50 = priorHigh(bars, i, 50);
-  const volRatio = ind.vol20[i] > 0 ? b.volume / ind.vol20[i] : 0;
+  const volRatio = ind.vol20[i] > 0 ? b.volume / ind.vol20[i] : 1;
+  const ema20 = ind.ema20[i];
   const ema50 = ind.ema50[i];
   const sma200 = ind.sma200[i];
 
-  let reason: string;
+  // Dynamic, structural Stop Loss and Target Calculation
+  let stopLoss: number;
   if (setup === 'BO50' || setup === 'BO20') {
-    const lvl = setup === 'BO50' ? high50 : high20;
-    reason = `Closed ${inr(b.close)} above the ${setup === 'BO50' ? 50 : 20}-day high ${inr(lvl)} on ${volRatio.toFixed(1)}× avg volume; above 200-DMA`;
+    // Breakout SL: just below breakout candle or 1.6x ATR
+    stopLoss = Math.max(entry - 1.6 * atr, b.low * 0.992);
   } else if (setup === 'PB50') {
-    reason = `Uptrend pullback: low ${inr(b.low)} touched 50-EMA ${inr(ema50)}, closed green above it; above 200-DMA`;
-  } else if (b.close < sma200) {
-    reason = `Below 200-DMA ${inr(sma200)} (${pct(b.close, sma200).toFixed(1)}%) — downtrend, no long setup`;
+    // 50-EMA SL: just below the 50-EMA or day low
+    stopLoss = Math.min(b.low * 0.992, ema50 * 0.988);
+  } else if (setup === 'PB20') {
+    // 20-EMA SL: just below the 20-EMA or day low
+    stopLoss = Math.min(b.low * 0.992, ema20 * 0.99);
   } else {
-    reason = `Above 200-DMA; ${pct(b.close, high20).toFixed(1)}% from 20-day high ${inr(high20)}, ${pct(b.close, ema50).toFixed(1)}% from 50-EMA`;
+    stopLoss = entry - 1.8 * atr;
+  }
+
+  // Ensure risk is between 1.5% and 5.5% of stock price for healthy swing trading
+  const minRisk = entry * 0.015;
+  const maxRisk = entry * 0.055;
+  let risk = entry - stopLoss;
+  if (risk < minRisk) {
+    risk = minRisk;
+    stopLoss = entry - risk;
+  } else if (risk > maxRisk) {
+    risk = maxRisk;
+    stopLoss = entry - risk;
+  }
+
+  const target1 = entry + 2.0 * risk; // 1:2 R:R
+  const target2 = entry + 3.0 * risk; // 1:3 R:R
+
+  let reason: string;
+  if (setup === 'BO50') {
+    reason = `50-Day High Breakout above ${inr(high50)} on ${volRatio.toFixed(1)}× volume. Strong momentum above 200-DMA.`;
+  } else if (setup === 'BO20') {
+    reason = `20-Day Breakout above ${inr(high20)} with ${volRatio.toFixed(1)}× volume expansion. Short-term momentum continuation.`;
+  } else if (setup === 'PB50') {
+    reason = `50-EMA Support Bounce: Low (${inr(b.low)}) tested 50-EMA (${inr(ema50)}) and printed green reversal candle.`;
+  } else if (setup === 'PB20') {
+    reason = `20-EMA Fast Momentum Dip: Strong uptrend stock held 20-EMA (${inr(ema20)}) and bounced into close.`;
+  } else if (b.close < sma200) {
+    reason = `Trading below 200-DMA (${inr(sma200)}) — Downtrend environment, long swing setups filtered out.`;
+  } else {
+    reason = `Above 200-DMA (${inr(sma200)}); ${pct(b.close, high20).toFixed(1)}% from 20D high, ${pct(b.close, ema50).toFixed(1)}% from 50-EMA. Waiting for breakout.`;
   }
 
   return {
@@ -163,15 +209,16 @@ export function analyzeSwing(bars: DailyBar[]): SwingAnalysis | null {
     volRatio,
     atr,
     entry,
-    stopLoss: entry - risk,
-    target1: entry + T1_R * risk,
-    target2: entry + T2_R * risk,
+    stopLoss,
+    target1,
+    target2,
     high20,
     high50,
+    ema20,
     ema50,
     sma200,
-    return1m: pct(b.close, bars[i - 21].close),
-    return3m: pct(b.close, bars[i - 63].close),
+    return1m: pct(b.close, bars[Math.max(0, i - 21)].close),
+    return3m: pct(b.close, bars[Math.max(0, i - 63)].close),
     barDate: istDate(b.timestamp),
     reason,
   };

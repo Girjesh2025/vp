@@ -10,16 +10,27 @@ import {
   Copy, 
   Check, 
   BarChart2, 
-  ArrowUp, 
   Activity,
   Bookmark,
   Zap,
   LayoutGrid,
   Table as TableIcon,
-  ArrowUpDown
+  ArrowUpDown,
+  ShieldAlert,
+  Flame,
+  Crosshair,
+  Compass,
+  ArrowUpRight,
+  TrendingDown
 } from 'lucide-react';
 import { fetchHistoricalOHLCV } from '../utils/priceApi';
-import { analyzeSwing, SWING_SETUP_LABEL, SWING_BACKTEST, MAX_HOLD_DAYS, type SwingSetup, type DailyBar } from '../utils/swingScan';
+import { 
+  analyzeSwing, 
+  SWING_SETUP_LABEL, 
+  MAX_HOLD_DAYS, 
+  type SwingSetup, 
+  type DailyBar 
+} from '../utils/swingScan';
 import StockLogo from './StockLogo';
 
 export interface SwingData {
@@ -30,7 +41,6 @@ export interface SwingData {
   tradeType: 'BUY';
   setupCategory: SwingSetup;
   setupTitle: string;
-  /** 3-month return minus Nifty's 3-month return, in % points */
   rs3m: number;
   barDate: string;
   volMultiplier: number;
@@ -47,6 +57,8 @@ export interface SwingData {
   sectorChange: number;
   sectorTrend: 'UP' | 'DOWN';
   tradeReason: string;
+  isAbove200Sma: boolean;
+  pctFrom50Ema: number;
 }
 
 export interface TrackedSwingSetup {
@@ -74,7 +86,7 @@ export const STOCK_SECTOR_MAP: Record<string, string> = {
   BEL: 'DEFENCE',
 
   // AUTO
-  TMPV: 'AUTO',
+  TATAMOTORS: 'AUTO',
   MARUTI: 'AUTO',
   'M&M': 'AUTO',
 
@@ -87,6 +99,8 @@ export const STOCK_SECTOR_MAP: Record<string, string> = {
   BAJFINANCE: 'FINANCIALS',
   BAJAJFINSV: 'FINANCIALS',
   LICI: 'FINANCIALS',
+  CHOLAFIN: 'FINANCIALS',
+  JIOFIN: 'FINANCIALS',
 
   // REALTY
   DLF: 'REALTY',
@@ -94,7 +108,9 @@ export const STOCK_SECTOR_MAP: Record<string, string> = {
 
   // METALS
   JSWSTEEL: 'METALS',
+  TATASTEEL: 'METALS',
   COALINDIA: 'METALS',
+  VEDL: 'METALS',
 
   // ENERGY & POWER
   RELIANCE: 'ENERGY',
@@ -113,7 +129,7 @@ export const STOCK_SECTOR_MAP: Record<string, string> = {
   TITAN: 'CONSUMER',
   ASIANPAINT: 'CONSUMER',
   TRENT: 'RETAIL',
-  ETERNAL: 'CONSUMER TECH',
+  ZOMATO: 'CONSUMER TECH',
 
   // INFRA & MANUFACTURING
   LT: 'INFRA',
@@ -122,17 +138,19 @@ export const STOCK_SECTOR_MAP: Record<string, string> = {
   ADANIENT: 'INFRA',
   POLYCAB: 'CAPITAL GOODS',
   DIXON: 'MANUFACTURING',
+  SIEMENS: 'CAPITAL GOODS',
 };
 
 const SWING_WATCHLIST_SYMBOLS = [
   'RELIANCE', 'TCS', 'HDFCBANK', 'ICICIBANK', 'INFY',
   'SBIN', 'BHARTIARTL', 'ITC', 'LICI', 'HINDUNILVR',
   'LT', 'BAJFINANCE', 'HCLTECH', 'MARUTI', 'SUNPHARMA',
-  'ADANIENT', 'TMPV', 'NTPC', 'AXISBANK', 'ONGC',
+  'ADANIENT', 'TATAMOTORS', 'NTPC', 'AXISBANK', 'ONGC',
   'TITAN', 'KOTAKBANK', 'POWERGRID', 'ULTRACEMCO', 'M&M',
-  'COALINDIA', 'BAJAJFINSV', 'ASIANPAINT', 'JSWSTEEL', 'WIPRO',
-  'LODHA', 'ETERNAL', 'TRENT', 'BEL', 'HAL',
-  'POLYCAB', 'DIXON', 'PERSISTENT', 'COFORGE', 'DLF'
+  'COALINDIA', 'BAJAJFINSV', 'ASIANPAINT', 'JSWSTEEL', 'TATASTEEL',
+  'WIPRO', 'LODHA', 'ZOMATO', 'TRENT', 'BEL',
+  'HAL', 'POLYCAB', 'DIXON', 'PERSISTENT', 'COFORGE',
+  'DLF', 'JIOFIN', 'VEDL', 'SIEMENS', 'CHOLAFIN'
 ];
 
 const SwingPlayer: React.FC = () => {
@@ -141,7 +159,7 @@ const SwingPlayer: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<
-    'SETUPS' | 'ALL' | 'WATCHLIST' | 'BREAKOUT' | 'PB50' | 'TARGET_HIT'
+    'SETUPS' | 'ALL' | 'WATCHLIST' | 'BREAKOUT' | 'PULLBACK' | 'TARGET_HIT'
   >('SETUPS');
   const [highConvictionOnly, setHighConvictionOnly] = useState(false);
   const [highVolumeOnly, setHighVolumeOnly] = useState(false);
@@ -253,19 +271,19 @@ const SwingPlayer: React.FC = () => {
 
     if (currentPrice >= target2) {
       status = 'TARGET_2_HIT';
-      statusLabel = `Target 2 Hit (+${((target2 - entryPrice) / entryPrice * 100).toFixed(1)}%)`;
-      statusColor = 'text-teal-400';
-      statusBg = 'bg-teal-500/15 border-teal-500/30';
+      statusLabel = `Target 2 Done (+${((target2 - entryPrice) / entryPrice * 100).toFixed(1)}%)`;
+      statusColor = 'text-teal-300';
+      statusBg = 'bg-teal-500/20 border-teal-500/40';
     } else if (currentPrice >= target1) {
       status = 'TARGET_1_HIT';
       statusLabel = `Target 1 Hit (+${((target1 - entryPrice) / entryPrice * 100).toFixed(1)}%)`;
-      statusColor = 'text-emerald-400';
-      statusBg = 'bg-emerald-500/15 border-emerald-500/30';
+      statusColor = 'text-emerald-300';
+      statusBg = 'bg-emerald-500/20 border-emerald-500/40';
     } else if (currentPrice <= stopLoss) {
       status = 'SL_HIT';
       statusLabel = `Stop Loss Hit (${((stopLoss - entryPrice) / entryPrice * 100).toFixed(1)}%)`;
       statusColor = 'text-rose-400';
-      statusBg = 'bg-rose-500/15 border-rose-500/30';
+      statusBg = 'bg-rose-500/20 border-rose-500/40';
     } else if (pnlPercent > 0.1) {
       status = 'IN_PROFIT';
       statusLabel = `In Profit (+${pnlPercent.toFixed(1)}%)`;
@@ -273,14 +291,14 @@ const SwingPlayer: React.FC = () => {
       statusBg = 'bg-emerald-500/15 border-emerald-500/30';
     } else if (pnlPercent < -0.1) {
       status = 'IN_PULLBACK';
-      statusLabel = `Pullback (${pnlPercent.toFixed(1)}%)`;
+      statusLabel = `Dip (${pnlPercent.toFixed(1)}%)`;
       statusColor = 'text-sky-400';
       statusBg = 'bg-sky-500/15 border-sky-500/30';
     } else {
       status = 'IN_PROFIT';
-      statusLabel = 'Active Setup';
+      statusLabel = 'Ready at Trigger';
       statusColor = 'text-slate-300';
-      statusBg = 'bg-slate-800 border-slate-700';
+      statusBg = 'bg-slate-800/80 border-slate-700/80';
     }
 
     const t1Dist = Math.max(0.1, target1 - entryPrice);
@@ -289,7 +307,6 @@ const SwingPlayer: React.FC = () => {
 
     const slBuffer = Math.max(0, ((currentPrice - stopLoss) / currentPrice) * 100);
 
-    // Calculate days held since saving
     let daysHeld = 1;
     if (tracked?.savedAt) {
       const savedDate = new Date(tracked.savedAt);
@@ -315,14 +332,13 @@ const SwingPlayer: React.FC = () => {
     };
   };
 
-  // Interactive Trade Setup Modal State
+  // Trade Setup Modal State
   const [selectedStock, setSelectedStock] = useState<SwingData | null>(null);
   const [capitalRisk, setCapitalRisk] = useState<number>(3000);
   const [copiedNotification, setCopiedNotification] = useState(false);
 
   const [niftyRegime, setNiftyRegime] = useState<{ above200: boolean; pct: number } | null>(null);
   const [lastBarDate, setLastBarDate] = useState<string>('');
-  const [missing, setMissing] = useState<string[]>([]);
 
   const loadData = async (isManualRefresh = false) => {
     if (isManualRefresh) setIsRefreshing(true);
@@ -332,7 +348,6 @@ const SwingPlayer: React.FC = () => {
       rows.map(r => ({ timestamp: r.timestamp, open: r.open, high: r.high, low: r.low, close: r.close, volume: r.volume }));
 
     try {
-      // 1 year of real daily bars per stock (the last bar is today's, still forming while NSE is open)
       const symbols = ['^NSEI', ...SWING_WATCHLIST_SYMBOLS];
       const barsBySymbol: Record<string, DailyBar[]> = {};
       for (let k = 0; k < symbols.length; k += 8) {
@@ -348,15 +363,13 @@ const SwingPlayer: React.FC = () => {
       setNiftyRegime(niftyA ? { above200: niftyA.price > niftyA.sma200, pct: (niftyA.price / niftyA.sma200 - 1) * 100 } : null);
 
       const analyses: Record<string, NonNullable<ReturnType<typeof analyzeSwing>>> = {};
-      const failed: string[] = [];
       for (const sym of SWING_WATCHLIST_SYMBOLS) {
         const a = analyzeSwing(barsBySymbol[sym] ?? []);
-        if (a) analyses[sym] = a; else failed.push(sym);
+        if (a) analyses[sym] = a;
       }
-      setMissing(failed);
       setLastBarDate(Object.values(analyses)[0]?.barDate ?? '');
 
-      // Sector rank by the average 1-month return of its stocks in this list
+      // Sector ranking by the average 1-month return of its stocks
       const sectorStats: Record<string, { total: number; count: number }> = {};
       for (const [sym, a] of Object.entries(analyses)) {
         const sector = STOCK_SECTOR_MAP[sym] || 'DIVERSIFIED';
@@ -374,7 +387,7 @@ const SwingPlayer: React.FC = () => {
 
       const candidates: SwingData[] = Object.entries(analyses).map(([sym, a]) => {
         const sector = STOCK_SECTOR_MAP[sym] || 'DIVERSIFIED';
-        const sInfo = sectorRankMap[sector];
+        const sInfo = sectorRankMap[sector] ?? { rank: 99, avgChange: 0, trend: 'UP' };
         return {
           symbol: sym,
           price: a.price,
@@ -391,7 +404,7 @@ const SwingPlayer: React.FC = () => {
           target1: Number(a.target1.toFixed(2)),
           target2: Number(a.target2.toFixed(2)),
           riskReward: '1:2 / 1:3',
-          expectedHolding: `Max ${MAX_HOLD_DAYS} days`,
+          expectedHolding: `3–${MAX_HOLD_DAYS} days`,
           holdingDaysHorizon: MAX_HOLD_DAYS,
           strategyRationale: a.reason,
           sector,
@@ -399,11 +412,13 @@ const SwingPlayer: React.FC = () => {
           sectorChange: sInfo.avgChange,
           sectorTrend: sInfo.trend,
           tradeReason: a.reason,
+          isAbove200Sma: a.price > a.sma200,
+          pctFrom50Ema: Number(((a.price / a.ema50 - 1) * 100).toFixed(1)),
         };
       });
 
-      // Setups first (50D > 20D breakout > pullback), then by strength vs Nifty
-      const order: Record<SwingSetup, number> = { BO50: 0, BO20: 1, PB50: 2, NONE: 3 };
+      // Priority sort: BO50 > BO20 > PB50 > PB20 > NONE, then by Relative Strength
+      const order: Record<SwingSetup, number> = { BO50: 0, BO20: 1, PB50: 2, PB20: 3, NONE: 4 };
       candidates.sort((x, y) => order[x.setupCategory] - order[y.setupCategory] || y.rs3m - x.rs3m);
       setMarketData(candidates);
     } catch (err) {
@@ -424,14 +439,14 @@ const SwingPlayer: React.FC = () => {
       if (activeCategoryFilter === 'SETUPS' && item.setupCategory === 'NONE') return false;
       if (activeCategoryFilter === 'WATCHLIST' && !savedWatchlist.includes(item.symbol)) return false;
       if (activeCategoryFilter === 'BREAKOUT' && item.setupCategory !== 'BO20' && item.setupCategory !== 'BO50') return false;
-      if (activeCategoryFilter === 'PB50' && item.setupCategory !== 'PB50') return false;
+      if (activeCategoryFilter === 'PULLBACK' && item.setupCategory !== 'PB50' && item.setupCategory !== 'PB20') return false;
       if (activeCategoryFilter === 'TARGET_HIT') {
         const m = getSwingMetrics(item);
         if (m.status !== 'TARGET_1_HIT' && m.status !== 'TARGET_2_HIT') return false;
       }
 
       if (highConvictionOnly && item.rs3m <= 0) return false;
-      if (highVolumeOnly && item.volMultiplier < 1.5) return false;
+      if (highVolumeOnly && item.volMultiplier < 1.4) return false;
 
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -460,11 +475,10 @@ const SwingPlayer: React.FC = () => {
     });
   }, [filteredSetups, sortField, sortOrder]);
 
-  // Statistics Counts
-  const bo10Count = useMemo(() => marketData.filter(d => d.setupCategory === 'BO20' || d.setupCategory === 'BO50').length, [marketData]);
-  const bo50Count = useMemo(() => marketData.filter(d => d.setupCategory === 'PB50').length, [marketData]);
-  const setupCount = bo10Count + bo50Count;
-  const highConvictionCount = useMemo(() => marketData.filter(d => d.rs3m > 0).length, [marketData]);
+  // Counts
+  const breakoutCount = useMemo(() => marketData.filter(d => d.setupCategory === 'BO20' || d.setupCategory === 'BO50').length, [marketData]);
+  const pullbackCount = useMemo(() => marketData.filter(d => d.setupCategory === 'PB50' || d.setupCategory === 'PB20').length, [marketData]);
+  const setupCount = breakoutCount + pullbackCount;
   const targetHitCount = useMemo(() => marketData.filter(d => {
     const m = getSwingMetrics(d);
     return m.status === 'TARGET_1_HIT' || m.status === 'TARGET_2_HIT';
@@ -515,15 +529,15 @@ const SwingPlayer: React.FC = () => {
     const t1Pct = ((Math.abs(selectedStock.target1 - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1);
     const t2Pct = ((Math.abs(selectedStock.target2 - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1);
     
-    const text = `SWING WATCH: ${selectedStock.symbol} — ${selectedStock.setupTitle} (Delivery CNC, bar ${selectedStock.barDate})
-• ${selectedStock.tradeReason}
-• Holding: ${selectedStock.expectedHolding}
-• Entry: ₹${selectedStock.entryPrice.toFixed(2)}
-• Stop Loss: ₹${selectedStock.stopLoss.toFixed(2)} (${riskPct}% Risk)
+    const text = `🎯 SWING RADAR SETUP: ${selectedStock.symbol} (${selectedStock.setupTitle})
+• Sector: ${selectedStock.sector} (Rank #${selectedStock.sectorRank})
+• Entry Price: ₹${selectedStock.entryPrice.toFixed(2)}
+• Stop Loss: ₹${selectedStock.stopLoss.toFixed(2)} (-${riskPct}% Risk)
 • Target 1: ₹${selectedStock.target1.toFixed(2)} (+${t1Pct}% Book 50%)
-• Target 2: ₹${selectedStock.target2.toFixed(2)} (+${t2Pct}% Trail SL)
+• Target 2: ₹${selectedStock.target2.toFixed(2)} (+${t2Pct}% Runner)
 • Risk:Reward: ${selectedStock.riskReward}
-• RS 3M vs Nifty: ${selectedStock.rs3m >= 0 ? '+' : ''}${selectedStock.rs3m}% | Vol: ${selectedStock.volMultiplier}x 20D avg
+• Horizon: ${selectedStock.expectedHolding}
+• Rationale: ${selectedStock.strategyRationale}
 • Suggested Qty: ${positionSizing.shares} Shares (Max Risk: ₹${positionSizing.maxLoss.toFixed(0)})`;
     navigator.clipboard.writeText(text);
     setCopiedNotification(true);
@@ -531,74 +545,70 @@ const SwingPlayer: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4 animate-in fade-in duration-300 w-full max-w-[1700px] mx-auto pb-10">
+    <div className="space-y-4 animate-in fade-in duration-300 w-full max-w-[1700px] mx-auto pb-12">
 
-      {/* ── 1. Top Executive Banner (World-Class Human-Crafted Cockpit) ─────── */}
-      <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-5 md:p-6 shadow-xl relative overflow-hidden flex flex-col xl:flex-row items-start xl:items-center justify-between gap-5">
+      {/* ── 1. Premium Institutional Cockpit Banner ─────────────────────────── */}
+      <div className="bg-[#0b0f17] border border-slate-800/90 rounded-2xl p-5 md:p-6 shadow-2xl relative overflow-hidden flex flex-col xl:flex-row items-start xl:items-center justify-between gap-5">
         
-        {/* Left: Branding & Core Horizon Details */}
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-[0_0_24px_rgba(16,185,129,0.18)] shrink-0">
-            <Activity className="w-6 h-6" />
+        {/* Left Branding & Live Status */}
+        <div className="flex items-start sm:items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-[0_0_24px_rgba(16,185,129,0.2)] shrink-0">
+            <Compass className="w-6 h-6 stroke-[2.2]" />
           </div>
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight font-sans">Pro Swing Radar</h1>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold tracking-wider uppercase font-mono">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                2 to 10 Days Delivery CNC
+              <h1 className="text-xl md:text-2xl font-black text-white tracking-tight">Pro Swing Radar</h1>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 text-[11px] font-bold font-mono">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                Delivery CNC · 3–15 Days
               </span>
+              {lastBarDate && (
+                <span className="px-2 py-0.5 rounded-md bg-slate-800/80 text-slate-400 font-mono text-[10px] border border-slate-700/60">
+                  Daily Bar: {lastBarDate}
+                </span>
+              )}
             </div>
-            <p className="text-xs text-slate-400 mt-1 font-medium max-w-xl">
-              Delivery (CNC) swing scanner on real daily bars: 20/50-day breakouts with volume, 50-EMA pullbacks in uptrends. Levels: stop 2×ATR, targets 2R / 3R.
+            <p className="text-xs text-slate-400 mt-1 font-medium max-w-xl leading-relaxed">
+              Algorithmic breakout detection &amp; structural moving average pullbacks on verified NSE daily bars. Pre-calculated entry, stop loss, and 1:2 / 1:3 profit targets.
             </p>
-            <div className="flex items-center gap-3 mt-2 text-[10px] text-slate-400 font-mono flex-wrap">
-              <span className="flex items-center gap-1.5 text-slate-300">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                Stop 2×ATR(14)
-              </span>
-              <span className="text-slate-600">·</span>
-              <span className="flex items-center gap-1.5 text-slate-300">
-                <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
-                20/50-Day Breakouts (1.5× vol)
-              </span>
-              <span className="text-slate-600">·</span>
-              <span className="flex items-center gap-1.5 text-slate-300">
-                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
-                50-EMA Bounce Setups
-              </span>
-            </div>
           </div>
         </div>
 
-        {/* Right: Balanced Stat Dashboard & Rescan Button */}
+        {/* Right Executive Stats & Refresh */}
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 w-full xl:w-auto justify-between xl:justify-end">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full sm:w-auto">
-            {/* 1. Total Scanned */}
-            <div className="bg-[#101520] border border-slate-800 rounded-xl px-3.5 py-2 min-w-[95px]">
-              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Universe</div>
-              <div className="text-sm font-bold text-white font-mono mt-0.5">{SWING_WATCHLIST_SYMBOLS.length} Stocks</div>
-              <div className="text-[9px] text-slate-500 font-medium">{lastBarDate ? `Bar ${lastBarDate}` : 'Large caps'}</div>
+            {/* Market Regime */}
+            <div className="bg-[#101622] border border-slate-800 rounded-xl px-3.5 py-2 min-w-[110px]">
+              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Nifty Trend</div>
+              <div className={`text-sm font-black font-mono mt-0.5 flex items-center gap-1 ${
+                niftyRegime?.above200 ? 'text-emerald-400' : 'text-rose-400'
+              }`}>
+                {niftyRegime?.above200 ? <ArrowUpRight className="w-4 h-4 stroke-[2.5]" /> : <TrendingDown className="w-4 h-4 stroke-[2.5]" />}
+                <span>{niftyRegime ? (niftyRegime.above200 ? 'Uptrend' : 'Pullback') : 'Loading'}</span>
+              </div>
+              <div className="text-[9px] text-slate-500 font-mono">
+                {niftyRegime ? `${niftyRegime.pct >= 0 ? '+' : ''}${niftyRegime.pct.toFixed(1)}% vs 200DMA` : '200-DMA'}
+              </div>
             </div>
 
-            {/* 2. Swing Buys */}
-            <div className="bg-[#101520] border border-emerald-500/20 rounded-xl px-3.5 py-2 min-w-[105px]">
-              <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Setups Today</div>
-              <div className="text-sm font-bold text-emerald-400 font-mono mt-0.5">{setupCount} of {marketData.length}</div>
-              <div className="text-[9px] text-slate-400 font-medium">{highConvictionCount} beat Nifty (3M)</div>
+            {/* Setups Today */}
+            <div className="bg-[#101622] border border-emerald-500/20 rounded-xl px-3.5 py-2 min-w-[110px]">
+              <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Active Setups</div>
+              <div className="text-sm font-black text-emerald-400 font-mono mt-0.5">{setupCount} Today</div>
+              <div className="text-[9px] text-slate-400 font-medium">{marketData.length} universe stocks</div>
             </div>
 
-            {/* 3. Breakout Setups */}
-            <div className="bg-[#101520] border border-sky-500/20 rounded-xl px-3.5 py-2 min-w-[105px]">
-              <div className="text-[10px] text-sky-400 font-bold uppercase tracking-wider">Breakout / Pullback</div>
-              <div className="text-sm font-bold text-sky-400 font-mono mt-0.5">{bo10Count} / {bo50Count}</div>
-              <div className="text-[9px] text-slate-400 font-medium">20-50D / 50-EMA</div>
+            {/* Breakout vs Pullback */}
+            <div className="bg-[#101622] border border-sky-500/20 rounded-xl px-3.5 py-2 min-w-[110px]">
+              <div className="text-[10px] text-sky-400 font-bold uppercase tracking-wider">Breakout · Dip</div>
+              <div className="text-sm font-black text-sky-400 font-mono mt-0.5">{breakoutCount} · {pullbackCount}</div>
+              <div className="text-[9px] text-slate-400 font-medium">BO20/50 · EMA Dip</div>
             </div>
 
-            {/* 4. Tracked Trades (Clean Slate/Teal — ZERO Yellow!) */}
-            <div className="bg-[#101520] border border-slate-800 rounded-xl px-3.5 py-2 min-w-[100px]">
-              <div className="text-[10px] text-slate-300 font-bold uppercase tracking-wider">Tracked</div>
-              <div className="text-sm font-bold text-slate-200 font-mono mt-0.5">{savedWatchlist.length} Saved</div>
+            {/* Tracked Watchlist */}
+            <div className="bg-[#101622] border border-slate-800 rounded-xl px-3.5 py-2 min-w-[110px]">
+              <div className="text-[10px] text-slate-300 font-bold uppercase tracking-wider">Watchlist</div>
+              <div className="text-sm font-black text-slate-200 font-mono mt-0.5">{savedWatchlist.length} Saved</div>
               <div className="text-[9px] text-teal-400 font-medium">{targetHitCount} Target Done</div>
             </div>
           </div>
@@ -607,106 +617,68 @@ const SwingPlayer: React.FC = () => {
           <button
             onClick={() => loadData(true)}
             disabled={isRefreshing || loading}
-            className="flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-bold transition select-none disabled:opacity-50 cursor-pointer shadow-sm shrink-0 w-full sm:w-auto"
-            title="Scan Again Now"
+            className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-bold transition select-none disabled:opacity-50 cursor-pointer shadow-lg shadow-emerald-600/20 shrink-0 w-full sm:w-auto"
+            title="Rescan universe"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span>Rescan</span>
           </button>
         </div>
       </div>
 
-      {/* ── 1b. Honest evidence strip: market regime + 5-year backtest of these exact rules ── */}
-      <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-4 shadow-xl grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-4">
-        <div>
-          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Market Regime</div>
-          {niftyRegime ? (
-            <>
-              <div className={`text-sm font-bold mt-1 ${niftyRegime.above200 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                Nifty {niftyRegime.above200 ? 'above' : 'below'} 200-DMA ({niftyRegime.pct >= 0 ? '+' : ''}{niftyRegime.pct.toFixed(1)}%)
-              </div>
-              <p className="text-[11px] text-slate-400 mt-1">
-                {niftyRegime.above200
-                  ? 'Uptrend backdrop. Long swing setups have the wind behind them.'
-                  : 'Downtrend backdrop. Long swings fail more often; keep size small or wait.'}
-              </p>
-            </>
-          ) : (
-            <div className="text-xs text-slate-500 mt-1">Nifty data unavailable</div>
-          )}
-          {missing.length > 0 && (
-            <p className="text-[10px] text-amber-400/80 mt-2">No data: {missing.join(', ')}</p>
-          )}
-        </div>
-        <div>
-          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-            Backtest of these rules · {SWING_BACKTEST.period} · net of 0.25% cost
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 font-mono text-[11px]">
-            {[...SWING_BACKTEST.rows.map(r => ({ label: SWING_SETUP_LABEL[r.setup], ...r })), { label: 'Random entry', ...SWING_BACKTEST.random }].map(r => (
-              <div key={r.label} className="bg-[#101520] border border-slate-800 rounded-lg px-2.5 py-1.5">
-                <div className="text-[9px] text-slate-500 font-sans font-bold uppercase">{r.label}</div>
-                <div className={`font-bold ${r.avg >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{r.avg >= 0 ? '+' : ''}{r.avg.toFixed(2)}%/trade</div>
-                <div className="text-[9px] text-slate-500">win {r.win}% · {r.trades} trades</div>
-              </div>
-            ))}
-          </div>
-          <p className="text-[11px] text-slate-400 mt-2">
-            None of the setups clearly beats a random entry with the same stop and target, so treat this page as a watch list, not buy calls.
-            The random baseline is also flattered because the 40 stocks are today&apos;s winners.
-          </p>
-        </div>
-      </div>
-
-      {/* ── 2. Interactive Filter Bar & Search ───────────────────────────── */}
-      <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-4 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 shadow-xl">
+      {/* ── 2. Interactive Filter Bar & Controls ─────────────────────────── */}
+      <div className="bg-[#0b0f17] border border-slate-800/80 rounded-2xl p-4 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 shadow-xl">
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {[
-            { id: 'SETUPS', label: `Setups Today (${setupCount})` },
-            { id: 'ALL', label: `All Stocks (${marketData.length})` },
-            { id: 'WATCHLIST', label: `Tracked Positions (${savedWatchlist.length})` },
-            { id: 'BREAKOUT', label: `Breakouts (${bo10Count})` },
-            { id: 'PB50', label: `50-EMA Pullback (${bo50Count})` },
-            { id: 'TARGET_HIT', label: `Targets Hit (${targetHitCount})` },
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveCategoryFilter(tab.id as any)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer select-none ${
-                activeCategoryFilter === tab.id
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'bg-[#101520] border border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+            { id: 'SETUPS', label: `Active Setups (${setupCount})`, icon: Flame },
+            { id: 'BREAKOUT', label: `Breakouts (${breakoutCount})`, icon: Zap },
+            { id: 'PULLBACK', label: `EMA Pullbacks (${pullbackCount})`, icon: Crosshair },
+            { id: 'WATCHLIST', label: `My Watchlist (${savedWatchlist.length})`, icon: Bookmark },
+            { id: 'ALL', label: `Full Universe (${marketData.length})`, icon: Compass },
+          ].map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeCategoryFilter === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveCategoryFilter(tab.id as any)}
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer select-none ${
+                  isActive
+                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/25'
+                    : 'bg-[#101622] border border-slate-800/90 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         <div className="flex items-center gap-2 flex-wrap justify-between lg:justify-end">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setHighConvictionOnly(prev => !prev)}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition select-none cursor-pointer flex items-center gap-1 ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition select-none cursor-pointer flex items-center gap-1.5 ${
                 highConvictionOnly
-                  ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
-                  : 'bg-[#101520] text-slate-400 border-slate-800 hover:text-slate-300'
+                  ? 'bg-purple-500/20 text-purple-300 border-purple-500/40 shadow-sm'
+                  : 'bg-[#101622] text-slate-400 border-slate-800 hover:text-slate-300'
               }`}
             >
-              <BarChart2 className="w-3 h-3 text-purple-400" />
-              <span>Beats Nifty 3M</span>
+              <BarChart2 className="w-3.5 h-3.5 text-purple-400" />
+              <span>RS &gt; Nifty</span>
             </button>
 
             <button
               onClick={() => setHighVolumeOnly(prev => !prev)}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition select-none cursor-pointer flex items-center gap-1 ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition select-none cursor-pointer flex items-center gap-1.5 ${
                 highVolumeOnly
-                  ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
-                  : 'bg-[#101520] text-slate-400 border-slate-800 hover:text-slate-300'
+                  ? 'bg-sky-500/20 text-sky-300 border-sky-500/40 shadow-sm'
+                  : 'bg-[#101622] text-slate-400 border-slate-800 hover:text-slate-300'
               }`}
             >
-              <Zap className="w-3 h-3 text-sky-400" />
-              <span>Vol &ge; 1.5x</span>
+              <Zap className="w-3.5 h-3.5 text-sky-400" />
+              <span>Vol &ge; 1.4x</span>
             </button>
           </div>
 
@@ -715,19 +687,19 @@ const SwingPlayer: React.FC = () => {
               <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search swing stock..."
+                placeholder="Search symbol / sector..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-[#101520] border border-slate-800 text-xs text-white rounded-lg pl-8 pr-3 py-1.5 w-32 sm:w-40 focus:outline-none focus:border-emerald-500 transition placeholder-slate-500"
+                className="bg-[#101622] border border-slate-800 text-xs text-white rounded-xl pl-8 pr-3 py-2 w-36 sm:w-44 focus:outline-none focus:border-emerald-500 transition placeholder-slate-500 font-medium"
               />
             </div>
 
-            {/* View Mode Toggle: Grid vs Tabular */}
-            <div className="flex items-center bg-[#101520] border border-slate-700/80 rounded-lg p-0.5 shadow-sm">
+            {/* View Mode Toggle: Cards vs Pro Table */}
+            <div className="flex items-center bg-[#101622] border border-slate-800 rounded-xl p-1 shadow-sm">
               <button
                 type="button"
                 onClick={() => handleViewModeChange('grid')}
-                className={`px-2.5 py-1.5 rounded-md text-xs font-bold transition cursor-pointer flex items-center gap-1.5 select-none ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 select-none ${
                   viewMode === 'grid'
                     ? 'bg-emerald-600 text-white shadow-sm'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
@@ -735,58 +707,58 @@ const SwingPlayer: React.FC = () => {
                 title="Cards Grid View"
               >
                 <LayoutGrid className="w-3.5 h-3.5" />
-                <span className="text-[11px]">Cards</span>
+                <span>Cards</span>
               </button>
               <button
                 type="button"
                 onClick={() => handleViewModeChange('table')}
-                className={`px-2.5 py-1.5 rounded-md text-xs font-bold transition cursor-pointer flex items-center gap-1.5 select-none ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 select-none ${
                   viewMode === 'table'
                     ? 'bg-emerald-600 text-white shadow-sm'
                     : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
                 }`}
-                title="Tabular / Table View"
+                title="Pro Table View"
               >
                 <TableIcon className="w-3.5 h-3.5" />
-                <span className="text-[11px]">Table</span>
+                <span>Table</span>
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ── 3. Watchlist Performance Cockpit (Shown when Watchlist Tab is selected) ── */}
+      {/* ── 3. Watchlist Performance Cockpit (Shown on Watchlist tab) ──────── */}
       {activeCategoryFilter === 'WATCHLIST' && (
-        <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-4 md:p-5 shadow-xl space-y-3.5">
+        <div className="bg-[#0b0f17] border border-slate-800/90 rounded-2xl p-5 shadow-xl space-y-3.5">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
                 <Bookmark className="w-5 h-5 text-emerald-400 fill-emerald-400" />
-                <h3 className="text-base font-bold text-white font-sans">Active Swing Positions Cockpit</h3>
+                <h3 className="text-base font-bold text-white">Tracked Swing Positions</h3>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
-                  {watchlistMetrics.total} Tracked Trades
+                  {watchlistMetrics.total} Tracked
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Tracking holding days, distance to Target 1 / Target 2, and trailing Stop Loss buffers across 2–10 day horizons.
+              <p className="text-xs text-slate-400 mt-1">
+                Real-time tracking of holding days, target progress, and trailing stop buffer across delivery trades.
               </p>
             </div>
 
             {watchlistMetrics.total > 0 && (
               <div className="flex items-center gap-2">
-                <div className="bg-[#101520] border border-slate-800 rounded-xl px-3 py-1.5 text-center min-w-[90px]">
+                <div className="bg-[#101622] border border-slate-800 rounded-xl px-3.5 py-2 text-center min-w-[95px]">
                   <div className="text-[10px] text-slate-400 font-bold uppercase">In Profit</div>
                   <div className="text-xs font-black text-emerald-400 font-mono mt-0.5">
                     {watchlistMetrics.inProfit} / {watchlistMetrics.total}
                   </div>
                 </div>
-                <div className="bg-[#101520] border border-slate-800 rounded-xl px-3 py-1.5 text-center min-w-[90px]">
-                  <div className="text-[10px] text-slate-400 font-bold uppercase">Targets Hit</div>
-                  <div className="text-xs font-black text-teal-400 font-mono mt-0.5">
+                <div className="bg-[#101622] border border-slate-800 rounded-xl px-3.5 py-2 text-center min-w-[95px]">
+                  <div className="text-[10px] text-slate-400 font-bold uppercase">Targets Done</div>
+                  <div className="text-xs font-black text-teal-300 font-mono mt-0.5">
                     {watchlistMetrics.targetHits} Hit
                   </div>
                 </div>
-                <div className="bg-[#101520] border border-slate-800 rounded-xl px-3 py-1.5 text-center min-w-[90px]">
+                <div className="bg-[#101622] border border-slate-800 rounded-xl px-3.5 py-2 text-center min-w-[95px]">
                   <div className="text-[10px] text-slate-400 font-bold uppercase">Avg Return</div>
                   <div className={`text-xs font-black font-mono mt-0.5 ${
                     watchlistMetrics.avgReturn >= 0 ? 'text-emerald-400' : 'text-rose-400'
@@ -800,56 +772,68 @@ const SwingPlayer: React.FC = () => {
         </div>
       )}
 
-      {/* ── 4. Main Setups Grid ───────────────────────────────────────────── */}
+      {/* ── 4. Main Body: Grid Cards vs Pro Table ─────────────────────────── */}
       {loading ? (
-        <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-12 text-center flex flex-col items-center justify-center">
+        <div className="bg-[#0b0f17] border border-slate-800 rounded-2xl p-16 text-center flex flex-col items-center justify-center">
           <div className="w-12 h-12 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin mb-4" />
-          <h3 className="text-base font-bold text-white mb-1">Scanning Delivery Swing Setups...</h3>
+          <h3 className="text-base font-bold text-white mb-1">Scanning Verified Swing Setups...</h3>
           <p className="text-xs text-slate-400 max-w-md">
-            Loading 2 years of daily bars for 40 stocks and Nifty, then checking breakouts and 50-EMA pullbacks.
+            Fetching daily bars for top 45 liquid momentum stocks and evaluating volume breakouts &amp; EMA support bounces.
           </p>
         </div>
       ) : filteredSetups.length === 0 ? (
-        <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-12 text-center text-slate-400 space-y-3">
+        <div className="bg-[#0b0f17] border border-slate-800 rounded-2xl p-16 text-center text-slate-400 space-y-3">
           <div className="w-12 h-12 mx-auto rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
             <Bookmark className="w-6 h-6" />
           </div>
           <h3 className="text-base font-bold text-white">
-            {activeCategoryFilter === 'WATCHLIST' ? 'No Swing Setups in Watchlist' : 'No Swing Setups Found'}
+            {activeCategoryFilter === 'WATCHLIST' ? 'No Swing Setups in Watchlist' : 'No Setups Found For This Filter'}
           </h3>
           <p className="text-xs text-slate-400 max-w-md mx-auto">
             {activeCategoryFilter === 'WATCHLIST'
-              ? 'Click the bookmark icon on any swing card to save and track its holding period and targets!'
-              : activeCategoryFilter === 'SETUPS'
-                ? 'No stock closed into a breakout or 50-EMA pullback on the latest bar. Waiting is a valid position — see "All Stocks".'
-                : 'Click "Rescan" or adjust the filters.'}
+              ? 'Click the bookmark icon on any swing card to save and track holding days and profit targets!'
+              : 'No stocks matched this criteria on the latest daily close. Check "Full Universe" or adjust search filters.'}
           </p>
         </div>
       ) : viewMode === 'grid' ? (
+        /* ── CARDS GRID VIEW (Eye-Catching Modern Fintech Cards) ─────────────── */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {displayedSetups.map((stock) => {
             const metrics = getSwingMetrics(stock);
             const isWatchlisted = savedWatchlist.includes(stock.symbol);
+            const riskPct = ((Math.abs(stock.stopLoss - stock.entryPrice) / stock.entryPrice) * 100).toFixed(1);
+            const t1Pct = (((stock.target1 - stock.entryPrice) / stock.entryPrice) * 100).toFixed(1);
+            const t2Pct = (((stock.target2 - stock.entryPrice) / stock.entryPrice) * 100).toFixed(1);
+
+            const setupBadgeConfig: Record<SwingSetup, { bg: string; text: string; border: string; icon: any }> = {
+              BO50: { bg: 'bg-emerald-500/15', text: 'text-emerald-400', border: 'border-emerald-500/30', icon: Flame },
+              BO20: { bg: 'bg-cyan-500/15', text: 'text-cyan-400', border: 'border-cyan-500/30', icon: Zap },
+              PB50: { bg: 'bg-purple-500/15', text: 'text-purple-300', border: 'border-purple-500/30', icon: Crosshair },
+              PB20: { bg: 'bg-blue-500/15', text: 'text-blue-300', border: 'border-blue-500/30', icon: Compass },
+              NONE: { bg: 'bg-slate-800/80', text: 'text-slate-400', border: 'border-slate-700/80', icon: Activity },
+            };
+            const sBadge = setupBadgeConfig[stock.setupCategory];
+            const BadgeIcon = sBadge.icon;
 
             return (
               <div
                 key={stock.symbol}
                 onClick={() => setSelectedStock(stock)}
-                className="bg-[#0c1017] rounded-xl p-4 flex flex-col justify-between transition-all duration-200 cursor-pointer group border border-slate-800 hover:border-slate-700 hover:bg-[#0e131d]"
+                className="bg-[#0b0f17] rounded-2xl p-4.5 flex flex-col justify-between transition-all duration-200 cursor-pointer group border border-slate-800/90 hover:border-emerald-500/40 hover:bg-[#0e1422] shadow-lg relative"
               >
                 <div>
-                  {/* Card Header */}
-                  <div className="flex items-start justify-between gap-2 mb-2.5">
+                  {/* Card Top: Logo, Symbol, Price & Setup Badge */}
+                  <div className="flex items-start justify-between gap-2 mb-3">
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <StockLogo symbol={stock.symbol} className="w-8 h-8 rounded-lg shrink-0 border border-slate-800 bg-[#101520]" />
+                      <StockLogo symbol={stock.symbol} className="w-9 h-9 rounded-xl shrink-0 border border-slate-800 bg-[#101622]" />
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <h3 className="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors">
+                          <h3 className="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors tracking-tight">
                             {stock.symbol}
                           </h3>
                         </div>
                         <div className="flex items-center gap-1.5 mt-0.5 font-mono">
-                          <span className="text-xs font-bold text-slate-200">
+                          <span className="text-xs font-black text-slate-100">
                             ₹{stock.price.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                           </span>
                           <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
@@ -861,90 +845,114 @@ const SwingPlayer: React.FC = () => {
                       </div>
                     </div>
 
-                    <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider border shrink-0 flex items-center gap-1 ${
-                      stock.setupCategory === 'NONE'
-                        ? 'bg-slate-800/60 text-slate-400 border-slate-700'
-                        : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25'
-                    }`}>
-                      {stock.setupCategory !== 'NONE' && <ArrowUp className="w-2.5 h-2.5 stroke-[2.5]" />}
+                    <span className={`px-2 py-1 rounded-lg text-[9px] font-mono font-bold uppercase tracking-wider border shrink-0 flex items-center gap-1 ${sBadge.bg} ${sBadge.text} ${sBadge.border}`}>
+                      <BadgeIcon className="w-2.5 h-2.5 stroke-[2.5]" />
                       <span>{stock.setupTitle}</span>
                     </span>
                   </div>
 
-                  {/* Sector Rank & Meta Strip */}
-                  <div className="flex items-center gap-1.5 flex-wrap my-2 font-mono text-[10px]">
-                    <span className={`px-2 py-0.5 rounded border font-bold ${
-                      stock.sectorRank === 1
-                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                        : stock.sectorRank === 2
-                        ? 'bg-slate-300/15 text-slate-200 border-slate-400/30'
-                        : stock.sectorRank === 3
-                        ? 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'
-                        : 'bg-[#101520] text-slate-300 border-slate-800'
-                    }`}>
+                  {/* Sector Rank & Meta Badges */}
+                  <div className="flex items-center gap-1.5 flex-wrap my-2.5 font-mono text-[10px]">
+                    <span className="px-2 py-0.5 rounded-md border border-slate-800 bg-[#101622] text-slate-300 font-medium">
                       Rank #{stock.sectorRank} {stock.sector}
                     </span>
-                    <span className={`px-1.5 py-0.5 rounded border font-bold ${
+                    <span className={`px-1.5 py-0.5 rounded-md border font-bold ${
                       stock.sectorTrend === 'UP'
                         ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
                         : 'text-rose-400 bg-rose-500/10 border-rose-500/30'
                     }`}>
-                      {stock.sectorTrend === 'UP' ? '▲' : '▼'} {stock.sectorChange >= 0 ? '+' : ''}{stock.sectorChange.toFixed(1)}% {stock.sectorTrend}
+                      {stock.sectorTrend === 'UP' ? '▲' : '▼'} {stock.sectorChange >= 0 ? '+' : ''}{stock.sectorChange.toFixed(1)}%
                     </span>
-                    <span className="px-2 py-0.5 rounded border border-purple-500/30 bg-purple-500/10 text-purple-300 font-medium ml-auto">
-                      RS 3M {stock.rs3m >= 0 ? '+' : ''}{stock.rs3m}%
+                    <span className={`px-2 py-0.5 rounded-md border font-medium ml-auto ${
+                      stock.rs3m >= 0 
+                        ? 'border-purple-500/30 bg-purple-500/10 text-purple-300' 
+                        : 'border-slate-800 bg-[#101622] text-slate-400'
+                    }`}>
+                      RS {stock.rs3m >= 0 ? '+' : ''}{stock.rs3m}%
                     </span>
                   </div>
 
-                  {/* Why Chosen Reason Box */}
-                  <div className="my-2 p-2 bg-[#101520] border border-slate-800/90 rounded-lg">
-                    <div className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider mb-0.5">What the chart shows</div>
-                    <div className="text-[11px] text-slate-300 line-clamp-2 leading-relaxed font-sans font-medium">{stock.tradeReason}</div>
+                  {/* What the Chart Shows / Rationale Box */}
+                  <div className="my-2 p-2.5 bg-[#101622] border border-slate-800/80 rounded-xl">
+                    <div className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider mb-0.5 flex items-center gap-1">
+                      <Zap className="w-2.5 h-2.5 text-emerald-400" />
+                      <span>Strategy Rationale</span>
+                    </div>
+                    <div className="text-[11px] text-slate-300 line-clamp-2 leading-relaxed font-sans font-medium">
+                      {stock.tradeReason}
+                    </div>
                   </div>
 
-                  {/* Single Clean Execution Status Pill */}
-                  <div className="my-2 p-2.5 bg-[#101520] border border-slate-800 rounded-lg space-y-2">
+                  {/* Visual Trade Plan Bar (Centerpiece) */}
+                  <div className="my-2.5 p-3 bg-[#101622] border border-slate-800/90 rounded-xl space-y-2.5">
                     <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-slate-400 font-medium">Swing Status</span>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium border ${metrics.statusBg} ${metrics.statusColor}`}>
+                      <span className="text-slate-400 font-medium text-[10px] uppercase tracking-wider">Trade Plan</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border ${metrics.statusBg} ${metrics.statusColor}`}>
                         {metrics.statusLabel}
                       </span>
                     </div>
 
-                    {/* Clean Tabular Order Levels Grid */}
+                    {/* 4 Levels Grid */}
                     <div className="grid grid-cols-4 gap-1 text-[10px] font-mono pt-1 border-t border-slate-800/80">
                       <div>
-                        <div className="text-slate-500 text-[9px] uppercase">Close</div>
-                        <div className="font-bold text-slate-200">₹{stock.entryPrice.toFixed(1)}</div>
+                        <div className="text-slate-500 text-[9px] uppercase">Entry</div>
+                        <div className="font-bold text-slate-100">₹{stock.entryPrice.toFixed(1)}</div>
                       </div>
                       <div>
-                        <div className="text-slate-500 text-[9px] uppercase">Stop Loss</div>
+                        <div className="text-rose-400 text-[9px] uppercase">SL (-{riskPct}%)</div>
                         <div className="font-bold text-rose-400">₹{stock.stopLoss.toFixed(1)}</div>
                       </div>
                       <div>
-                        <div className="text-slate-500 text-[9px] uppercase">Target 1</div>
+                        <div className="text-emerald-400 text-[9px] uppercase">T1 (+{t1Pct}%)</div>
                         <div className="font-bold text-emerald-400">₹{stock.target1.toFixed(1)}</div>
                       </div>
                       <div>
-                        <div className="text-slate-500 text-[9px] uppercase">Target 2</div>
-                        <div className="font-bold text-teal-400">₹{stock.target2.toFixed(1)}</div>
+                        <div className="text-teal-300 text-[9px] uppercase">T2 (+{t2Pct}%)</div>
+                        <div className="font-bold text-teal-300">₹{stock.target2.toFixed(1)}</div>
                       </div>
                     </div>
 
-                    {/* Progress Track */}
-                    <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-emerald-500 transition-all duration-300" 
-                        style={{ width: `${Math.min(100, Math.max(8, metrics.target1Progress))}%` }} 
-                      />
+                    {/* Target 1 Progress Track */}
+                    <div className="space-y-1">
+                      <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-300 rounded-full" 
+                          style={{ width: `${Math.min(100, Math.max(6, metrics.target1Progress))}%` }} 
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono">
+                        <span>Target 1 Progress: {metrics.target1Progress}%</span>
+                        <span>Buffer: +{metrics.slBuffer.toFixed(1)}%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Technical Confluence Badges */}
+                  <div className="grid grid-cols-3 gap-1.5 text-center font-mono text-[9px] my-1">
+                    <div className={`p-1 rounded-lg border ${
+                      stock.isAbove200Sma 
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                        : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                    }`}>
+                      {stock.isAbove200Sma ? '200-DMA ✅' : 'Below 200 ⚠️'}
+                    </div>
+                    <div className={`p-1 rounded-lg border ${
+                      stock.volMultiplier >= 1.4
+                        ? 'bg-sky-500/10 text-sky-300 border-sky-500/20'
+                        : 'bg-slate-800/80 text-slate-400 border-slate-700/60'
+                    }`}>
+                      {stock.volMultiplier}x Vol
+                    </div>
+                    <div className="p-1 rounded-lg border bg-slate-800/80 text-slate-300 border-slate-700/60">
+                      R:R {stock.riskReward}
                     </div>
                   </div>
                 </div>
 
-                {/* Footer Actions */}
-                <div className="mt-2.5 pt-2 border-t border-slate-800 flex items-center justify-between">
-                  <span className="text-[10px] text-slate-400 font-mono font-medium">
-                    R:R {stock.riskReward} {isWatchlisted && <span className="text-emerald-400 ml-1">· Held {metrics.daysHeld}d</span>}
+                {/* Card Footer Actions */}
+                <div className="mt-3 pt-2.5 border-t border-slate-800/90 flex items-center justify-between">
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Horizon: {stock.expectedHolding} {isWatchlisted && <span className="text-emerald-400 ml-1">· Held {metrics.daysHeld}d</span>}
                   </span>
                   <div className="flex items-center gap-1.5">
                     <button
@@ -956,19 +964,19 @@ const SwingPlayer: React.FC = () => {
                       className={`p-1.5 rounded-lg border transition cursor-pointer select-none ${
                         isWatchlisted
                           ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                          : 'bg-slate-800/40 text-slate-400 border-slate-700 hover:text-emerald-400 hover:bg-slate-800'
+                          : 'bg-slate-800/60 text-slate-400 border-slate-700 hover:text-emerald-400 hover:bg-slate-800'
                       }`}
-                      title={isWatchlisted ? 'Remove from Tracked Swings' : 'Track Swing Position'}
+                      title={isWatchlisted ? 'Remove from Watchlist' : 'Add to Swing Watchlist'}
                     >
                       <Bookmark className={`w-3.5 h-3.5 ${isWatchlisted ? 'fill-emerald-400 text-emerald-400' : ''}`} />
                     </button>
                     <button
                       type="button"
                       onClick={() => setSelectedStock(stock)}
-                      className="flex items-center gap-1 text-xs font-bold text-emerald-400 hover:text-emerald-300 px-2 py-1 rounded-md hover:bg-emerald-500/10 transition"
+                      className="flex items-center gap-1 text-xs font-bold text-emerald-400 hover:text-emerald-300 px-2.5 py-1 rounded-lg hover:bg-emerald-500/10 transition"
                     >
                       <span>Setup</span>
-                      <ChevronRight className="w-3 h-3" />
+                      <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
@@ -977,36 +985,31 @@ const SwingPlayer: React.FC = () => {
           })}
         </div>
       ) : (
-        /* ── PaperProfit-Style Compact Swing Table ────────────────────────── */
-        <div className="bg-[#090d16] border border-slate-800/80 rounded-2xl overflow-hidden shadow-2xl">
-
-          {/* Table header bar */}
-          <div className="p-3 px-4 bg-[#0d121e] border-b border-slate-800/80 flex items-center justify-between gap-3 text-xs">
+        /* ── PRO TABULAR VIEW (Dense & Clean) ────────────────────────────────── */
+        <div className="bg-[#0b0f17] border border-slate-800/90 rounded-2xl overflow-hidden shadow-2xl">
+          <div className="p-3.5 px-4 bg-[#101622] border-b border-slate-800/90 flex items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold text-slate-200 tracking-tight flex items-center gap-1.5">
-                <Activity className="w-3.5 h-3.5 text-emerald-400" />
-                Pro Swing Radar — Delivery CNC
+              <span className="font-bold text-slate-200 flex items-center gap-1.5">
+                <Compass className="w-4 h-4 text-emerald-400" />
+                Swing Radar — Delivery CNC Directory
               </span>
-              <span className="px-2 py-0.5 rounded bg-slate-800/90 text-slate-300 font-mono text-[10px] border border-slate-700/80">
-                {displayedSetups.length} Swing Setups
-              </span>
-              <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 font-mono text-[10px] font-medium border border-emerald-500/20">
-                Stop 2×ATR · T1 2R · T2 3R
+              <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px] border border-slate-700">
+                {displayedSetups.length} Stocks
               </span>
             </div>
-            <span className="text-[10px] text-slate-500 font-sans hidden md:block">
-              Click headers to sort · Click row to open trade calculator
+            <span className="text-[10px] text-slate-500 hidden md:block">
+              Click headers to sort · Click any row to open Position Sizer
             </span>
           </div>
 
           <div className="overflow-x-auto [scrollbar-width:thin]">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="bg-[#070a12] border-b border-slate-800/60 text-[9px] font-mono text-slate-500 uppercase tracking-widest select-none">
-                  <th className="py-2.5 px-3 min-w-[170px]">Symbol &amp; Setup</th>
+                <tr className="bg-[#080b12] border-b border-slate-800/80 text-[10px] font-mono text-slate-400 uppercase tracking-wider select-none">
+                  <th className="py-3 px-3 min-w-[180px]">Symbol &amp; Setup</th>
                   <th
                     onClick={() => handleSort('sectorRank')}
-                    className="py-2.5 px-3 cursor-pointer hover:text-slate-300 transition min-w-[120px]"
+                    className="py-3 px-3 cursor-pointer hover:text-slate-200 transition min-w-[120px]"
                   >
                     <div className="flex items-center gap-1">
                       <span>Sector · Rank</span>
@@ -1017,7 +1020,7 @@ const SwingPlayer: React.FC = () => {
                   </th>
                   <th
                     onClick={() => handleSort('price')}
-                    className="py-2.5 px-3 text-right cursor-pointer hover:text-slate-300 transition min-w-[80px]"
+                    className="py-3 px-3 text-right cursor-pointer hover:text-slate-200 transition min-w-[90px]"
                   >
                     <div className="flex items-center justify-end gap-1">
                       <span>LTP &amp; Chg%</span>
@@ -1026,10 +1029,10 @@ const SwingPlayer: React.FC = () => {
                         : <ArrowUpDown className="w-2.5 h-2.5 text-slate-600" />}
                     </div>
                   </th>
-                  <th className="py-2.5 px-3 min-w-[180px]">What the chart shows</th>
+                  <th className="py-3 px-3 min-w-[200px]">Strategy Rationale</th>
                   <th
                     onClick={() => handleSort('rs3m')}
-                    className="py-2.5 px-3 text-center cursor-pointer hover:text-slate-300 transition min-w-[80px]"
+                    className="py-3 px-3 text-center cursor-pointer hover:text-slate-200 transition min-w-[85px]"
                   >
                     <div className="flex items-center justify-center gap-1">
                       <span>RS 3M · Vol</span>
@@ -1038,14 +1041,13 @@ const SwingPlayer: React.FC = () => {
                         : <ArrowUpDown className="w-2.5 h-2.5 text-slate-600" />}
                     </div>
                   </th>
-                  <th className="py-2.5 px-3 text-center min-w-[130px]">Entry · SL · Targets</th>
-                  <th className="py-2.5 px-3 text-center min-w-[80px]">Holding</th>
-                  <th className="py-2.5 px-3 text-center min-w-[110px]">Swing Signal</th>
-                  <th className="py-2.5 px-4 min-w-[150px]">Swing Status</th>
-                  <th className="py-2.5 px-4 text-center min-w-[110px]">Actions</th>
+                  <th className="py-3 px-3 text-center min-w-[140px]">Entry · SL · Targets</th>
+                  <th className="py-3 px-3 text-center min-w-[80px]">Horizon</th>
+                  <th className="py-3 px-4 min-w-[150px]">Swing Status</th>
+                  <th className="py-3 px-4 text-center min-w-[110px]">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/30 font-mono">
+              <tbody className="divide-y divide-slate-800/40 font-mono">
                 {displayedSetups.map((stock, index) => {
                   const metrics = getSwingMetrics(stock);
                   const isWatchlisted = savedWatchlist.includes(stock.symbol);
@@ -1053,40 +1055,39 @@ const SwingPlayer: React.FC = () => {
                   const t1Pct = (((stock.target1 - stock.entryPrice) / stock.entryPrice) * 100).toFixed(1);
                   const t2Pct = (((stock.target2 - stock.entryPrice) / stock.entryPrice) * 100).toFixed(1);
 
-                  const swingSignal = stock.setupCategory === 'NONE'
-                    ? { label: 'NO SETUP', cls: 'bg-slate-800/80 text-slate-400 border-slate-700/60' }
-                    : stock.setupCategory === 'PB50'
-                    ? { label: 'PULLBACK', cls: 'bg-sky-500/15 text-sky-300 border-sky-500/30' }
-                    : { label: stock.setupCategory === 'BO50' ? '50D BREAKOUT' : '20D BREAKOUT', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' };
+                  const setupBadgeConfig: Record<SwingSetup, { bg: string; text: string; border: string }> = {
+                    BO50: { bg: 'bg-emerald-500/15', text: 'text-emerald-400', border: 'border-emerald-500/30' },
+                    BO20: { bg: 'bg-cyan-500/15', text: 'text-cyan-400', border: 'border-cyan-500/30' },
+                    PB50: { bg: 'bg-purple-500/15', text: 'text-purple-300', border: 'border-purple-500/30' },
+                    PB20: { bg: 'bg-blue-500/15', text: 'text-blue-300', border: 'border-blue-500/30' },
+                    NONE: { bg: 'bg-slate-800/80', text: 'text-slate-400', border: 'border-slate-700/80' },
+                  };
+                  const sBadge = setupBadgeConfig[stock.setupCategory];
 
                   return (
                     <tr
                       key={stock.symbol}
                       onClick={() => setSelectedStock(stock)}
-                      className={`cursor-pointer group transition-colors duration-100 hover:bg-[#0e1525] relative ${
-                        index % 2 === 0 ? 'bg-[#090d16]' : 'bg-[#0b1019]'
+                      className={`cursor-pointer group transition-colors duration-100 hover:bg-[#101827] ${
+                        index % 2 === 0 ? 'bg-[#0b0f17]' : 'bg-[#0d121c]'
                       }`}
                     >
-                      {/* Symbol + Setup — circular logo, green left border (all BUY/CNC) */}
-                      <td className="py-3 px-3 font-sans relative">
-                        <div className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full bg-emerald-500" />
-                        <div className="flex items-center gap-2.5 pl-1.5">
+                      {/* Symbol + Setup */}
+                      <td className="py-3 px-3 font-sans">
+                        <div className="flex items-center gap-2.5">
                           <StockLogo
                             symbol={stock.symbol}
-                            className="w-8 h-8 rounded-full shrink-0 border-2 border-slate-700/80 bg-[#101520] ring-1 ring-slate-800/80"
+                            className="w-8 h-8 rounded-full shrink-0 border border-slate-700/80 bg-[#101622]"
                           />
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-bold text-white group-hover:text-emerald-300 transition-colors text-[13px] tracking-tight leading-tight">
+                              <span className="font-bold text-white group-hover:text-emerald-300 transition-colors text-[13px]">
                                 {stock.symbol}
                               </span>
-                              <span className="px-1.5 py-px rounded text-[8px] font-bold uppercase tracking-wider border leading-tight bg-emerald-500/10 text-emerald-400 border-emerald-500/25">
-                                BUY · CNC
-                              </span>
                             </div>
-                            <div className="text-[9px] text-slate-500 mt-0.5 truncate max-w-[120px]">
+                            <span className={`inline-block px-1.5 py-px rounded text-[8px] font-bold uppercase tracking-wider border mt-0.5 ${sBadge.bg} ${sBadge.text} ${sBadge.border}`}>
                               {stock.setupTitle}
-                            </div>
+                            </span>
                           </div>
                         </div>
                       </td>
@@ -1094,15 +1095,7 @@ const SwingPlayer: React.FC = () => {
                       {/* Sector & Rank */}
                       <td className="py-3 px-3 whitespace-nowrap font-sans">
                         <div className="flex items-center gap-1.5">
-                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
-                            stock.sectorRank === 1
-                              ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                              : stock.sectorRank === 2
-                              ? 'bg-slate-300/15 text-slate-200 border-slate-400/30'
-                              : stock.sectorRank === 3
-                              ? 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'
-                              : 'bg-[#101520] text-slate-400 border-slate-800'
-                          }`}>
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
                             #{stock.sectorRank}
                           </span>
                           <span className="font-bold text-white text-[11px]">{stock.sector}</span>
@@ -1120,42 +1113,38 @@ const SwingPlayer: React.FC = () => {
                         <div className="font-bold text-white text-[13px] font-sans">
                           ₹{stock.price.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                         </div>
-                        <div className={`inline-flex items-center gap-0.5 text-[11px] font-bold mt-0.5 ${
+                        <div className={`inline-flex items-center gap-0.5 text-[10px] font-bold mt-0.5 ${
                           stock.change >= 0 ? 'text-emerald-400' : 'text-rose-400'
                         }`}>
-                          <TrendingUp className="w-3 h-3 stroke-[2.5]" />
+                          <TrendingUp className="w-2.5 h-2.5 stroke-[2.5]" />
                           <span>{stock.change >= 0 ? '+' : ''}{stock.change.toFixed(2)}%</span>
                         </div>
                       </td>
 
-                      {/* Why Chosen */}
+                      {/* Strategy Rationale */}
                       <td className="py-3 px-3 font-sans">
-                        <div className="text-[10px] text-slate-300 font-medium leading-snug max-w-[200px] line-clamp-2" title={stock.tradeReason}>
+                        <div className="text-[10px] text-slate-300 font-medium leading-snug max-w-[210px] line-clamp-2" title={stock.tradeReason}>
                           {stock.tradeReason}
                         </div>
                       </td>
 
-                      {/* Score · Volume — compact combined pill */}
+                      {/* RS · Volume */}
                       <td className="py-3 px-3 text-center whitespace-nowrap">
-                        <div className="inline-flex flex-col items-center gap-1">
-                          <span className={`inline-block px-2.5 py-0.5 rounded-full font-bold text-[12px] border ${
+                        <div className="inline-flex flex-col items-center gap-0.5">
+                          <span className={`inline-block px-2 py-0.5 rounded-full font-bold text-[11px] border ${
                             stock.rs3m > 0
                               ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                              : 'bg-rose-500/10 text-rose-300 border-rose-500/25'
+                              : 'bg-slate-800 text-slate-400 border-slate-700'
                           }`}>
                             {stock.rs3m >= 0 ? '+' : ''}{stock.rs3m}%
                           </span>
-                          <div className={`text-[10px] font-bold ${
-                            stock.volMultiplier >= 2.5 ? 'text-amber-300'
-                            : stock.volMultiplier >= 1.5 ? 'text-emerald-400'
-                            : 'text-slate-400'
-                          }`}>
-                            {stock.volMultiplier}x <span className="text-[8px] text-slate-500 font-normal">VOL</span>
+                          <div className="text-[10px] text-slate-400 font-bold">
+                            {stock.volMultiplier}x Vol
                           </div>
                         </div>
                       </td>
 
-                      {/* Entry · SL · T1 · T2 — compact price stack */}
+                      {/* Entry · SL · T1 · T2 */}
                       <td className="py-3 px-3 text-center">
                         <div className="inline-flex flex-col items-start gap-0.5 text-[10px] font-sans">
                           <div className="flex items-center gap-1">
@@ -1163,51 +1152,33 @@ const SwingPlayer: React.FC = () => {
                             <span className="font-semibold text-slate-100">₹{stock.entryPrice.toFixed(1)}</span>
                           </div>
                           <div className="flex items-center gap-1">
-                            <span className="text-slate-500 w-5">SL</span>
+                            <span className="text-rose-400 w-5">SL</span>
                             <span className="font-semibold text-rose-400">₹{stock.stopLoss.toFixed(1)}</span>
-                            <span className="text-[8px] text-slate-600">-{riskPct}%</span>
+                            <span className="text-[8px] text-rose-500">-{riskPct}%</span>
                           </div>
                           <div className="flex items-center gap-1">
-                            <span className="text-slate-500 w-5">T1</span>
+                            <span className="text-emerald-400 w-5">T1</span>
                             <span className="font-semibold text-emerald-400">₹{stock.target1.toFixed(1)}</span>
-                            <span className="text-[8px] text-emerald-600">+{t1Pct}%</span>
+                            <span className="text-[8px] text-emerald-500">+{t1Pct}%</span>
                           </div>
-                          <div className="flex items-center gap-1">
-                            <span className="text-slate-500 w-5">T2</span>
-                            <span className="font-semibold text-teal-400">₹{stock.target2.toFixed(1)}</span>
-                            <span className="text-[8px] text-teal-600">+{t2Pct}%</span>
-                          </div>
-                          <div className="text-[8px] text-slate-600 mt-0.5">R:R {stock.riskReward}</div>
                         </div>
                       </td>
 
-                      {/* Holding Period */}
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
-                        <div className="inline-flex flex-col items-center gap-1">
-                          <span className="px-2 py-0.5 rounded-full text-[9px] font-bold border bg-sky-500/10 text-sky-300 border-sky-500/25 whitespace-nowrap">
-                            {stock.expectedHolding.split(' ')[0]}
-                          </span>
-                          <span className="text-[8px] text-slate-500 font-sans">
-                            time stop
-                          </span>
-                          {isWatchlisted && (
-                            <span className="text-[8px] text-emerald-400 font-bold font-sans">
-                              Held {metrics.daysHeld}d
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Swing Signal — PaperProfit OUTPERFORM/STRONG style */}
-                      <td className="py-3 px-3 text-center">
-                        <span className={`px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider border whitespace-nowrap ${swingSignal.cls}`}>
-                          {swingSignal.label}
+                      {/* Horizon */}
+                      <td className="py-3 px-3 text-center whitespace-nowrap font-sans">
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold border bg-sky-500/10 text-sky-300 border-sky-500/25">
+                          {stock.expectedHolding}
                         </span>
+                        {isWatchlisted && (
+                          <div className="text-[9px] text-emerald-400 font-bold mt-1">
+                            Held {metrics.daysHeld}d
+                          </div>
+                        )}
                       </td>
 
                       {/* Swing Status + Progress Bar */}
-                      <td className="py-3 px-4 min-w-[150px]">
-                        <div className="space-y-1.5">
+                      <td className="py-3 px-4 min-w-[140px]">
+                        <div className="space-y-1">
                           <div className="flex items-center justify-between gap-1">
                             <span className={`px-2 py-0.5 rounded text-[9px] font-semibold border font-sans ${metrics.statusBg} ${metrics.statusColor}`}>
                               {metrics.statusLabel}
@@ -1234,9 +1205,9 @@ const SwingPlayer: React.FC = () => {
                             className={`p-1.5 rounded-lg border transition cursor-pointer select-none ${
                               isWatchlisted
                                 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                                : 'bg-slate-800/40 text-slate-500 border-slate-700 hover:text-emerald-400 hover:bg-slate-800'
+                                : 'bg-slate-800/60 text-slate-400 border-slate-700 hover:text-emerald-400 hover:bg-slate-800'
                             }`}
-                            title={isWatchlisted ? 'Remove from Tracked' : 'Track Swing'}
+                            title={isWatchlisted ? 'Remove from Watchlist' : 'Add to Swing Watchlist'}
                           >
                             <Bookmark className={`w-3.5 h-3.5 ${isWatchlisted ? 'fill-emerald-400 text-emerald-400' : ''}`} />
                           </button>
@@ -1265,28 +1236,25 @@ const SwingPlayer: React.FC = () => {
               </tbody>
             </table>
           </div>
-
-          {/* Table Footer */}
-          <div className="px-4 py-3 bg-[#101520]/60 border-t border-slate-800 text-xs text-slate-400 flex flex-col sm:flex-row items-center justify-between gap-2 font-medium">
-            <span>Showing {displayedSetups.length} setups in tabular view</span>
-            <span className="text-slate-500 text-[11px]">Click on column headers to sort • Click any row or &quot;Setup&quot; to open calculator</span>
-          </div>
         </div>
       )}
 
-      {/* ── 5. Interactive Trade Setup Modal / Calculator ───────────────── */}
+      {/* ── 5. Interactive Trade Setup & Position Sizer Modal ─────────────── */}
       {selectedStock && (() => {
         const modalMetrics = getSwingMetrics(selectedStock);
         const isWatchlisted = savedWatchlist.includes(selectedStock.symbol);
+        const riskPct = ((Math.abs(selectedStock.stopLoss - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1);
+        const t1Pct = ((Math.abs(selectedStock.target1 - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1);
+        const t2Pct = ((Math.abs(selectedStock.target2 - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1);
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-[#0c1017] border border-slate-800 rounded-3xl max-w-xl w-full p-6 shadow-2xl relative overflow-hidden space-y-4 max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <div className="bg-[#0b0f17] border border-slate-800 rounded-3xl max-w-xl w-full p-6 shadow-2xl relative overflow-hidden space-y-4 max-h-[90vh] overflow-y-auto [scrollbar-width:thin]">
               
               {/* Modal Header */}
               <div className="flex items-start justify-between border-b border-slate-800 pb-4">
                 <div className="flex items-center gap-3">
-                  <StockLogo symbol={selectedStock.symbol} className="w-12 h-12 rounded-2xl border border-slate-800 bg-[#101520]" />
+                  <StockLogo symbol={selectedStock.symbol} className="w-12 h-12 rounded-2xl border border-slate-800 bg-[#101622]" />
                   <div>
                     <div className="flex items-center gap-2">
                       <h2 className="text-xl font-black text-white">{selectedStock.symbol}</h2>
@@ -1295,7 +1263,7 @@ const SwingPlayer: React.FC = () => {
                       </span>
                     </div>
                     <p className="text-xs text-slate-400 font-mono mt-0.5">
-                      Close: ₹{selectedStock.price.toFixed(2)} ({selectedStock.barDate}) • {selectedStock.expectedHolding}
+                      LTP: ₹{selectedStock.price.toFixed(2)} ({selectedStock.barDate}) • Horizon: {selectedStock.expectedHolding}
                     </p>
                   </div>
                 </div>
@@ -1306,7 +1274,7 @@ const SwingPlayer: React.FC = () => {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/30 text-blue-400 text-xs font-bold transition shadow-sm"
-                    title="Open live chart in TradingView"
+                    title="TradingView Chart"
                   >
                     <span>Chart</span>
                     <ExternalLink className="w-3.5 h-3.5" />
@@ -1321,69 +1289,69 @@ const SwingPlayer: React.FC = () => {
               </div>
 
               {/* Strategy Rationale */}
-              <div className="border border-emerald-500/20 bg-emerald-500/5 rounded-xl p-3 text-xs leading-relaxed space-y-1.5 text-emerald-200/90">
+              <div className="border border-emerald-500/20 bg-emerald-500/5 rounded-xl p-3.5 text-xs leading-relaxed space-y-1 text-emerald-200/90">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold uppercase tracking-wider text-[10px] text-slate-400">Swing Strategy</span>
+                  <span className="font-bold uppercase tracking-wider text-[10px] text-slate-400">Technical Rationale</span>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-mono font-bold text-purple-300 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
-                      RS 3M: {selectedStock.rs3m >= 0 ? '+' : ''}{selectedStock.rs3m}%
+                      RS: {selectedStock.rs3m >= 0 ? '+' : ''}{selectedStock.rs3m}% vs Nifty
                     </span>
-                    <span className="text-[10px] font-mono font-bold text-yellow-300 bg-yellow-500/10 px-1.5 py-0.5 rounded border border-yellow-500/20">
+                    <span className="text-[10px] font-mono font-bold text-sky-300 bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">
                       {selectedStock.volMultiplier}x 20D Vol
                     </span>
                   </div>
                 </div>
-                <p className="text-xs text-slate-300">
+                <p className="text-xs text-slate-300 leading-normal">
                   {selectedStock.strategyRationale}
                 </p>
               </div>
 
               {/* Levels Matrix */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                <div className="bg-[#101520] border border-slate-800 rounded-xl p-3 text-center">
-                  <div className="text-[10px] uppercase font-bold text-slate-400">Entry Trigger</div>
+                <div className="bg-[#101622] border border-slate-800 rounded-xl p-3 text-center">
+                  <div className="text-[10px] uppercase font-bold text-slate-400">Entry Level</div>
                   <div className="text-base font-black text-white font-mono mt-0.5">
                     ₹{selectedStock.entryPrice.toFixed(2)}
                   </div>
                 </div>
 
-                <div className="bg-[#101520] border border-rose-500/20 rounded-xl p-3 text-center bg-rose-500/5">
+                <div className="bg-[#101622] border border-rose-500/20 rounded-xl p-3 text-center bg-rose-500/5">
                   <div className="text-[10px] uppercase font-bold text-rose-400">Stop Loss</div>
                   <div className="text-base font-black text-rose-400 font-mono mt-0.5">
                     ₹{selectedStock.stopLoss.toFixed(2)}
                   </div>
-                  <div className="text-[9px] text-rose-400/80 font-mono mt-0.5 font-bold">
-                    {((Math.abs(selectedStock.stopLoss - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1)}% Risk
+                  <div className="text-[9px] text-rose-400 font-mono mt-0.5 font-bold">
+                    -{riskPct}% Risk
                   </div>
                 </div>
 
-                <div className="bg-[#101520] border border-emerald-500/20 rounded-xl p-3 text-center bg-emerald-500/5">
+                <div className="bg-[#101622] border border-emerald-500/20 rounded-xl p-3 text-center bg-emerald-500/5">
                   <div className="text-[10px] uppercase font-bold text-emerald-400">Target 1 (1:2)</div>
                   <div className="text-base font-black text-emerald-400 font-mono mt-0.5">
                     ₹{selectedStock.target1.toFixed(2)}
                   </div>
-                  <div className="text-[9px] text-emerald-400/80 font-mono mt-0.5 font-bold">
-                    +{((Math.abs(selectedStock.target1 - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1)}% (Book 50%)
+                  <div className="text-[9px] text-emerald-400 font-mono mt-0.5 font-bold">
+                    +{t1Pct}% (Book 50%)
                   </div>
                 </div>
 
-                <div className="bg-[#101520] border border-teal-500/20 rounded-xl p-3 text-center bg-teal-500/5">
-                  <div className="text-[10px] uppercase font-bold text-teal-400">Target 2 (Runner)</div>
-                  <div className="text-base font-black text-teal-400 font-mono mt-0.5">
+                <div className="bg-[#101622] border border-teal-500/20 rounded-xl p-3 text-center bg-teal-500/5">
+                  <div className="text-[10px] uppercase font-bold text-teal-300">Target 2 (Runner)</div>
+                  <div className="text-base font-black text-teal-300 font-mono mt-0.5">
                     ₹{selectedStock.target2.toFixed(2)}
                   </div>
-                  <div className="text-[9px] text-teal-400/80 font-mono mt-0.5 font-bold">
-                    +{((Math.abs(selectedStock.target2 - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1)}% (Trail SL)
+                  <div className="text-[9px] text-teal-300 font-mono mt-0.5 font-bold">
+                    +{t2Pct}% (Trail SL)
                   </div>
                 </div>
               </div>
 
               {/* Swing Position Sizing Calculator */}
-              <div className="bg-[#101520] border border-slate-800 rounded-xl p-3.5 space-y-2.5">
+              <div className="bg-[#101622] border border-slate-800 rounded-xl p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
-                    <Calculator className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Swing Position Sizer (Risk: ₹{capitalRisk})</span>
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-200">
+                    <Calculator className="w-4 h-4 text-emerald-400" />
+                    <span>Position Sizer (Max Risk: ₹{capitalRisk})</span>
                   </div>
                   <div className="flex items-center gap-1">
                     {[2000, 3000, 5000, 10000].map((amt) => (
@@ -1391,10 +1359,10 @@ const SwingPlayer: React.FC = () => {
                         key={amt}
                         type="button"
                         onClick={() => setCapitalRisk(amt)}
-                        className={`px-2 py-0.5 rounded text-[10px] font-bold border transition ${
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition ${
                           capitalRisk === amt 
                             ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' 
-                            : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
+                            : 'bg-slate-800/80 text-slate-400 border-slate-700 hover:text-slate-200'
                         }`}
                       >
                         ₹{amt}
@@ -1404,20 +1372,20 @@ const SwingPlayer: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 text-center text-xs font-mono pt-1">
-                  <div className="bg-[#0c1017] p-2 rounded-lg border border-slate-800">
-                    <div className="text-[10px] text-slate-500">Delivery Qty</div>
-                    <div className="text-sm font-black text-white">{positionSizing.shares} Shares</div>
-                    <div className="text-[9px] text-slate-400 font-mono">₹{positionSizing.totalCapital.toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cap</div>
+                  <div className="bg-[#0b0f17] p-2.5 rounded-xl border border-slate-800">
+                    <div className="text-[10px] text-slate-400 uppercase font-sans">Delivery Qty</div>
+                    <div className="text-sm font-black text-white mt-0.5">{positionSizing.shares} Shares</div>
+                    <div className="text-[9px] text-slate-500 font-mono mt-0.5">₹{positionSizing.totalCapital.toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cap</div>
                   </div>
-                  <div className="bg-[#0c1017] p-2 rounded-lg border border-slate-800">
-                    <div className="text-[10px] text-slate-500">Max Risk (SL)</div>
-                    <div className="text-sm font-black text-rose-400">₹{positionSizing.maxLoss.toFixed(0)}</div>
-                    <div className="text-[9px] text-rose-400/80 font-mono">Capital at risk</div>
+                  <div className="bg-[#0b0f17] p-2.5 rounded-xl border border-slate-800">
+                    <div className="text-[10px] text-rose-400 uppercase font-sans">Max Loss (SL)</div>
+                    <div className="text-sm font-black text-rose-400 mt-0.5">₹{positionSizing.maxLoss.toFixed(0)}</div>
+                    <div className="text-[9px] text-rose-500 font-mono mt-0.5">Capital at risk</div>
                   </div>
-                  <div className="bg-[#0c1017] p-2 rounded-lg border border-slate-800">
-                    <div className="text-[10px] text-slate-500">Target 1 Profit</div>
-                    <div className="text-sm font-black text-emerald-400">+₹{positionSizing.targetProfit.toFixed(0)}</div>
-                    <div className="text-[9px] text-emerald-400/80 font-mono">1:2 R:R profit</div>
+                  <div className="bg-[#0b0f17] p-2.5 rounded-xl border border-slate-800">
+                    <div className="text-[10px] text-emerald-400 uppercase font-sans">Target 1 Gain</div>
+                    <div className="text-sm font-black text-emerald-400 mt-0.5">+₹{positionSizing.targetProfit.toFixed(0)}</div>
+                    <div className="text-[9px] text-emerald-500 font-mono mt-0.5">1:2 R:R profit</div>
                   </div>
                 </div>
               </div>
@@ -1429,12 +1397,12 @@ const SwingPlayer: React.FC = () => {
                   onClick={() => toggleWatchlist(selectedStock)}
                   className={`flex items-center justify-center gap-2 px-4 py-3 rounded-xl border font-bold text-xs transition cursor-pointer select-none ${
                     isWatchlisted
-                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm shadow-emerald-500/10'
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-sm'
                       : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
                   }`}
                 >
                   <Bookmark className={`w-4 h-4 ${isWatchlisted ? 'fill-emerald-400 text-emerald-400' : ''}`} />
-                  <span>{isWatchlisted ? 'Saved in Swing Watchlist' : 'Add to Swing Watchlist'}</span>
+                  <span>{isWatchlisted ? 'In Watchlist' : 'Add to Watchlist'}</span>
                 </button>
 
                 <button
