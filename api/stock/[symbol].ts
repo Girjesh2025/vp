@@ -46,6 +46,8 @@ export default async function handler(req: any, res: any) {
       if (s.startsWith('^') || s.includes('=')) return s;
       if (/\.NSE$/i.test(s) || /\.NS$/i.test(s)) return `${clean}.NS`;
       if (/\.BSE$/i.test(s) || /\.BO$/i.test(s)) return `${clean}.BO`;
+      // Other Yahoo exchange suffixes (e.g. DX-Y.NYB, 7203.T) are already complete symbols
+      if (/\.[A-Z]{1,4}$/i.test(s)) return s;
       return `${clean}.NS`;
     }
     if (api === 'eodhd') return s;

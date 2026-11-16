@@ -132,7 +132,8 @@ const GlobalMarket: React.FC = () => {
                       changePercent: giftData.changePercent || 0,
                       status: getMarketStatus(idx.category, idx.symbol),
                       lastUpdate: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                      sourceNote: `${giftData.source || 'Live source'}`,
+                      // Dhan's quote is delayed ~10 min, so show its own time
+                      sourceNote: `${giftData.source || 'Live source'}${giftData.fetchedAt && /IST$/.test(giftData.fetchedAt) ? ` · as of ${giftData.fetchedAt.replace(/^\d{1,2} \w{3} \d{4} /, '')}` : ''}`,
                       isEstimated: false,
                     };
                   }

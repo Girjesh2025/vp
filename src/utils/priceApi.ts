@@ -56,7 +56,9 @@ export const getApiBaseUrl = (): string => resolveBaseUrl();
 
 // Check if a symbol is a global index or futures symbol (e.g. ^DJI, ^NSEI, YM=F)
 const isGlobalOrIndexSymbol = (symbol: string): boolean => {
-  return symbol.startsWith('^') || symbol.includes('=');
+  // ^INDEX, futures/FX (=), or a non-Indian Yahoo exchange suffix such as DX-Y.NYB
+  return symbol.startsWith('^') || symbol.includes('=') ||
+    (/\.[A-Z]{1,4}$/i.test(symbol) && !/\.(NS|BO|NSE|BSE)$/i.test(symbol));
 };
 
 const YAHOO_SYMBOL_ALIASES: Record<string, string> = {

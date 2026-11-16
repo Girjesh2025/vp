@@ -1,5 +1,33 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
+/**
+ * Read the GIFT Nifty quote from Dhan's page data (the Next.js JSON embedded in the page),
+ * which is stable across visual redesigns: "sym":"GIFTNIFTY",...,"Ltp":25245,"ch":-21,"p_ch":-0.0831,...,"cl":25266
+ */
+export function parseDhanGiftNifty(html: string) {
+  const i = html.indexOf('"sym":"GIFTNIFTY"');
+  if (i < 0) return null;
+  const block = html.slice(i, i + 1500);
+  const num = (key: string) => {
+    const m = block.match(new RegExp(`"${key}":(-?\\d+(?:\\.\\d+)?)`));
+    return m ? Number(m[1]) : NaN;
+  };
+  const price = num('Ltp');
+  if (!(price > 0)) return null;
+  const change = num('ch');
+  const changePercent = num('p_ch');
+  const previousClose = num('cl');
+  // "as on 16 Nov 2026 at 14:19" (IST) — Dhan's quote time, not our fetch time
+  const asOf = html.match(/as on (\d{1,2} \w{3} \d{4}) at (\d{1,2}:\d{2})/);
+  return {
+    price: Number(price.toFixed(2)),
+    change: Number.isFinite(change) ? Number(change.toFixed(2)) : 0,
+    changePercent: Number.isFinite(changePercent) ? Number(changePercent.toFixed(2)) : 0,
+    previousClose: previousClose > 0 ? previousClose : undefined,
+    fetchedAt: asOf ? `${asOf[1]} ${asOf[2]} IST` : new Date().toISOString(),
+  };
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -24,31 +52,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (response.ok) {
       const html = await response.text();
-      const priceMatch = html.match(/text-\[28px\][^>]*>([\d,]+\.\d+)<\/p>/);
-      const changeBlockMatch = html.match(/text-lg font-CircularBook[^>]*text-\[#(?:E15858|16A34A)\]">([+-]?[\d,]+\.\d+).*?\(([+-]?[\d.]+)\s*%\)/);
-      const updatedMatch = html.match(/Last Updated on.*?(\d{1,2}\s+\w+\s+\d{4}).*?at\s+(\d{1,2}:\d{2})/);
-      const openMatch = html.match(/Open at<\/p><p[^>]*>([\d,]+\.\d+)<\/p>/);
-
-      const price = priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : NaN;
-      const change = changeBlockMatch ? parseFloat(changeBlockMatch[1].replace(/,/g, '')) : NaN;
-      const changePercent = changeBlockMatch ? parseFloat(changeBlockMatch[2].replace(/,/g, '')) : NaN;
-      const open = openMatch ? parseFloat(openMatch[1].replace(/,/g, '')) : undefined;
-
-      if (Number.isFinite(price) && price > 0) {
-        const safeChange = Number.isFinite(change) ? change : 0;
-        const safeChangePercent = Number.isFinite(changePercent) ? changePercent : 0;
-
+      const q = parseDhanGiftNifty(html);
+      if (q) {
         res.setHeader('Cache-Control', 's-maxage=10, stale-while-revalidate=30');
-        return res.json({
-          price: Number(price.toFixed(2)),
-          change: Number(safeChange.toFixed(2)),
-          changePercent: Number(safeChangePercent.toFixed(2)),
-          previousClose: typeof open === 'number' ? open : undefined,
-          source: 'Dhan',
-          symbol: 'GIFTNIFTY',
-          fetchedAt: updatedMatch ? `${updatedMatch[1]} ${updatedMatch[2]}` : new Date().toISOString(),
-          link: 'https://dhan.co/indices/gift-nifty-share-price/',
-        });
+        return res.json({ ...q, source: 'Dhan', symbol: 'GIFTNIFTY', link: url });
       }
     }
   } catch (_) {}
