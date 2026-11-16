@@ -1,12 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   TrendingUp, 
-  Target, 
-  Clock, 
   ChevronRight, 
   Search, 
   RefreshCw, 
-  Sparkles, 
   Calculator, 
   ExternalLink, 
   X, 
@@ -17,14 +14,12 @@ import {
   Activity,
   Bookmark,
   Zap,
-  Crosshair,
-  Calendar,
-  Layers,
   LayoutGrid,
   Table as TableIcon,
   ArrowUpDown
 } from 'lucide-react';
-import { fetchMultipleStockPrices, fetchHistoricalPrices } from '../utils/priceApi';
+import { fetchHistoricalOHLCV } from '../utils/priceApi';
+import { analyzeSwing, SWING_SETUP_LABEL, SWING_BACKTEST, MAX_HOLD_DAYS, type SwingSetup, type DailyBar } from '../utils/swingScan';
 import StockLogo from './StockLogo';
 
 export interface SwingData {
@@ -33,9 +28,11 @@ export interface SwingData {
   change: number;
   isBull: boolean;
   tradeType: 'BUY';
-  setupCategory: '10_DAY_BO' | '50_DAY_BO' | 'CHANNEL_BO' | 'REVERSAL';
+  setupCategory: SwingSetup;
   setupTitle: string;
-  aiScore: number;
+  /** 3-month return minus Nifty's 3-month return, in % points */
+  rs3m: number;
+  barDate: string;
   volMultiplier: number;
   entryPrice: number;
   stopLoss: number;
@@ -77,7 +74,7 @@ export const STOCK_SECTOR_MAP: Record<string, string> = {
   BEL: 'DEFENCE',
 
   // AUTO
-  TATAMOTORS: 'AUTO',
+  TMPV: 'AUTO',
   MARUTI: 'AUTO',
   'M&M': 'AUTO',
 
@@ -116,7 +113,7 @@ export const STOCK_SECTOR_MAP: Record<string, string> = {
   TITAN: 'CONSUMER',
   ASIANPAINT: 'CONSUMER',
   TRENT: 'RETAIL',
-  ZOMATO: 'CONSUMER TECH',
+  ETERNAL: 'CONSUMER TECH',
 
   // INFRA & MANUFACTURING
   LT: 'INFRA',
@@ -131,106 +128,12 @@ const SWING_WATCHLIST_SYMBOLS = [
   'RELIANCE', 'TCS', 'HDFCBANK', 'ICICIBANK', 'INFY',
   'SBIN', 'BHARTIARTL', 'ITC', 'LICI', 'HINDUNILVR',
   'LT', 'BAJFINANCE', 'HCLTECH', 'MARUTI', 'SUNPHARMA',
-  'ADANIENT', 'TATAMOTORS', 'NTPC', 'AXISBANK', 'ONGC',
+  'ADANIENT', 'TMPV', 'NTPC', 'AXISBANK', 'ONGC',
   'TITAN', 'KOTAKBANK', 'POWERGRID', 'ULTRACEMCO', 'M&M',
   'COALINDIA', 'BAJAJFINSV', 'ASIANPAINT', 'JSWSTEEL', 'WIPRO',
-  'LODHA', 'ZOMATO', 'TRENT', 'BEL', 'HAL',
+  'LODHA', 'ETERNAL', 'TRENT', 'BEL', 'HAL',
   'POLYCAB', 'DIXON', 'PERSISTENT', 'COFORGE', 'DLF'
 ];
-
-export const SWING_BASE_PRICES: Record<string, number> = {
-  RELIANCE: 2980.0,
-  TCS: 4250.0,
-  HDFCBANK: 1658.0,
-  ICICIBANK: 1245.0,
-  INFY: 1910.0,
-  SBIN: 818.0,
-  BHARTIARTL: 1690.0,
-  ITC: 512.0,
-  LICI: 1040.0,
-  HINDUNILVR: 2810.0,
-  LT: 3720.0,
-  BAJFINANCE: 7350.0,
-  HCLTECH: 1820.0,
-  MARUTI: 12400.0,
-  SUNPHARMA: 1890.0,
-  ADANIENT: 3120.0,
-  TATAMOTORS: 975.0,
-  NTPC: 410.0,
-  AXISBANK: 1260.0,
-  ONGC: 318.0,
-  TITAN: 3780.0,
-  KOTAKBANK: 1840.0,
-  POWERGRID: 342.0,
-  ULTRACEMCO: 11800.0,
-  'M&M': 3080.0,
-  COALINDIA: 508.0,
-  BAJAJFINSV: 1890.0,
-  ASIANPAINT: 3260.0,
-  JSWSTEEL: 1010.0,
-  WIPRO: 540.0,
-  LODHA: 1320.0,
-  ZOMATO: 275.0,
-  TRENT: 7600.0,
-  BEL: 312.0,
-  HAL: 4620.0,
-  POLYCAB: 6850.0,
-  DIXON: 13200.0,
-  PERSISTENT: 5480.0,
-  COFORGE: 7200.0,
-  DLF: 890.0
-};
-
-const getActiveTradingSessionDate = (): string => {
-  const now = new Date();
-  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
-  const ist = new Date(now.getTime() + IST_OFFSET_MS);
-
-  const hours = ist.getUTCHours();
-  const minutes = ist.getUTCMinutes();
-  const totalMinutes = hours * 60 + minutes;
-
-  if (totalMinutes < 9 * 60 + 15) {
-    ist.setUTCDate(ist.getUTCDate() - 1);
-  }
-
-  while (ist.getUTCDay() === 0 || ist.getUTCDay() === 6) {
-    ist.setUTCDate(ist.getUTCDate() - 1);
-  }
-
-  const yyyy = ist.getUTCFullYear();
-  const mm = String(ist.getUTCMonth() + 1).padStart(2, '0');
-  const dd = String(ist.getUTCDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-};
-
-const getSessionSwingPrice = (symbol: string, basePrice: number, sessionKey: string) => {
-  const seedStr = `SWING_${symbol}_${sessionKey}`;
-  const seed = seedStr.split('').reduce((acc, c, i) => acc + c.charCodeAt(0) * (i + 17), 9973);
-  
-  const prng = (offset: number) => {
-    const val = Math.sin(seed + offset) * 10000;
-    return val - Math.floor(val);
-  };
-
-  const isPullback = prng(1) < 0.22;
-  const rawChange = isPullback 
-    ? -0.4 - prng(2) * 1.4
-    : 0.7 + prng(2) * 3.6;
-  const change = Number(rawChange.toFixed(2));
-
-  const price = Number((basePrice * (1 + change / 100)).toFixed(2));
-  const dayHigh = Number((price * (1 + 0.008 + prng(3) * 0.015)).toFixed(2));
-  const dayLow = Number((price * (1 - 0.008 - prng(4) * 0.012)).toFixed(2));
-
-  return {
-    price,
-    change,
-    high: dayHigh,
-    low: dayLow,
-    previousClose: basePrice
-  };
-};
 
 const SwingPlayer: React.FC = () => {
   const [marketData, setMarketData] = useState<SwingData[]>([]);
@@ -238,8 +141,8 @@ const SwingPlayer: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<
-    'TOP_10' | 'ALL' | 'WATCHLIST' | '10_DAY_BO' | '50_DAY_BO' | 'TARGET_HIT'
-  >('TOP_10');
+    'SETUPS' | 'ALL' | 'WATCHLIST' | 'BREAKOUT' | 'PB50' | 'TARGET_HIT'
+  >('SETUPS');
   const [highConvictionOnly, setHighConvictionOnly] = useState(false);
   const [highVolumeOnly, setHighVolumeOnly] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>(() => {
@@ -250,10 +153,10 @@ const SwingPlayer: React.FC = () => {
       return 'grid';
     }
   });
-  const [sortField, setSortField] = useState<'default' | 'sectorRank' | 'symbol' | 'price' | 'change' | 'aiScore' | 'vol'>('default');
+  const [sortField, setSortField] = useState<'default' | 'sectorRank' | 'symbol' | 'price' | 'change' | 'rs3m' | 'vol'>('default');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
-  const handleSort = (field: 'sectorRank' | 'symbol' | 'price' | 'change' | 'aiScore' | 'vol') => {
+  const handleSort = (field: 'sectorRank' | 'symbol' | 'price' | 'change' | 'rs3m' | 'vol') => {
     if (sortField === field) {
       setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
     } else {
@@ -417,177 +320,91 @@ const SwingPlayer: React.FC = () => {
   const [capitalRisk, setCapitalRisk] = useState<number>(3000);
   const [copiedNotification, setCopiedNotification] = useState(false);
 
+  const [niftyRegime, setNiftyRegime] = useState<{ above200: boolean; pct: number } | null>(null);
+  const [lastBarDate, setLastBarDate] = useState<string>('');
+  const [missing, setMissing] = useState<string[]>([]);
+
   const loadData = async (isManualRefresh = false) => {
     if (isManualRefresh) setIsRefreshing(true);
     else setLoading(true);
 
-    const activeSessionKey = getActiveTradingSessionDate();
-    const scanSymbols = SWING_WATCHLIST_SYMBOLS.map(s => `${s}.NS`);
-    
+    const toBars = (rows: Awaited<ReturnType<typeof fetchHistoricalOHLCV>>): DailyBar[] =>
+      rows.map(r => ({ timestamp: r.timestamp, open: r.open, high: r.high, low: r.low, close: r.close, volume: r.volume }));
+
     try {
-      // 1. Fetch current live prices (falling back to locked session benchmark when closed)
-      let batchData: Record<string, any> = {};
-      try {
-        batchData = await fetchMultipleStockPrices(scanSymbols);
-      } catch (err) {
-        console.warn('Live API fetch in SwingPlayer had an issue, using locked session data:', err);
+      // 1 year of real daily bars per stock (the last bar is today's, still forming while NSE is open)
+      const symbols = ['^NSEI', ...SWING_WATCHLIST_SYMBOLS];
+      const barsBySymbol: Record<string, DailyBar[]> = {};
+      for (let k = 0; k < symbols.length; k += 8) {
+        const chunk = symbols.slice(k, k + 8);
+        const rows = await Promise.all(chunk.map(sym =>
+          fetchHistoricalOHLCV(sym.startsWith('^') ? sym : `${sym}.NS`, { range: '2y', interval: '1d' }).catch(() => [])
+        ));
+        chunk.forEach((sym, j) => { barsBySymbol[sym] = toBars(rows[j]); });
       }
-      
-      // 2. Compute live sector performance by aggregating constituent stock changes
-      const sectorStats: Record<string, { totalChange: number; count: number; symbols: string[] }> = {};
+
+      const nifty = barsBySymbol['^NSEI'] ?? [];
+      const niftyA = nifty.length > 200 ? analyzeSwing(nifty) : null;
+      setNiftyRegime(niftyA ? { above200: niftyA.price > niftyA.sma200, pct: (niftyA.price / niftyA.sma200 - 1) * 100 } : null);
+
+      const analyses: Record<string, NonNullable<ReturnType<typeof analyzeSwing>>> = {};
+      const failed: string[] = [];
       for (const sym of SWING_WATCHLIST_SYMBOLS) {
-        const fullKey = `${sym}.NS`;
-        const live = batchData[fullKey] || batchData[sym];
-        const basePrice = SWING_BASE_PRICES[sym] || 1500;
-        const data = (live && typeof live.price === 'number' && live.price > 0)
-          ? live
-          : getSessionSwingPrice(sym, basePrice, activeSessionKey);
-
-        const change = typeof data.change === 'number' ? data.change : 0;
-        const sector = STOCK_SECTOR_MAP[sym] || 'DIVERSIFIED';
-
-        if (!sectorStats[sector]) {
-          sectorStats[sector] = { totalChange: 0, count: 0, symbols: [] };
-        }
-        sectorStats[sector].totalChange += change;
-        sectorStats[sector].count += 1;
-        sectorStats[sector].symbols.push(sym);
+        const a = analyzeSwing(barsBySymbol[sym] ?? []);
+        if (a) analyses[sym] = a; else failed.push(sym);
       }
+      setMissing(failed);
+      setLastBarDate(Object.values(analyses)[0]?.barDate ?? '');
 
-      // Rank sectors from #1 (strongest) downwards by average % change
-      const rankedSectors = Object.entries(sectorStats)
-        .map(([sector, s]) => ({
-          sector,
-          avgChange: Number((s.totalChange / Math.max(1, s.count)).toFixed(2)),
-          symbols: s.symbols,
-        }))
-        .sort((a, b) => b.avgChange - a.avgChange);
-
+      // Sector rank by the average 1-month return of its stocks in this list
+      const sectorStats: Record<string, { total: number; count: number }> = {};
+      for (const [sym, a] of Object.entries(analyses)) {
+        const sector = STOCK_SECTOR_MAP[sym] || 'DIVERSIFIED';
+        sectorStats[sector] ??= { total: 0, count: 0 };
+        sectorStats[sector].total += a.return1m;
+        sectorStats[sector].count += 1;
+      }
       const sectorRankMap: Record<string, { rank: number; avgChange: number; trend: 'UP' | 'DOWN' }> = {};
-      rankedSectors.forEach((sec, idx) => {
-        sectorRankMap[sec.sector] = {
-          rank: idx + 1,
-          avgChange: sec.avgChange,
-          trend: sec.avgChange >= 0 ? 'UP' : 'DOWN',
+      Object.entries(sectorStats)
+        .map(([sector, st]) => ({ sector, avg: st.total / st.count }))
+        .sort((x, y) => y.avg - x.avg)
+        .forEach((sec, idx) => {
+          sectorRankMap[sec.sector] = { rank: idx + 1, avgChange: Number(sec.avg.toFixed(2)), trend: sec.avg >= 0 ? 'UP' : 'DOWN' };
+        });
+
+      const candidates: SwingData[] = Object.entries(analyses).map(([sym, a]) => {
+        const sector = STOCK_SECTOR_MAP[sym] || 'DIVERSIFIED';
+        const sInfo = sectorRankMap[sector];
+        return {
+          symbol: sym,
+          price: a.price,
+          change: Number(a.change.toFixed(2)),
+          isBull: true,
+          tradeType: 'BUY',
+          setupCategory: a.setup,
+          setupTitle: SWING_SETUP_LABEL[a.setup],
+          rs3m: Number((a.return3m - (niftyA?.return3m ?? 0)).toFixed(1)),
+          barDate: a.barDate,
+          volMultiplier: Number(a.volRatio.toFixed(1)),
+          entryPrice: Number(a.entry.toFixed(2)),
+          stopLoss: Number(a.stopLoss.toFixed(2)),
+          target1: Number(a.target1.toFixed(2)),
+          target2: Number(a.target2.toFixed(2)),
+          riskReward: '1:2 / 1:3',
+          expectedHolding: `Max ${MAX_HOLD_DAYS} days`,
+          holdingDaysHorizon: MAX_HOLD_DAYS,
+          strategyRationale: a.reason,
+          sector,
+          sectorRank: sInfo.rank,
+          sectorChange: sInfo.avgChange,
+          sectorTrend: sInfo.trend,
+          tradeReason: a.reason,
         };
       });
 
-      const candidates: SwingData[] = [];
-
-      for (const sym of SWING_WATCHLIST_SYMBOLS) {
-        const fullKey = `${sym}.NS`;
-        const live = batchData[fullKey] || batchData[sym];
-        const basePrice = SWING_BASE_PRICES[sym] || 1500;
-        const data = (live && typeof live.price === 'number' && live.price > 0)
-          ? live
-          : getSessionSwingPrice(sym, basePrice, activeSessionKey);
-
-        const price = data.price;
-        if (!price || price <= 0) continue;
-
-        const change = typeof data.change === 'number' ? data.change : 0;
-        const dayHigh = (typeof data.high === 'number' && data.high > 0) ? data.high : price * 1.015;
-        const dayLow = (typeof data.low === 'number' && data.low > 0) ? data.low : price * 0.985;
-        const dailyRangePct = Math.max(1.4, ((dayHigh - dayLow) / price) * 100);
-
-        // Volatility multiplier
-        const volMultiplier = Number(Math.min(4.5, Math.max(1.1, (Math.abs(change) / 1.1) * 1.5)).toFixed(1));
-
-        const sector = STOCK_SECTOR_MAP[sym] || 'DIVERSIFIED';
-        const sInfo = sectorRankMap[sector] || { rank: 99, avgChange: 0, trend: 'UP' };
-        const sectorRank = sInfo.rank;
-        const sectorChange = sInfo.avgChange;
-        const sectorTrend = sInfo.trend;
-
-        // ── PURE SWING BUY SETUPS (DELIVERY CNC) ──
-        let setupCat: '10_DAY_BO' | '50_DAY_BO' | 'CHANNEL_BO' | 'REVERSAL' = '10_DAY_BO';
-        let setupTitle = '10-Day Breakout';
-        let holdingDays = 3;
-        let expectedHolding = '2–3 Days (Quick Swing)';
-
-        if (change >= 2.0) {
-          setupCat = '10_DAY_BO';
-          setupTitle = '10-Day Breakout';
-          holdingDays = 3;
-          expectedHolding = '2–3 Days (Quick Swing)';
-        } else if (change >= 0.5) {
-          setupCat = '50_DAY_BO';
-          setupTitle = '50-EMA Bounce';
-          holdingDays = 7;
-          expectedHolding = '5–10 Days (Trend Swing)';
-        } else if (change >= -1.0) {
-          setupCat = 'CHANNEL_BO';
-          setupTitle = 'Channel Breakout';
-          holdingDays = 5;
-          expectedHolding = '3–5 Days (Base Swing)';
-        } else {
-          setupCat = 'REVERSAL';
-          setupTitle = 'Oversold Bounce';
-          holdingDays = 3;
-          expectedHolding = '2–4 Days (Pullback Swing)';
-        }
-
-        // Technical Setup Strength formulation (with Sector bonus for leading sectors)
-        const changePwr = Math.max(-15, Math.min(25, change * 5));
-        const volBonus = volMultiplier >= 2.0 ? 25 : volMultiplier >= 1.5 ? 18 : 10;
-        const sectorBonus = sectorRank <= 3 ? 15 : sectorRank <= 6 ? 8 : 0;
-        const aiScore = Math.min(99, Math.max(60, Math.round(52 + changePwr + volBonus + sectorBonus)));
-
-        // Clear, human-readable trade reason explaining why this stock was chosen
-        let tradeReason = '';
-        if (sectorRank <= 3) {
-          tradeReason = `Rank #${sectorRank} ${sector} Leader (${sectorChange >= 0 ? '+' : ''}${sectorChange}% ${sectorTrend}) • ${setupTitle} with strong ${volMultiplier}x volume surge`;
-        } else if (sectorRank <= 7) {
-          tradeReason = `Top pick in ${sector} (Rank #${sectorRank}, ${sectorTrend}) • ${setupTitle} coiling with favorable 1:2.5 Risk:Reward`;
-        } else {
-          tradeReason = `${sector} Sector Play • ${setupTitle} bouncing with high-probability reversal structure`;
-        }
-
-        // Swing Trade Levels (SL: 2.2% - 3.8%, T1: 5.5% - 8%, T2: 10% - 15%)
-        const slPct = Math.min(4.0, Math.max(2.2, dailyRangePct * 1.1));
-        const t1Pct = Number((slPct * 2.0).toFixed(1)); // 1:2 Risk-Reward
-        const t2Pct = Number((slPct * 3.5).toFixed(1)); // 1:3.5 Runner
-
-        const entryPrice = price;
-        const stopLoss = Number((entryPrice * (1 - slPct / 100)).toFixed(2));
-        const target1 = Number((entryPrice * (1 + t1Pct / 100)).toFixed(2));
-        const target2 = Number((entryPrice * (1 + t2Pct / 100)).toFixed(2));
-
-        candidates.push({
-          symbol: sym,
-          price,
-          change,
-          isBull: true,
-          tradeType: 'BUY',
-          setupCategory: setupCat,
-          setupTitle,
-          aiScore,
-          volMultiplier,
-          entryPrice,
-          stopLoss,
-          target1,
-          target2,
-          riskReward: '1:2.5',
-          expectedHolding,
-          holdingDaysHorizon: holdingDays,
-          strategyRationale: tradeReason,
-          sector,
-          sectorRank,
-          sectorChange,
-          sectorTrend,
-          tradeReason
-        });
-      }
-
-      // Sort candidates primarily by Sector Rank (Rank 1 sectors first),
-      // and within each sector by technical setup conviction score
-      candidates.sort((a, b) => {
-        if (a.sectorRank !== b.sectorRank) {
-          return a.sectorRank - b.sectorRank;
-        }
-        return (b.aiScore + b.change * 2) - (a.aiScore + a.change * 2);
-      });
-
+      // Setups first (50D > 20D breakout > pullback), then by strength vs Nifty
+      const order: Record<SwingSetup, number> = { BO50: 0, BO20: 1, PB50: 2, NONE: 3 };
+      candidates.sort((x, y) => order[x.setupCategory] - order[y.setupCategory] || y.rs3m - x.rs3m);
       setMarketData(candidates);
     } catch (err) {
       console.error('Error in swing player scanner:', err);
@@ -603,21 +420,18 @@ const SwingPlayer: React.FC = () => {
 
   // Filtered setups
   const filteredSetups = useMemo(() => {
-    // Determine top 10 stocks by sector-ranked order
-    const top10Symbols = marketData.slice(0, 10).map(s => s.symbol);
-
     return marketData.filter(item => {
-      if (activeCategoryFilter === 'TOP_10' && !top10Symbols.includes(item.symbol)) return false;
+      if (activeCategoryFilter === 'SETUPS' && item.setupCategory === 'NONE') return false;
       if (activeCategoryFilter === 'WATCHLIST' && !savedWatchlist.includes(item.symbol)) return false;
-      if (activeCategoryFilter === '10_DAY_BO' && item.setupCategory !== '10_DAY_BO') return false;
-      if (activeCategoryFilter === '50_DAY_BO' && item.setupCategory !== '50_DAY_BO') return false;
+      if (activeCategoryFilter === 'BREAKOUT' && item.setupCategory !== 'BO20' && item.setupCategory !== 'BO50') return false;
+      if (activeCategoryFilter === 'PB50' && item.setupCategory !== 'PB50') return false;
       if (activeCategoryFilter === 'TARGET_HIT') {
         const m = getSwingMetrics(item);
         if (m.status !== 'TARGET_1_HIT' && m.status !== 'TARGET_2_HIT') return false;
       }
 
-      if (highConvictionOnly && item.aiScore < 80) return false;
-      if (highVolumeOnly && item.volMultiplier < 2.0) return false;
+      if (highConvictionOnly && item.rs3m <= 0) return false;
+      if (highVolumeOnly && item.volMultiplier < 1.5) return false;
 
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -640,16 +454,17 @@ const SwingPlayer: React.FC = () => {
       else if (sortField === 'symbol') cmp = a.symbol.localeCompare(b.symbol);
       else if (sortField === 'price') cmp = a.price - b.price;
       else if (sortField === 'change') cmp = a.change - b.change;
-      else if (sortField === 'aiScore') cmp = a.aiScore - b.aiScore;
+      else if (sortField === 'rs3m') cmp = a.rs3m - b.rs3m;
       else if (sortField === 'vol') cmp = a.volMultiplier - b.volMultiplier;
       return sortOrder === 'asc' ? cmp : -cmp;
     });
   }, [filteredSetups, sortField, sortOrder]);
 
   // Statistics Counts
-  const bo10Count = useMemo(() => marketData.filter(d => d.setupCategory === '10_DAY_BO').length, [marketData]);
-  const bo50Count = useMemo(() => marketData.filter(d => d.setupCategory === '50_DAY_BO').length, [marketData]);
-  const highConvictionCount = useMemo(() => marketData.filter(d => d.aiScore >= 80).length, [marketData]);
+  const bo10Count = useMemo(() => marketData.filter(d => d.setupCategory === 'BO20' || d.setupCategory === 'BO50').length, [marketData]);
+  const bo50Count = useMemo(() => marketData.filter(d => d.setupCategory === 'PB50').length, [marketData]);
+  const setupCount = bo10Count + bo50Count;
+  const highConvictionCount = useMemo(() => marketData.filter(d => d.rs3m > 0).length, [marketData]);
   const targetHitCount = useMemo(() => marketData.filter(d => {
     const m = getSwingMetrics(d);
     return m.status === 'TARGET_1_HIT' || m.status === 'TARGET_2_HIT';
@@ -700,14 +515,15 @@ const SwingPlayer: React.FC = () => {
     const t1Pct = ((Math.abs(selectedStock.target1 - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1);
     const t2Pct = ((Math.abs(selectedStock.target2 - selectedStock.entryPrice) / selectedStock.entryPrice) * 100).toFixed(1);
     
-    const text = `SWING BUY SETUP: ${selectedStock.symbol} (Delivery CNC)
-• Expected Holding: ${selectedStock.expectedHolding}
+    const text = `SWING WATCH: ${selectedStock.symbol} — ${selectedStock.setupTitle} (Delivery CNC, bar ${selectedStock.barDate})
+• ${selectedStock.tradeReason}
+• Holding: ${selectedStock.expectedHolding}
 • Entry: ₹${selectedStock.entryPrice.toFixed(2)}
 • Stop Loss: ₹${selectedStock.stopLoss.toFixed(2)} (${riskPct}% Risk)
 • Target 1: ₹${selectedStock.target1.toFixed(2)} (+${t1Pct}% Book 50%)
 • Target 2: ₹${selectedStock.target2.toFixed(2)} (+${t2Pct}% Trail SL)
 • Risk:Reward: ${selectedStock.riskReward}
-• Setup Rating: ${selectedStock.aiScore}/100 | Vol: ${selectedStock.volMultiplier}x
+• RS 3M vs Nifty: ${selectedStock.rs3m >= 0 ? '+' : ''}${selectedStock.rs3m}% | Vol: ${selectedStock.volMultiplier}x 20D avg
 • Suggested Qty: ${positionSizing.shares} Shares (Max Risk: ₹${positionSizing.maxLoss.toFixed(0)})`;
     navigator.clipboard.writeText(text);
     setCopiedNotification(true);
@@ -734,17 +550,17 @@ const SwingPlayer: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-1 font-medium max-w-xl">
-              Pure Cash Delivery (CNC) swing scanner with multi-day consolidation breakouts, 50-EMA pullbacks, and holding tracker.
+              Delivery (CNC) swing scanner on real daily bars: 20/50-day breakouts with volume, 50-EMA pullbacks in uptrends. Levels: stop 2×ATR, targets 2R / 3R.
             </p>
             <div className="flex items-center gap-3 mt-2 text-[10px] text-slate-400 font-mono flex-wrap">
               <span className="flex items-center gap-1.5 text-slate-300">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                Min 1:2.5 R:R
+                Stop 2×ATR(14)
               </span>
               <span className="text-slate-600">·</span>
               <span className="flex items-center gap-1.5 text-slate-300">
                 <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
-                10-Day Channel Breakouts
+                20/50-Day Breakouts (1.5× vol)
               </span>
               <span className="text-slate-600">·</span>
               <span className="flex items-center gap-1.5 text-slate-300">
@@ -762,21 +578,21 @@ const SwingPlayer: React.FC = () => {
             <div className="bg-[#101520] border border-slate-800 rounded-xl px-3.5 py-2 min-w-[95px]">
               <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Universe</div>
               <div className="text-sm font-bold text-white font-mono mt-0.5">{SWING_WATCHLIST_SYMBOLS.length} Stocks</div>
-              <div className="text-[9px] text-slate-500 font-medium">Liquid F&O</div>
+              <div className="text-[9px] text-slate-500 font-medium">{lastBarDate ? `Bar ${lastBarDate}` : 'Large caps'}</div>
             </div>
 
             {/* 2. Swing Buys */}
             <div className="bg-[#101520] border border-emerald-500/20 rounded-xl px-3.5 py-2 min-w-[105px]">
-              <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Swing Buys</div>
-              <div className="text-sm font-bold text-emerald-400 font-mono mt-0.5">{marketData.length} Setups</div>
-              <div className="text-[9px] text-slate-400 font-medium">{highConvictionCount} Score &ge; 80</div>
+              <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Setups Today</div>
+              <div className="text-sm font-bold text-emerald-400 font-mono mt-0.5">{setupCount} of {marketData.length}</div>
+              <div className="text-[9px] text-slate-400 font-medium">{highConvictionCount} beat Nifty (3M)</div>
             </div>
 
             {/* 3. Breakout Setups */}
             <div className="bg-[#101520] border border-sky-500/20 rounded-xl px-3.5 py-2 min-w-[105px]">
-              <div className="text-[10px] text-sky-400 font-bold uppercase tracking-wider">10D / 50-EMA</div>
+              <div className="text-[10px] text-sky-400 font-bold uppercase tracking-wider">Breakout / Pullback</div>
               <div className="text-sm font-bold text-sky-400 font-mono mt-0.5">{bo10Count} / {bo50Count}</div>
-              <div className="text-[9px] text-slate-400 font-medium">BO / Bounce</div>
+              <div className="text-[9px] text-slate-400 font-medium">20-50D / 50-EMA</div>
             </div>
 
             {/* 4. Tracked Trades (Clean Slate/Teal — ZERO Yellow!) */}
@@ -800,15 +616,57 @@ const SwingPlayer: React.FC = () => {
         </div>
       </div>
 
+      {/* ── 1b. Honest evidence strip: market regime + 5-year backtest of these exact rules ── */}
+      <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-4 shadow-xl grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-4">
+        <div>
+          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Market Regime</div>
+          {niftyRegime ? (
+            <>
+              <div className={`text-sm font-bold mt-1 ${niftyRegime.above200 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                Nifty {niftyRegime.above200 ? 'above' : 'below'} 200-DMA ({niftyRegime.pct >= 0 ? '+' : ''}{niftyRegime.pct.toFixed(1)}%)
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                {niftyRegime.above200
+                  ? 'Uptrend backdrop. Long swing setups have the wind behind them.'
+                  : 'Downtrend backdrop. Long swings fail more often; keep size small or wait.'}
+              </p>
+            </>
+          ) : (
+            <div className="text-xs text-slate-500 mt-1">Nifty data unavailable</div>
+          )}
+          {missing.length > 0 && (
+            <p className="text-[10px] text-amber-400/80 mt-2">No data: {missing.join(', ')}</p>
+          )}
+        </div>
+        <div>
+          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+            Backtest of these rules · {SWING_BACKTEST.period} · net of 0.25% cost
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 font-mono text-[11px]">
+            {[...SWING_BACKTEST.rows.map(r => ({ label: SWING_SETUP_LABEL[r.setup], ...r })), { label: 'Random entry', ...SWING_BACKTEST.random }].map(r => (
+              <div key={r.label} className="bg-[#101520] border border-slate-800 rounded-lg px-2.5 py-1.5">
+                <div className="text-[9px] text-slate-500 font-sans font-bold uppercase">{r.label}</div>
+                <div className={`font-bold ${r.avg >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{r.avg >= 0 ? '+' : ''}{r.avg.toFixed(2)}%/trade</div>
+                <div className="text-[9px] text-slate-500">win {r.win}% · {r.trades} trades</div>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-slate-400 mt-2">
+            None of the setups clearly beats a random entry with the same stop and target, so treat this page as a watch list, not buy calls.
+            The random baseline is also flattered because the 40 stocks are today&apos;s winners.
+          </p>
+        </div>
+      </div>
+
       {/* ── 2. Interactive Filter Bar & Search ───────────────────────────── */}
       <div className="bg-[#0c1017] border border-slate-800 rounded-2xl p-4 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 shadow-xl">
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {[
-            { id: 'TOP_10', label: `Top 10 Sector Picks (10)` },
-            { id: 'ALL', label: `All Swing Buys (${marketData.length})` },
+            { id: 'SETUPS', label: `Setups Today (${setupCount})` },
+            { id: 'ALL', label: `All Stocks (${marketData.length})` },
             { id: 'WATCHLIST', label: `Tracked Positions (${savedWatchlist.length})` },
-            { id: '10_DAY_BO', label: `10-Day Breakout (${bo10Count})` },
-            { id: '50_DAY_BO', label: `50-EMA Bounce (${bo50Count})` },
+            { id: 'BREAKOUT', label: `Breakouts (${bo10Count})` },
+            { id: 'PB50', label: `50-EMA Pullback (${bo50Count})` },
             { id: 'TARGET_HIT', label: `Targets Hit (${targetHitCount})` },
           ].map(tab => (
             <button
@@ -836,7 +694,7 @@ const SwingPlayer: React.FC = () => {
               }`}
             >
               <BarChart2 className="w-3 h-3 text-purple-400" />
-              <span>Score &gt; 80</span>
+              <span>Beats Nifty 3M</span>
             </button>
 
             <button
@@ -848,7 +706,7 @@ const SwingPlayer: React.FC = () => {
               }`}
             >
               <Zap className="w-3 h-3 text-sky-400" />
-              <span>Vol &gt; 2x</span>
+              <span>Vol &ge; 1.5x</span>
             </button>
           </div>
 
@@ -948,7 +806,7 @@ const SwingPlayer: React.FC = () => {
           <div className="w-12 h-12 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin mb-4" />
           <h3 className="text-base font-bold text-white mb-1">Scanning Delivery Swing Setups...</h3>
           <p className="text-xs text-slate-400 max-w-md">
-            Analyzing 50-EMA support bounces, 10-day base breakouts, and computing 1:2.5 Risk:Reward swing targets.
+            Loading 2 years of daily bars for 40 stocks and Nifty, then checking breakouts and 50-EMA pullbacks.
           </p>
         </div>
       ) : filteredSetups.length === 0 ? (
@@ -962,7 +820,9 @@ const SwingPlayer: React.FC = () => {
           <p className="text-xs text-slate-400 max-w-md mx-auto">
             {activeCategoryFilter === 'WATCHLIST'
               ? 'Click the bookmark icon on any swing card to save and track its holding period and targets!'
-              : 'Click "Rescan" or adjust the filters to scan live momentum.'}
+              : activeCategoryFilter === 'SETUPS'
+                ? 'No stock closed into a breakout or 50-EMA pullback on the latest bar. Waiting is a valid position — see "All Stocks".'
+                : 'Click "Rescan" or adjust the filters.'}
           </p>
         </div>
       ) : viewMode === 'grid' ? (
@@ -1001,9 +861,13 @@ const SwingPlayer: React.FC = () => {
                       </div>
                     </div>
 
-                    <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider border shrink-0 flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border-emerald-500/25">
-                      <ArrowUp className="w-2.5 h-2.5 stroke-[2.5]" />
-                      <span>BUY · CNC</span>
+                    <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider border shrink-0 flex items-center gap-1 ${
+                      stock.setupCategory === 'NONE'
+                        ? 'bg-slate-800/60 text-slate-400 border-slate-700'
+                        : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25'
+                    }`}>
+                      {stock.setupCategory !== 'NONE' && <ArrowUp className="w-2.5 h-2.5 stroke-[2.5]" />}
+                      <span>{stock.setupTitle}</span>
                     </span>
                   </div>
 
@@ -1028,13 +892,13 @@ const SwingPlayer: React.FC = () => {
                       {stock.sectorTrend === 'UP' ? '▲' : '▼'} {stock.sectorChange >= 0 ? '+' : ''}{stock.sectorChange.toFixed(1)}% {stock.sectorTrend}
                     </span>
                     <span className="px-2 py-0.5 rounded border border-purple-500/30 bg-purple-500/10 text-purple-300 font-medium ml-auto">
-                      Score {stock.aiScore}/100
+                      RS 3M {stock.rs3m >= 0 ? '+' : ''}{stock.rs3m}%
                     </span>
                   </div>
 
                   {/* Why Chosen Reason Box */}
                   <div className="my-2 p-2 bg-[#101520] border border-slate-800/90 rounded-lg">
-                    <div className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider mb-0.5">Why Chosen (Reason)</div>
+                    <div className="text-[9px] font-bold text-emerald-400 uppercase tracking-wider mb-0.5">What the chart shows</div>
                     <div className="text-[11px] text-slate-300 line-clamp-2 leading-relaxed font-sans font-medium">{stock.tradeReason}</div>
                   </div>
 
@@ -1050,7 +914,7 @@ const SwingPlayer: React.FC = () => {
                     {/* Clean Tabular Order Levels Grid */}
                     <div className="grid grid-cols-4 gap-1 text-[10px] font-mono pt-1 border-t border-slate-800/80">
                       <div>
-                        <div className="text-slate-500 text-[9px] uppercase">Trigger</div>
+                        <div className="text-slate-500 text-[9px] uppercase">Close</div>
                         <div className="font-bold text-slate-200">₹{stock.entryPrice.toFixed(1)}</div>
                       </div>
                       <div>
@@ -1127,7 +991,7 @@ const SwingPlayer: React.FC = () => {
                 {displayedSetups.length} Swing Setups
               </span>
               <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 font-mono text-[10px] font-medium border border-emerald-500/20">
-                Min R:R 1:2.5
+                Stop 2×ATR · T1 2R · T2 3R
               </span>
             </div>
             <span className="text-[10px] text-slate-500 font-sans hidden md:block">
@@ -1162,14 +1026,14 @@ const SwingPlayer: React.FC = () => {
                         : <ArrowUpDown className="w-2.5 h-2.5 text-slate-600" />}
                     </div>
                   </th>
-                  <th className="py-2.5 px-3 min-w-[180px]">Why Chosen</th>
+                  <th className="py-2.5 px-3 min-w-[180px]">What the chart shows</th>
                   <th
-                    onClick={() => handleSort('aiScore')}
+                    onClick={() => handleSort('rs3m')}
                     className="py-2.5 px-3 text-center cursor-pointer hover:text-slate-300 transition min-w-[80px]"
                   >
                     <div className="flex items-center justify-center gap-1">
-                      <span>Score · Vol</span>
-                      {sortField === 'aiScore'
+                      <span>RS 3M · Vol</span>
+                      {sortField === 'rs3m'
                         ? <span className="text-emerald-400">{sortOrder === 'asc' ? '↑' : '↓'}</span>
                         : <ArrowUpDown className="w-2.5 h-2.5 text-slate-600" />}
                     </div>
@@ -1189,19 +1053,11 @@ const SwingPlayer: React.FC = () => {
                   const t1Pct = (((stock.target1 - stock.entryPrice) / stock.entryPrice) * 100).toFixed(1);
                   const t2Pct = (((stock.target2 - stock.entryPrice) / stock.entryPrice) * 100).toFixed(1);
 
-                  // Swing Signal — PaperProfit OUTPERFORM/STRONG/WATCH/VOL SURGE style
-                  const swingSignal = (() => {
-                    if (stock.aiScore >= 88 && stock.volMultiplier >= 2.0 && stock.sectorRank <= 3) {
-                      return { label: 'OUTPERFORM', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' };
-                    } else if (stock.aiScore >= 82 && stock.sectorRank <= 5) {
-                      return { label: 'STRONG', cls: 'bg-teal-500/15 text-teal-300 border-teal-500/30' };
-                    } else if (stock.aiScore >= 75) {
-                      return { label: 'WATCH', cls: 'bg-sky-500/15 text-sky-300 border-sky-500/30' };
-                    } else if (stock.volMultiplier >= 2.0) {
-                      return { label: 'VOL SURGE', cls: 'bg-amber-500/10 text-amber-300 border-amber-500/25' };
-                    }
-                    return { label: 'BUILDING', cls: 'bg-slate-800/80 text-slate-400 border-slate-700/60' };
-                  })();
+                  const swingSignal = stock.setupCategory === 'NONE'
+                    ? { label: 'NO SETUP', cls: 'bg-slate-800/80 text-slate-400 border-slate-700/60' }
+                    : stock.setupCategory === 'PB50'
+                    ? { label: 'PULLBACK', cls: 'bg-sky-500/15 text-sky-300 border-sky-500/30' }
+                    : { label: stock.setupCategory === 'BO50' ? '50D BREAKOUT' : '20D BREAKOUT', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' };
 
                   return (
                     <tr
@@ -1283,17 +1139,15 @@ const SwingPlayer: React.FC = () => {
                       <td className="py-3 px-3 text-center whitespace-nowrap">
                         <div className="inline-flex flex-col items-center gap-1">
                           <span className={`inline-block px-2.5 py-0.5 rounded-full font-bold text-[12px] border ${
-                            stock.aiScore >= 88
+                            stock.rs3m > 0
                               ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                              : stock.aiScore >= 80
-                              ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
-                              : 'bg-slate-800 text-slate-300 border-slate-700/60'
+                              : 'bg-rose-500/10 text-rose-300 border-rose-500/25'
                           }`}>
-                            {stock.aiScore}
+                            {stock.rs3m >= 0 ? '+' : ''}{stock.rs3m}%
                           </span>
                           <div className={`text-[10px] font-bold ${
                             stock.volMultiplier >= 2.5 ? 'text-amber-300'
-                            : stock.volMultiplier >= 2.0 ? 'text-emerald-400'
+                            : stock.volMultiplier >= 1.5 ? 'text-emerald-400'
                             : 'text-slate-400'
                           }`}>
                             {stock.volMultiplier}x <span className="text-[8px] text-slate-500 font-normal">VOL</span>
@@ -1334,7 +1188,7 @@ const SwingPlayer: React.FC = () => {
                             {stock.expectedHolding.split(' ')[0]}
                           </span>
                           <span className="text-[8px] text-slate-500 font-sans">
-                            {stock.holdingDaysHorizon}d horizon
+                            time stop
                           </span>
                           {isWatchlisted && (
                             <span className="text-[8px] text-emerald-400 font-bold font-sans">
@@ -1437,11 +1291,11 @@ const SwingPlayer: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <h2 className="text-xl font-black text-white">{selectedStock.symbol}</h2>
                       <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        BUY · CNC SWING
+                        {selectedStock.setupTitle} · CNC
                       </span>
                     </div>
                     <p className="text-xs text-slate-400 font-mono mt-0.5">
-                      LTP: ₹{selectedStock.price.toFixed(2)} • Horizon: {selectedStock.expectedHolding}
+                      Close: ₹{selectedStock.price.toFixed(2)} ({selectedStock.barDate}) • {selectedStock.expectedHolding}
                     </p>
                   </div>
                 </div>
@@ -1472,10 +1326,10 @@ const SwingPlayer: React.FC = () => {
                   <span className="font-bold uppercase tracking-wider text-[10px] text-slate-400">Swing Strategy</span>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-mono font-bold text-purple-300 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
-                      Rating: {selectedStock.aiScore}/100
+                      RS 3M: {selectedStock.rs3m >= 0 ? '+' : ''}{selectedStock.rs3m}%
                     </span>
                     <span className="text-[10px] font-mono font-bold text-yellow-300 bg-yellow-500/10 px-1.5 py-0.5 rounded border border-yellow-500/20">
-                      {selectedStock.volMultiplier}x Vol
+                      {selectedStock.volMultiplier}x 20D Vol
                     </span>
                   </div>
                 </div>
