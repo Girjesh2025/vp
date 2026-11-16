@@ -28,6 +28,9 @@ export interface SessionSummary {
 export interface UserActivitySummary {
   isOnline: boolean;
   currentPage?: string;
+  lastLoginAt?: string;
+  lastLoginFormatted?: string;
+  lastLoginAgo?: string;
   lastSeenAt?: string;
   lastActiveAgo: string;
   sessionDuration: string; // latest session
@@ -38,7 +41,7 @@ export interface UserActivitySummary {
   sessions: SessionSummary[];
 }
 
-export const ACTIVITY_WINDOW_DAYS = 7;
+export const ACTIVITY_WINDOW_DAYS = 90;
 const ONLINE_MS = 2.5 * 60 * 1000; // pings come every 60 s while the tab is visible
 const PING_GAP_CAP_S = 120; // gaps longer than this (tab hidden) don't count as time on site
 
@@ -52,22 +55,34 @@ export const formatDuration = (sec: number): string => {
 };
 
 export const timeAgo = (iso: string, now = Date.now()): string => {
-  const s = Math.max(0, (now - new Date(iso).getTime()) / 1000);
+  const t = new Date(iso).getTime();
+  if (isNaN(t)) return '—';
+  const s = Math.max(0, (now - t) / 1000);
   if (s < 90) return 'Just now';
   if (s < 3600) return `${Math.round(s / 60)}m ago`;
   if (s < 86400) return `${Math.round(s / 3600)}h ago`;
-  return formatIst(iso);
+  const days = Math.round(s / 86400);
+  if (days === 1) return 'Yesterday';
+  if (days < 30) return `${days}d ago`;
+  const months = Math.round(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  const years = Math.round(days / 365);
+  return `${years}y ago`;
 };
 
-export const formatIst = (iso: string): string =>
-  new Date(iso).toLocaleString('en-IN', {
+export const formatIst = (iso: string): string => {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso);
+  return d.toLocaleString('en-IN', {
     timeZone: 'Asia/Kolkata',
     day: '2-digit',
     month: 'short',
+    year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,
   });
+};
 
 export const deviceFromUserAgent = (ua?: string | null): string => {
   if (!ua) return 'Unknown';
@@ -128,14 +143,22 @@ export function summarizeUser(rows: ActivityRow[], now = Date.now()): UserActivi
     pageMap.set(r.page, e);
   }
 
+  const latestSession = sessions[0];
+  const lastLoginAt = latestSession?.start;
+  const lastLoginFormatted = lastLoginAt ? formatIst(lastLoginAt) : undefined;
+  const lastLoginAgo = lastLoginAt ? timeAgo(lastLoginAt, now) : undefined;
+
   return {
     isOnline,
     currentPage: last?.page ?? undefined,
+    lastLoginAt,
+    lastLoginFormatted,
+    lastLoginAgo,
     lastSeenAt: last?.created_at,
     lastActiveAgo: last ? (isOnline ? 'Active now' : timeAgo(last.created_at, now)) : 'No activity yet',
-    sessionDuration: sessions[0] ? formatDuration(sessions[0].durationSec) : '—',
+    sessionDuration: latestSession ? formatDuration(latestSession.durationSec) : '—',
     timeOnSite: formatDuration(sessions.reduce((s, x) => s + x.durationSec, 0)),
-    device: sessions[0]?.device,
+    device: latestSession?.device,
     pagesVisited: [...pageMap.entries()]
       .map(([page, e]) => ({ page, count: e.count, lastVisited: timeAgo(e.last, now) }))
       .sort((a, b) => b.count - a.count),
@@ -170,14 +193,12 @@ export interface AdminData {
 
 export async function loadAdminData(): Promise<AdminData> {
   const errors: string[] = [];
-  const since = new Date(Date.now() - ACTIVITY_WINDOW_DAYS * 86400 * 1000).toISOString();
 
   const [usersRes, actRes, pfRes, stRes] = await Promise.all([
     supabase.rpc('admin_list_users'),
     supabase
       .from('user_activity')
       .select('user_id,email,session_id,event,page,query,user_agent,created_at')
-      .gte('created_at', since)
       .order('created_at', { ascending: false })
       .limit(20000),
     supabase.from('portfolios').select('id,user_id,name'),
@@ -187,6 +208,15 @@ export async function loadAdminData(): Promise<AdminData> {
   if (actRes.error) errors.push(`activity: ${actRes.error.message}`);
   if (pfRes.error) errors.push(`portfolios: ${pfRes.error.message}`);
   if (stRes.error) errors.push(`stocks: ${stRes.error.message}`);
+
+  let users = (usersRes.data ?? []) as any[];
+  if ((!users || users.length === 0) && usersRes.error) {
+    // Fallback to direct users view if RPC is not yet created
+    try {
+      const fb = await supabase.from('users').select('*');
+      if (fb.data && fb.data.length > 0) users = fb.data;
+    } catch {}
+  }
 
   const allActivity = (actRes.data ?? []) as ActivityRow[];
   const activityByUser = new Map<string, ActivityRow[]>();
@@ -220,7 +250,7 @@ export async function loadAdminData(): Promise<AdminData> {
     portfolioByUser.set(p.user_id, cur);
   }
 
-  return { users: usersRes.data ?? [], activityByUser, portfolioByUser, allActivity, errors };
+  return { users, activityByUser, portfolioByUser, allActivity, errors };
 }
 
 /** Platform-wide analytics from the same activity rows (last ACTIVITY_WINDOW_DAYS days). */

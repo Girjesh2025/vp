@@ -9,13 +9,13 @@ import {
   UserPlus, Activity, ExternalLink, HardDrive, Cpu, Sliders,
   Clock, Shield, Download, FileText, Check, AlertCircle,
   ArrowUpRight, Globe, Layers, KeyRound, Sparkles, Filter,
-  Briefcase, UserCheck, MapPin, Laptop, Smartphone
+  Briefcase, UserCheck, MapPin, Laptop, Smartphone, LogIn
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { trackPageView, startPresenceHeartbeat } from '../../utils/activityTracker';
 import UserSessionsTable from './UserSessionsTable';
-import { loadAdminData, summarizeUser, buildAnalytics, formatIst, formatDuration, ACTIVITY_WINDOW_DAYS, type SessionSummary } from '../../utils/adminActivity';
+import { loadAdminData, summarizeUser, buildAnalytics, formatIst, formatDuration, timeAgo, ACTIVITY_WINDOW_DAYS, type SessionSummary } from '../../utils/adminActivity';
 
 export interface PageVisitItem {
   page: string;
@@ -42,6 +42,9 @@ export interface UserRecord {
   plan: 'pro' | 'free';
   joinedDate: string;
   lastActive: string;
+  lastLogin?: string;
+  lastLoginAgo?: string;
+  lastLoginAt?: string;
   portfoliosCount: number;
   source?: string;
   isOnline?: boolean;
@@ -255,16 +258,78 @@ export default function AdminDashboard() {
         const act = summarizeUser(data.activityByUser.get(emailLower) ?? []);
         const pf = data.portfolioByUser.get(u.id);
         const role = String(u.role || '').toLowerCase() === 'admin' ? 'admin' : 'user';
+
+        // Parse any date representation safely into a Date object
+        const parseDate = (val: any): Date | null => {
+          if (!val) return null;
+          const str = String(val).trim();
+          if (!str || str === 'Active' || str === 'Just now' || str === 'Never' || str === '—' || str === 'No activity yet') return null;
+          if (/^\d{2}\/\d{2}\/\d{4}$/.test(str)) {
+            const [d, m, y] = str.split('/').map(Number);
+            const dt = new Date(y, m - 1, d);
+            return isNaN(dt.getTime()) ? null : dt;
+          }
+          if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+            const dt = new Date(str + 'T00:00:00Z');
+            return isNaN(dt.getTime()) ? null : dt;
+          }
+          const dt = new Date(str);
+          return isNaN(dt.getTime()) ? null : dt;
+        };
+
+        const joinedDateStr = u.created_at ? String(u.created_at).split('T')[0] : (u.joinedDate || '—');
+
+        // Best available login timestamp (session_start -> Supabase last_sign_in_at -> lastSeenAt -> created_at):
+        const loginDate = 
+          parseDate(act.lastLoginAt) ||
+          parseDate(u.last_sign_in_at) ||
+          parseDate(act.lastSeenAt) ||
+          parseDate(u.last_login) ||
+          parseDate(u.lastActive) ||
+          parseDate(u.lastSeenAt) ||
+          parseDate(u.created_at) ||
+          parseDate(u.joinedDate) ||
+          null;
+
+        const lastLoginIso = loginDate ? loginDate.toISOString() : null;
+        const lastLogin = lastLoginIso ? formatIst(lastLoginIso) : (joinedDateStr !== '—' ? `Joined ${joinedDateStr}` : 'Joined recently');
+        const lastLoginAgo = lastLoginIso ? timeAgo(lastLoginIso) : '';
+
+        // Best available active timestamp:
+        const activeDate = 
+          (act.isOnline ? new Date() : null) ||
+          parseDate(act.lastSeenAt) ||
+          parseDate(act.lastLoginAt) ||
+          parseDate(u.last_sign_in_at) ||
+          parseDate(u.lastActive) ||
+          parseDate(u.last_login) ||
+          parseDate(u.lastSeenAt) ||
+          parseDate(u.created_at) ||
+          parseDate(u.joinedDate) ||
+          null;
+
+        const lastActiveIso = activeDate ? activeDate.toISOString() : null;
+        const lastActive = act.isOnline 
+          ? 'Active now' 
+          : (lastActiveIso ? formatIst(lastActiveIso) : (joinedDateStr !== '—' ? `Since ${joinedDateStr}` : 'Offline'));
+
+        const lastActiveAgo = act.isOnline 
+          ? 'Live Now' 
+          : (lastActiveIso ? timeAgo(lastActiveIso) : (joinedDateStr !== '—' ? `${joinedDateStr}` : 'Offline'));
+
         return {
           id: u.id,
           email: u.email,
           name: u.name?.trim() || (u.email ? u.email.split('@')[0] : 'Trader'),
           role,
           plan: String(u.plan || '').toLowerCase().includes('free') ? 'free' : 'pro',
-          joinedDate: u.created_at ? String(u.created_at).split('T')[0] : '—',
-          lastActive: act.lastSeenAt ? formatIst(act.lastSeenAt) : 'No activity yet',
-          lastActiveAgo: act.lastActiveAgo,
-          lastSeenAt: act.lastSeenAt,
+          joinedDate: joinedDateStr,
+          lastActive,
+          lastActiveAgo,
+          lastSeenAt: lastActiveIso || undefined,
+          lastLogin,
+          lastLoginAgo,
+          lastLoginAt: lastLoginIso || undefined,
           isOnline: act.isOnline,
           currentPage: act.currentPage,
           sessionDuration: act.sessionDuration,
@@ -435,13 +500,19 @@ export default function AdminDashboard() {
     }
   };
 
-  // User Actions (Real Database CRUD)
+  // User Actions (Real Database CRUD via safe admin RPCs & protected API)
   const toggleUserPlan = async (userId: string, currentPlan: 'pro' | 'free') => {
     const nextPlan = currentPlan === 'pro' ? 'free' : 'pro';
     setUsersList(prev => prev.map(u => u.id === userId ? { ...u, plan: nextPlan } : u));
     try {
-      const { error } = await supabase.from('users').update({ plan: nextPlan }).eq('id', userId);
-      if (error) throw error;
+      const { error: rpcErr } = await supabase.rpc('admin_set_user_plan', { target_user_id: userId, new_plan: nextPlan });
+      if (rpcErr) {
+        await adminFetch(`/api/admin/users/${userId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plan: nextPlan })
+        });
+      }
     } catch (e) {
       console.error('Failed to update plan in database:', e);
       fetchUsers();
@@ -452,8 +523,14 @@ export default function AdminDashboard() {
     const nextRole = currentRole === 'admin' ? 'user' : 'admin';
     setUsersList(prev => prev.map(u => u.id === userId ? { ...u, role: nextRole } : u));
     try {
-      const { error } = await supabase.from('users').update({ role: nextRole === 'admin' ? 'ADMIN' : 'TRADER' }).eq('id', userId);
-      if (error) throw error;
+      const { error: rpcErr } = await supabase.rpc('admin_set_user_role', { target_user_id: userId, new_role: nextRole === 'admin' ? 'ADMIN' : 'TRADER' });
+      if (rpcErr) {
+        await adminFetch(`/api/admin/users/${userId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role: nextRole })
+        });
+      }
     } catch (e) {
       console.error('Failed to update role in database:', e);
       fetchUsers();
@@ -464,8 +541,7 @@ export default function AdminDashboard() {
     if (!window.confirm(`Are you sure you want to delete ${userEmail} from database?`)) return;
     setUsersList(prev => prev.filter(u => u.id !== userId));
     try {
-      const { error } = await supabase.from('users').delete().eq('id', userId);
-      if (error) throw error;
+      await adminFetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
     } catch (e) {
       console.error('Failed to delete user from database:', e);
       fetchUsers();
@@ -1154,7 +1230,7 @@ export default function AdminDashboard() {
                         <th className="py-3 px-3">Role</th>
                         <th className="py-3 px-3">Plan</th>
                         <th className="py-3 px-3">Joined Date</th>
-                        <th className="py-3 px-3">Live &amp; Last Active</th>
+                        <th className="py-3 px-3">Login &amp; Activity</th>
                         <th className="py-3 px-4 text-center">Actions</th>
                       </tr>
                     </thead>
@@ -1190,15 +1266,29 @@ export default function AdminDashboard() {
                           <td className="py-3 px-3 font-mono text-slate-500 dark:text-slate-400">{u.joinedDate}</td>
                           <td className="py-3 px-3 whitespace-nowrap">
                             {u.isOnline ? (
-                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                                <span className="relative flex h-1.5 w-1.5">
-                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 w-max">
+                                  <span className="relative flex h-1.5 w-1.5">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                                  </span>
+                                  <span>Live Now</span>
                                 </span>
-                                <span>Live Now</span>
-                              </span>
+                                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                                  In: {u.lastLogin}
+                                </span>
+                              </div>
                             ) : (
-                              <span className="text-slate-600 dark:text-slate-400 font-mono text-xs">{u.lastActiveAgo || u.lastActive}</span>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-slate-700 dark:text-slate-300 font-mono text-xs flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400 inline-block shrink-0" />
+                                  <span>Login: <strong className="font-semibold text-slate-900 dark:text-slate-100">{u.lastLogin}</strong></span>
+                                </span>
+                                <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
+                                  {u.lastLoginAgo && <span>({u.lastLoginAgo})</span>}
+                                  {u.lastActiveAgo && <span>• Active: {u.lastActiveAgo}</span>}
+                                </div>
+                              </div>
                             )}
                           </td>
                           <td className="py-3 px-4 text-center">
@@ -1327,7 +1417,7 @@ export default function AdminDashboard() {
                       <tr className="bg-slate-50 dark:bg-[#0b1320] border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-500 dark:text-slate-400 select-none">
                         <th className="py-3.5 px-4 font-mono w-10">#</th>
                         <th className="py-3.5 px-4">Trader / Account</th>
-                        <th className="py-3.5 px-3">Live Status</th>
+                        <th className="py-3.5 px-3">Login &amp; Activity</th>
                         <th className="py-3.5 px-3">Time on Site</th>
                         <th className="py-3.5 px-3">Role</th>
                         <th className="py-3.5 px-3">Current Plan</th>
@@ -1385,7 +1475,7 @@ export default function AdminDashboard() {
                               </div>
                             </td>
 
-                            {/* Live Status Column */}
+                            {/* Login & Activity Column */}
                             <td className="py-4 px-3 whitespace-nowrap">
                               {u.isOnline ? (
                                 <div className="flex flex-col gap-1">
@@ -1396,8 +1486,13 @@ export default function AdminDashboard() {
                                     </span>
                                     <span>Live Now</span>
                                   </span>
-                                  <span className="text-[10px] text-slate-400 font-mono truncate max-w-[130px]" title={u.currentPage}>
-                                    on {u.currentPage || 'Dashboard'}
+                                  <div className="text-[11px] text-emerald-700 dark:text-emerald-300 font-mono flex items-center gap-1 font-semibold">
+                                    <LogIn className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                    <span>In: {u.lastLogin}</span>
+                                    {u.lastLoginAgo && <span className="text-slate-400 text-[9px] font-normal">({u.lastLoginAgo})</span>}
+                                  </div>
+                                  <span className="text-[10px] text-slate-400 font-mono truncate max-w-[140px]" title={u.currentPage}>
+                                    browsing: {u.currentPage || 'Dashboard'}
                                   </span>
                                 </div>
                               ) : (
@@ -1406,9 +1501,19 @@ export default function AdminDashboard() {
                                     <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
                                     <span>Offline</span>
                                   </span>
-                                  <span className="text-[10px] text-slate-400 font-mono">
-                                    {u.lastActiveAgo || u.lastActive}
-                                  </span>
+                                  <div className="text-[11px] text-slate-800 dark:text-slate-200 font-mono flex items-center gap-1">
+                                    <LogIn className="w-3 h-3 text-slate-400 shrink-0" />
+                                    <span>Login: <strong className="font-semibold">{u.lastLogin}</strong></span>
+                                  </div>
+                                  {u.lastLoginAgo && (
+                                    <div className="text-[9px] text-slate-400 font-mono -mt-0.5">
+                                      {u.lastLoginAgo}
+                                    </div>
+                                  )}
+                                  <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1 mt-0.5">
+                                    <Clock className="w-2.5 h-2.5" />
+                                    <span>Active: {u.lastActiveAgo || u.lastActive}</span>
+                                  </div>
                                 </div>
                               )}
                             </td>
@@ -2735,11 +2840,17 @@ export default function AdminDashboard() {
                   <div className="font-bold text-xs">
                     {selectedUserDetail.isOnline ? 'Currently Live on Platform' : 'Trader Currently Offline'}
                   </div>
-                  <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">
-                    {selectedUserDetail.isOnline 
-                      ? `Browsing page: ${selectedUserDetail.currentPage || 'Dashboard'}`
-                      : `Last active: ${selectedUserDetail.lastActiveAgo || selectedUserDetail.lastActive}`
-                    }
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono mt-0.5 space-y-0.5">
+                    <div>
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">Login Time (IST):</span> {selectedUserDetail.lastLogin || 'No login recorded'} {selectedUserDetail.lastLoginAgo ? `(${selectedUserDetail.lastLoginAgo})` : ''}
+                    </div>
+                    <div>
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">Last Active:</span>{' '}
+                      {selectedUserDetail.isOnline 
+                        ? `Browsing page: ${selectedUserDetail.currentPage || 'Dashboard'}`
+                        : `${selectedUserDetail.lastActiveAgo || selectedUserDetail.lastActive}`
+                      }
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2926,12 +3037,18 @@ export default function AdminDashboard() {
             </div>
 
             {/* Account & Device Intelligence */}
-            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 sm:grid-cols-4 gap-3 text-[11px]">
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 sm:grid-cols-5 gap-3 text-[11px]">
               <div>
                 <span className="text-slate-400 block text-[10px]">Location</span>
                 <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1">
                   <span>🇮🇳</span>
                   <span>{selectedUserDetail.city || 'Not tracked'}</span>
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px]">Last Login (IST)</span>
+                <span className="font-mono font-bold text-slate-800 dark:text-slate-200 truncate block" title={selectedUserDetail.lastLogin}>
+                  {selectedUserDetail.lastLogin || '—'}
                 </span>
               </div>
               <div>

@@ -440,11 +440,16 @@ export function usePortfolio() {
         return;
       }
 
-      // 1. Try deleting via proxy backend endpoint with full service rights
+      // 1. Try deleting via backend endpoint with user auth token
       try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
         const apiRes = await fetch('/api/portfolio/stock', {
           method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
           body: JSON.stringify({
             symbol: cleanSymbol,
             rawSymbol: symbol,

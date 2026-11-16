@@ -59,14 +59,40 @@ create policy "admins read stocks" on public.stocks for select to authenticated 
 --    Close it to the API; admins read it only through a function that checks is_admin().
 revoke all on public.users from anon, authenticated;
 
+drop function if exists public.admin_list_users();
+
 create or replace function public.admin_list_users()
-returns setof public.users
+returns table (
+  id uuid,
+  email text,
+  name text,
+  role text,
+  plan text,
+  created_at timestamptz,
+  last_sign_in_at timestamptz
+)
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, auth
 as $$
-  select * from public.users where public.is_admin();
+  select 
+    au.id,
+    au.email::text,
+    coalesce(
+      au.raw_user_meta_data->>'full_name',
+      au.raw_user_meta_data->>'name',
+      split_part(au.email, '@', 1)
+    )::text as name,
+    case 
+      when exists (select 1 from public.app_admins a where lower(a.email) = lower(au.email)) then 'admin'
+      else coalesce(au.raw_user_meta_data->>'role', 'user')::text
+    end as role,
+    coalesce(au.raw_user_meta_data->>'plan', 'pro')::text as plan,
+    au.created_at,
+    coalesce(au.last_sign_in_at, au.created_at) as last_sign_in_at
+  from auth.users au
+  where public.is_admin();
 $$;
 revoke all on function public.admin_list_users() from public, anon;
 grant execute on function public.admin_list_users() to authenticated;

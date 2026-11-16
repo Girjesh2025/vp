@@ -24,6 +24,30 @@ const supabase = createSupabaseClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false },
   ...(wsTransport ? { realtime: { transport: wsTransport } } : {})
 });
+
+// Admin authorization middleware: verifies caller carries a valid Supabase access token for an approved admin
+const requireAdmin = async (req, res, next) => {
+  const header = String(req.headers.authorization || '');
+  const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+  if (!token || !SUPABASE_URL) {
+    return res.status(401).json({ error: 'Admin sign-in required: missing authorization token' });
+  }
+  try {
+    const client = createSupabaseClient(SUPABASE_URL, SUPABASE_KEY, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data, error } = await client.rpc('is_admin');
+    if (error || data !== true) {
+      return res.status(403).json({ error: 'Access denied: administrator privileges required' });
+    }
+    req.adminUser = true;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Authentication failed' });
+  }
+};
+
 const { fyersModel } = require('fyers-api-v3');
 
 const app = express();
@@ -930,7 +954,7 @@ app.post('/api/fundamentals/batch', async (req, res) => {
 });
 
 // Admin System Stats Endpoint
-app.get('/api/admin/system-stats', (req, res) => {
+app.get('/api/admin/system-stats', requireAdmin, (req, res) => {
   const memory = process.memoryUsage();
   res.json({
     status: 'HEALTHY',
@@ -946,7 +970,7 @@ app.get('/api/admin/system-stats', (req, res) => {
 });
 
 // Admin Flush Cache Endpoint
-app.post('/api/admin/flush-cache', (req, res) => {
+app.post('/api/admin/flush-cache', requireAdmin, (req, res) => {
   const previousCount = fundamentalsCache.size;
   fundamentalsCache.clear();
   console.log(`🧹 [Admin] Server fundamentals cache cleared (flushed ${previousCount} items)`);
@@ -1044,7 +1068,7 @@ const trackSearchQuery = (query) => {
 };
 
 // Admin Analytics Endpoint
-app.get('/api/admin/analytics', (req, res) => {
+app.get('/api/admin/analytics', requireAdmin, (req, res) => {
   const analytics = readAnalyticsDb();
   res.json({ success: true, analytics });
 });
@@ -1380,12 +1404,12 @@ const writeSettingsDb = (settings) => {
 };
 
 // Admin Platform Settings Endpoints
-app.get('/api/admin/settings', (req, res) => {
+app.get('/api/admin/settings', requireAdmin, (req, res) => {
   const settings = readSettingsDb();
   res.json({ success: true, settings });
 });
 
-app.post('/api/admin/settings', (req, res) => {
+app.post('/api/admin/settings', requireAdmin, (req, res) => {
   const updates = req.body || {};
   const current = readSettingsDb();
   const updated = {
@@ -1454,13 +1478,12 @@ const fetchRealUsersFromSupabase = async () => {
         data.forEach(u => {
           const uid = u.id || u.user_id;
           if (!uid || !u.email) return;
-          const isMaster = (u.email || '').toLowerCase().includes('girjesh') || (u.email || '').toLowerCase().includes('admin');
           usersMap.set(uid, {
             id: uid,
             email: u.email,
             name: u.name || u.full_name || u.email.split('@')[0],
-            role: u.role || (isMaster ? 'admin' : 'user'),
-            plan: u.plan || 'pro',
+            role: String(u.role || '').toLowerCase() === 'admin' ? 'admin' : 'user',
+            plan: String(u.plan || '').toLowerCase().includes('free') ? 'free' : 'pro',
             joinedDate: (u.created_at ? u.created_at.split('T')[0] : '2026-01-15'),
             lastActive: u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleDateString('en-GB') : 'Active',
             portfoliosCount: 1,
@@ -1478,12 +1501,11 @@ const fetchRealUsersFromSupabase = async () => {
       if (!authErr && authData && Array.isArray(authData.users)) {
         authData.users.forEach(u => {
           const existing = usersMap.get(u.id) || {};
-          const isMaster = (u.email || '').toLowerCase().includes('girjesh') || (u.email || '').toLowerCase().includes('admin');
           usersMap.set(u.id, {
             id: u.id,
             email: u.email,
             name: u.user_metadata?.full_name || u.email.split('@')[0],
-            role: isMaster ? 'admin' : (existing.role || 'user'),
+            role: existing.role || (String(u.user_metadata?.role || '').toLowerCase() === 'admin' ? 'admin' : 'user'),
             plan: existing.plan || 'pro',
             joinedDate: u.created_at ? u.created_at.split('T')[0] : (existing.joinedDate || '2026-01-15'),
             lastActive: u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleDateString('en-GB') : (existing.lastActive || 'Active'),
@@ -1569,7 +1591,7 @@ const fetchRealUsersFromSupabase = async () => {
 };
 
 // Admin Users Endpoints (Real Supabase Database)
-app.get('/api/admin/users', async (req, res) => {
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
   try {
     const users = await fetchRealUsersFromSupabase();
     res.json({ 
@@ -1611,13 +1633,12 @@ app.post('/api/users/sync', (req, res) => {
     }
     return res.json({ success: true, action: 'exists', user: users[existingIdx] });
   } else {
-    const isMaster = email.toLowerCase().includes('girjesh') || email.toLowerCase().includes('admin');
     const newUser = {
       id: id || `usr_${Date.now()}`,
       email,
       name: name || email.split('@')[0],
-      role: role || (isMaster ? 'admin' : 'user'),
-      plan: plan || (isMaster ? 'pro' : 'free'),
+      role: role && role === 'admin' ? 'user' : (role || 'user'), // Prevent client-side self-elevation
+      plan: plan || 'free',
       joinedDate: new Date().toISOString().split('T')[0],
       lastActive: 'Just now',
       portfoliosCount: 1
@@ -1629,7 +1650,7 @@ app.post('/api/users/sync', (req, res) => {
 });
 
 // Admin Create User manually in database
-app.post('/api/admin/users', (req, res) => {
+app.post('/api/admin/users', requireAdmin, (req, res) => {
   const { email, name, role, plan } = req.body || {};
   if (!email) return res.status(400).json({ error: 'Email is required' });
 
@@ -1654,7 +1675,7 @@ app.post('/api/admin/users', (req, res) => {
 });
 
 // Admin Update User (Plan / Role / Name)
-app.patch('/api/admin/users/:id', (req, res) => {
+app.patch('/api/admin/users/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
   const { plan, role, name } = req.body || {};
 
@@ -1673,7 +1694,7 @@ app.patch('/api/admin/users/:id', (req, res) => {
 });
 
 // Admin Delete User
-app.delete('/api/admin/users/:id', (req, res) => {
+app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
   let users = readUsersDb();
   const initCount = users.length;
@@ -1687,9 +1708,24 @@ app.delete('/api/admin/users/:id', (req, res) => {
   res.json({ success: true, message: 'User deleted from database' });
 });
 
-// Remove stock from portfolio (Backend endpoint with full Supabase service rights)
+// Remove stock from portfolio (Requires authenticated user session)
 app.delete('/api/portfolio/stock', async (req, res) => {
   try {
+    const authHeader = String(req.headers.authorization || '');
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    if (!token) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const userClient = createSupabaseClient(SUPABASE_URL, SUPABASE_KEY, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: { user }, error: userError } = await userClient.auth.getUser();
+    if (userError || !user) {
+      return res.status(401).json({ error: 'Invalid or expired authentication session' });
+    }
+
     const { symbol, rawSymbol, stockId, portfolioId } = req.body || {};
     const sym = (symbol || rawSymbol || '').trim().toUpperCase().replace(/\.(NS|BO)$/i, '').split('-')[0];
 
@@ -1697,7 +1733,7 @@ app.delete('/api/portfolio/stock', async (req, res) => {
       return res.status(400).json({ error: 'stockId or symbol is required' });
     }
 
-    let query = supabase.from('stocks').select('id');
+    let query = userClient.from('stocks').select('id');
     if (stockId) {
       query = query.eq('id', stockId);
     } else if (portfolioId) {
@@ -1720,11 +1756,11 @@ app.delete('/api/portfolio/stock', async (req, res) => {
     const ids = matchingStocks.map(s => s.id);
 
     // Delete associated transactions first
-    const { error: txErr } = await supabase.from('transactions').delete().in('stock_id', ids);
+    const { error: txErr } = await userClient.from('transactions').delete().in('stock_id', ids);
     if (txErr) console.warn('Warning deleting transactions:', txErr);
 
     // Delete the stock rows
-    const { error: delErr } = await supabase.from('stocks').delete().in('id', ids);
+    const { error: delErr } = await userClient.from('stocks').delete().in('id', ids);
     if (delErr) {
       console.error('Error deleting stock row:', delErr);
       return res.status(500).json({ error: delErr.message });

@@ -17,6 +17,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method === 'DELETE') {
     try {
+      const authHeader = String(req.headers.authorization || '');
+      const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+      if (!token) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+
+      const userClient = createClient(SUPABASE_URL, SUPABASE_KEY, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const { data: { user }, error: userError } = await userClient.auth.getUser();
+      if (userError || !user) {
+        return res.status(401).json({ error: 'Invalid or expired authentication session' });
+      }
+
       const { symbol, rawSymbol, stockId, portfolioId } = req.body || {};
       const sym = (symbol || rawSymbol || '').trim().toUpperCase().replace(/\.(NS|BO)$/i, '').split('-')[0];
 
@@ -24,7 +39,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: 'stockId or symbol is required' });
       }
 
-      let query = supabase.from('stocks').select('id, symbol');
+      let query = userClient.from('stocks').select('id, symbol');
       if (portfolioId) {
         query = query.eq('portfolio_id', portfolioId);
       }
@@ -49,8 +64,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json({ success: true, message: 'Stock not in DB, removed locally' });
       }
 
-      await supabase.from('transactions').delete().in('stock_id', matchingIds);
-      await supabase.from('stocks').delete().in('id', matchingIds);
+      await userClient.from('transactions').delete().in('stock_id', matchingIds);
+      await userClient.from('stocks').delete().in('id', matchingIds);
 
       return res.status(200).json({ success: true, message: `Deleted ${matchingIds.length} rows` });
     } catch (err: any) {
